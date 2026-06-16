@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite+aiosqlite:///./skladbase.db"
 
     BOT_TOKEN: str = ""
+    INIT_DATA_MAX_AGE_HOURS: int = 24
 
     WFP_MERCHANT: str = ""
     WFP_SECRET: str = ""
