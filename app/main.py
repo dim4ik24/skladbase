@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app import db
-from app.api import finance, me
+from app.api import catalog, finance, me
 
 
 @asynccontextmanager
@@ -16,6 +16,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 app = FastAPI(title="SkladBase", lifespan=lifespan)
 app.include_router(me.router)
 app.include_router(finance.router)
+app.include_router(catalog.router)
 
 
 @app.get("/health")

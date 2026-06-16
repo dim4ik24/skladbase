@@ -42,3 +42,6 @@ Thumbs.db
 
 # Alembic (keep versions/, ignore compiled pycache inside)
 migrations/__pycache__/
+
+# Claude Code local settings (per-machine permissions, not shared)
+.claude/settings.local.json
