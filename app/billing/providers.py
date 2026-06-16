@@ -72,15 +72,15 @@ class StarsProvider:
         )
 
     @staticmethod
-    def parse_successful_payment(sp, payload_raw: str) -> PaymentResult:
+    def parse_successful_payment(sp: object, payload_raw: str) -> PaymentResult:
         """sp = message.successful_payment (aiogram SuccessfulPayment)."""
         meta = json.loads(payload_raw) if payload_raw else {}
         is_recurring = bool(getattr(sp, "is_recurring", False))
         return PaymentResult(
             provider="stars",
-            amount=Decimal(sp.total_amount),       # у Stars
+            amount=Decimal(getattr(sp, "total_amount", 0)),       # у Stars
             currency="XTR",
-            external_id=sp.telegram_payment_charge_id,
+            external_id=getattr(sp, "telegram_payment_charge_id", ""),
             is_recurring=is_recurring,
             auto_renew=True,                       # Stars сам продовжує
             period="month",
@@ -108,7 +108,7 @@ class WayForPayProvider:
         self.secret = secret
         self.domain = domain
 
-    def _sign(self, fields: list[str]) -> str:
+    def _sign(self, fields: list[str | int]) -> str:
         msg = ";".join(str(f) for f in fields)
         return hmac.new(self.secret.encode(), msg.encode(), hashlib.md5).hexdigest()
 

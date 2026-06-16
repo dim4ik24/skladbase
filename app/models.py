@@ -17,17 +17,17 @@ SkladBase — повна схема БД (SQLAlchemy 2.0).
 from __future__ import annotations
 
 import enum
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
+    JSON,
     BigInteger,
     Boolean,
     DateTime,
     ForeignKey,
     Index,
     Integer,
-    JSON,
     Numeric,
     String,
     Text,
@@ -39,7 +39,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class Base(DeclarativeBase):
@@ -263,8 +263,8 @@ class Variant(Base):
     def available(self) -> int:
         return self.on_hand - self.reserved
 
-    @available.expression
-    def available(cls):
+    @available.expression  # type: ignore[no-redef]
+    def available(cls) -> int:
         return cls.on_hand - cls.reserved
 
 

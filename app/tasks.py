@@ -12,13 +12,13 @@ SkladBase — щоденні/щохвилинні крон-задачі.
 """
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from datetime import timedelta
-from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models import (
+from app.models import (
     MovementType,
     Plan,
     Product,
@@ -26,20 +26,21 @@ from models import (
     ReservationStatus,
     Shop,
     StockMovement,
-    SubPeriod,
     SubProvider,
-    SubStatus,
     Subscription,
+    SubStatus,
     Variant,
     utcnow,
 )
-from subscriptions import SubscriptionService
+from app.services.subscriptions import SubscriptionService
+
+Notifier = Callable[[int, str], Awaitable[None]]
 
 
 # --------------------------------------------------------------------------- #
 #  Підписки                                                                   #
 # --------------------------------------------------------------------------- #
-async def expire_subscriptions(session: AsyncSession, notify) -> int:
+async def expire_subscriptions(session: AsyncSession, notify: Notifier) -> int:
     """Перевести у read-only ті, що закінчились і не мають авто-продовження.
 
     Stars/картку з auto_renew=True НЕ чіпаємо — за них відповідає вебхук
@@ -62,14 +63,14 @@ async def expire_subscriptions(session: AsyncSession, notify) -> int:
         await svc.expire(sub)
         shop = await session.get(Shop, sub.shop_id)
         await notify(
-            shop.owner_tg_id,
+            shop.owner_tg_id,  # type: ignore[union-attr]
             "⏳ Підписку призупинено. Дані збережено — оформи підписку, щоб редагувати.",
         )
     await session.commit()
     return len(expired_candidates)
 
 
-async def send_renewal_reminders(session: AsyncSession, notify) -> int:
+async def send_renewal_reminders(session: AsyncSession, notify: Notifier) -> int:
     """Нагадати тим, у кого нема авто-продовження (крипта/разові) за 3 дні до кінця."""
     now = utcnow()
     subs = (await session.scalars(
@@ -82,15 +83,17 @@ async def send_renewal_reminders(session: AsyncSession, notify) -> int:
         )
     )).all()
     for sub in subs:
-        days = max((sub.current_period_end - now).days, 0)
+        days = max((sub.current_period_end - now).days, 0)  # type: ignore[operator]
         shop = await session.get(Shop, sub.shop_id)
-        await notify(shop.owner_tg_id, f"🔔 Підписка закінчується через {days} дн. Продовжити можна в меню.")
+        await notify(shop.owner_tg_id, f"🔔 Підписка закінчується через {days} дн. Продовжити можна в меню.")  # type: ignore[union-attr]
         sub.renewal_reminder_sent = True
     await session.commit()
     return len(subs)
 
 
-async def charge_due_card_subscriptions(session: AsyncSession, wfp_provider, notify) -> int:
+async def charge_due_card_subscriptions(
+    session: AsyncSession, wfp_provider: object, notify: Notifier
+) -> int:
     """Авто-списання карткових підписок (WayForPay не списує сам — це наша робота)."""
     now = utcnow()
     svc = SubscriptionService(session)
@@ -110,7 +113,7 @@ async def charge_due_card_subscriptions(session: AsyncSession, wfp_provider, not
             continue
         amount = SubscriptionService.effective_price_uah(plan, sub.period)
         order_ref = f"sb-{sub.shop_id}-{int(now.timestamp())}"
-        result = await wfp_provider.charge_recurring(
+        result = await wfp_provider.charge_recurring(  # type: ignore[attr-defined]
             rec_token=sub.external_sub_id, order_ref=order_ref, amount=amount
         )
         if result.get("transactionStatus") == "Approved":
@@ -130,7 +133,7 @@ async def charge_due_card_subscriptions(session: AsyncSession, wfp_provider, not
         else:
             await svc.mark_past_due(sub)
             shop = await session.get(Shop, sub.shop_id)
-            await notify(shop.owner_tg_id, "⚠️ Не вдалось списати оплату з картки. Онови картку протягом 3 днів.")
+            await notify(shop.owner_tg_id, "⚠️ Не вдалось списати оплату з картки. Онови картку протягом 3 днів.")  # type: ignore[union-attr]
     await session.commit()
     return charged
 
@@ -162,7 +165,7 @@ async def release_expired_reservations(session: AsyncSession) -> int:
     return len(resvs)
 
 
-async def low_stock_scan(session: AsyncSession, notify) -> int:
+async def low_stock_scan(session: AsyncSession, notify: Notifier) -> int:
     """Пуш 'товар закінчується' — один раз при перетині порога (дебаунс).
 
     Скидання low_stock_notified_at при поповненні робиться в логіці restock."""
@@ -177,7 +180,7 @@ async def low_stock_scan(session: AsyncSession, notify) -> int:
         product = await session.get(Product, v.product_id)
         shop = await session.get(Shop, v.shop_id)
         name = product.name if product else f"Товар #{v.product_id}"
-        await notify(shop.owner_tg_id, f"📦 «{name}» закінчується — залишилось {avail} {_units(avail)}.")
+        await notify(shop.owner_tg_id, f"📦 «{name}» закінчується — залишилось {avail} {_units(avail)}.")  # type: ignore[union-attr]
         v.low_stock_notified_at = utcnow()
     await session.commit()
     return len(variants)

@@ -47,6 +47,7 @@ Oracle Cloud (Ubuntu ARM, systemd). Розробка з Windows/PowerShell.
 - **Жодних заглушок.** Бракує ключа/рішення — зупинись і запитай, не лишай `# TODO`.
 - Acceptance-критерії стадії спочатку як тести, потім реалізація.
 - Один коміт = одна стадія ROADMAP.
+- Наприкінці кожної стадії: git add -A && git commit -m "Stage N: ..." && git push.
 
 ## Існуючі файли (не переписувати без причини)
 `models.py` (схема) · `subscriptions.py` (стейт-машина) · `billing.py` (провайдери) ·

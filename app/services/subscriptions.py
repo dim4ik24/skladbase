@@ -23,13 +23,13 @@ SkladBase — стейт-машина підписки + SubscriptionService.
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models import (
+from app.models import (
     Payment,
     PaymentStatus,
     Plan,
@@ -39,8 +39,8 @@ from models import (
     Shop,
     SubPeriod,
     SubProvider,
-    SubStatus,
     Subscription,
+    SubStatus,
     utcnow,
 )
 
@@ -161,7 +161,7 @@ class SubscriptionService:
         sub.auto_renew = False
         sub.canceled_at = utcnow()
         await self.s.flush()
-        # для Stars додатково смикнути editUserStarSubscription (див. billing.py)
+        # для Stars додатково смикнути editUserStarSubscription (див. billing/providers.py)
 
     # --- 5. Протермінування (з крона) ----------------------------------- #
     async def expire(self, sub: Subscription) -> None:
