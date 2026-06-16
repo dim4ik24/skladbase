@@ -219,6 +219,46 @@ async def test_sell_direct_more_than_on_hand_fails() -> None:
 
 
 @pytest.mark.asyncio
+async def test_sell_direct_respects_existing_reservation() -> None:
+    """Регресія: sell_direct мав перевіряти on_hand, не available — це дозволяло
+    прямому продажу списати товар, зарезервований під іншого клієнта, і загнати
+    available у мінус (порушення інваріанту №4 з CLAUDE.md)."""
+    shop_id, variant_id = await _make_variant(on_hand=10)
+
+    async with db.async_session() as session:
+        await inventory.reserve(
+            session,
+            shop_id=shop_id,
+            variant_id=variant_id,
+            qty=3,
+            source=ReservationSource.manual,
+        )
+
+    variant = await _get_variant(variant_id)
+    assert variant.available == 7
+
+    async with db.async_session() as session:
+        with pytest.raises(InventoryError) as exc_info:
+            await inventory.sell_direct(session, shop_id=shop_id, variant_id=variant_id, qty=8)
+    assert exc_info.value.status_code == HTTPStatus.CONFLICT
+
+    variant = await _get_variant(variant_id)
+    assert variant.on_hand == 10
+    assert variant.reserved == 3
+
+    async with db.async_session() as session:
+        sold = await inventory.sell_direct(
+            session, shop_id=shop_id, variant_id=variant_id, qty=7
+        )
+
+    assert sold.on_hand == 3
+    assert sold.reserved == 3
+    assert sold.available == 0
+    assert sold.reserved <= sold.on_hand
+    assert sold.available >= 0
+
+
+@pytest.mark.asyncio
 async def test_invariants_hold_after_sequence_of_operations() -> None:
     shop_id, variant_id = await _make_variant(on_hand=10)
 

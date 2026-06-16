@@ -220,10 +220,10 @@ async def sell_direct(
     _require_positive_qty(qty)
 
     variant = await _locked_variant(session, shop_id, variant_id)
-    if variant.on_hand < qty:
+    if variant.available < qty:
         raise InventoryError(
             HTTPStatus.CONFLICT,
-            f"Недостатньо залишку: на складі {variant.on_hand}, потрібно {qty}",
+            f"Недостатньо доступного залишку: доступно {variant.available}, потрібно {qty}",
         )
 
     variant.on_hand -= qty
