@@ -41,6 +41,7 @@ from app.models import (
     SubProvider,
     Subscription,
     SubStatus,
+    ensure_aware_utc,
     utcnow,
 )
 
@@ -121,7 +122,8 @@ class SubscriptionService:
         now = utcnow()
 
         # продовжуємо від більшої з дат: 'зараз' або поточний кінець періоду
-        base = sub.current_period_end if (sub.current_period_end and sub.current_period_end > now) else now
+        current_end = sub.current_period_end and ensure_aware_utc(sub.current_period_end)
+        base = current_end if (current_end and current_end > now) else now
         sub.current_period_end = base + _period_delta(period)
         sub.plan_id = plan.id
         sub.provider = provider
@@ -189,7 +191,8 @@ class SubscriptionService:
 
         if promo.type == PromoType.free_period:
             now = utcnow()
-            base = sub.current_period_end if (sub.current_period_end and sub.current_period_end > now) else now
+            current_end = sub.current_period_end and ensure_aware_utc(sub.current_period_end)
+            base = current_end if (current_end and current_end > now) else now
             sub.current_period_end = base + timedelta(days=promo.value)
             sub.is_comp = True
             sub.auto_renew = False

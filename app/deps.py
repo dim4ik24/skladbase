@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db import get_session
-from app.models import MemberRole, Membership, Shop
+from app.models import MemberRole, Membership, Shop, Subscription
 from app.security.crypto import CryptoError, decrypt
 from app.security.initdata import InitDataError, validate_init_data
 from app.services.bootstrap import bootstrap_shop
@@ -29,6 +29,7 @@ __all__ = [
     "require_api_key",
     "require_member",
     "require_owner",
+    "require_writable",
     "resolve_membership",
 ]
 
@@ -68,6 +69,23 @@ async def require_owner(
 ) -> Membership:
     if membership.role != MemberRole.owner:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="owner-only")
+    return membership
+
+
+async def require_writable(
+    membership: Membership = Depends(require_member),
+    session: AsyncSession = Depends(get_session),
+) -> Membership:
+    """Гард на запис: протермінована підписка -> read-only (CLAUDE.md).
+    GET-ендпоінти цей гард не накладають — дані лишаються видимими завжди."""
+    subscription = await session.scalar(
+        select(Subscription).where(Subscription.shop_id == membership.shop_id)
+    )
+    if subscription is None or not subscription.is_writable:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="підписка не активна — режим лише читання",
+        )
     return membership
 
 

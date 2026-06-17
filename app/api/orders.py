@@ -21,7 +21,7 @@ from sqlalchemy.orm import selectinload
 
 from app.bot.notify import notifier
 from app.db import get_session
-from app.deps import require_api_key, require_member
+from app.deps import require_api_key, require_member, require_writable
 from app.models import Membership, Order, OrderSource, OrderStatus, Shop
 from app.services import orders as orders_service
 
@@ -122,7 +122,7 @@ async def list_orders(
 @router.post("/orders/{order_id}/confirm", response_model=OrderOut)
 async def confirm_order(
     order_id: int,
-    membership: Membership = Depends(require_member),
+    membership: Membership = Depends(require_writable),
     session: AsyncSession = Depends(get_session),
 ) -> Order:
     try:
@@ -136,7 +136,7 @@ async def confirm_order(
 @router.post("/orders/{order_id}/cancel", response_model=OrderOut)
 async def cancel_order(
     order_id: int,
-    membership: Membership = Depends(require_member),
+    membership: Membership = Depends(require_writable),
     session: AsyncSession = Depends(get_session),
 ) -> Order:
     try:

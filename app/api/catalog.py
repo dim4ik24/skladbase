@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.db import get_session
-from app.deps import require_member
+from app.deps import require_member, require_writable
 from app.models import Membership, Product, ProductTemplate, TemplateCode
 from app.services import catalog as catalog_service
 
@@ -108,7 +108,7 @@ async def list_templates(
 @router.post("/products", response_model=ProductOut, status_code=status.HTTP_201_CREATED)
 async def create_product(
     payload: ProductIn,
-    membership: Membership = Depends(require_member),
+    membership: Membership = Depends(require_writable),
     session: AsyncSession = Depends(get_session),
 ) -> Product:
     service_payload = catalog_service.ProductInput(
@@ -166,7 +166,7 @@ async def _get_owned_product(session: AsyncSession, shop_id: int, product_id: in
 async def patch_product(
     product_id: int,
     payload: ProductPatch,
-    membership: Membership = Depends(require_member),
+    membership: Membership = Depends(require_writable),
     session: AsyncSession = Depends(get_session),
 ) -> Product:
     product = await _get_owned_product(session, membership.shop_id, product_id)
@@ -182,7 +182,7 @@ async def patch_product(
 @router.delete("/products/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_product(
     product_id: int,
-    membership: Membership = Depends(require_member),
+    membership: Membership = Depends(require_writable),
     session: AsyncSession = Depends(get_session),
 ) -> None:
     product = await _get_owned_product(session, membership.shop_id, product_id)

@@ -42,6 +42,14 @@ def utcnow() -> datetime:
     return datetime.now(UTC)
 
 
+def ensure_aware_utc(value: datetime) -> datetime:
+    """SQLite не зберігає tzinfo на `DateTime(timezone=True)` — після
+    перечитування з БД значення повертається naive. Postgres цього не робить,
+    тож тут лише підстраховка для порівнянь типу `trial_ends_at > utcnow()`.
+    Експортується — той самий захист потрібен у `services/subscriptions.py`."""
+    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+
+
 class Base(DeclarativeBase):
     pass
 
@@ -396,7 +404,11 @@ class Subscription(Base):
         """Чи може магазин редагувати дані (не read-only)."""
         if self.status in (SubStatus.active, SubStatus.canceled, SubStatus.past_due):
             return True
-        if self.status == SubStatus.trial and self.trial_ends_at and self.trial_ends_at > utcnow():
+        if (
+            self.status == SubStatus.trial
+            and self.trial_ends_at
+            and ensure_aware_utc(self.trial_ends_at) > utcnow()
+        ):
             return True
         return False
 
@@ -437,7 +449,7 @@ class PromoCode(Base):
     def is_redeemable(self) -> bool:
         if not self.is_active or self.used_count >= self.max_uses:
             return False
-        if self.expires_at and self.expires_at < utcnow():
+        if self.expires_at and ensure_aware_utc(self.expires_at) < utcnow():
             return False
         return True
 
