@@ -22,4 +22,6 @@ async def get_me(
         "shop_name": shop.name,
         "shop_slug": shop.slug,
         "role": membership.role.value,
+        "logo_url": shop.logo_url,
+        "accent_color": shop.accent_color,
     }

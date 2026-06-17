@@ -1,0 +1,205 @@
+:root {
+  /* М'яка пастельна палітра за замовчуванням — до завантаження брендингу
+     магазину (accent-color) і теми Telegram (--tg-*). */
+  --accent-color: #a7c7e7;
+  --bg-color: #faf8f5;
+  --card-bg: #ffffff;
+  --text-color: #3a3a3a;
+  --hint-color: #8a8580;
+  --low-bg: #fce7b8;
+  --low-text: #8a6d1f;
+  --out-bg: #fad4d4;
+  --out-text: #9b3b3b;
+
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--text-color);
+  background-color: var(--tg-bg-color, var(--bg-color));
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.app {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 12px 16px 32px;
+}
+
+.shop-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0 16px;
+}
+
+.shop-logo {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  object-fit: cover;
+}
+
+.shop-logo-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-color);
+  color: #fff;
+  font-weight: 600;
+  font-size: 18px;
+}
+
+.shop-name {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.search-input {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid #e3ddd3;
+  font-size: 15px;
+  margin-bottom: 16px;
+}
+
+.search-input:focus {
+  outline: 2px solid var(--accent-color);
+}
+
+.status-text,
+.error-banner {
+  color: var(--hint-color);
+  text-align: center;
+  padding: 24px 0;
+}
+
+.error-banner {
+  color: var(--out-text);
+}
+
+.product-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.product-card {
+  background: var(--card-bg);
+  border-radius: 16px;
+  padding: 12px;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.06);
+}
+
+.product-photo {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--bg-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+
+.product-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.product-photo-placeholder {
+  font-size: 40px;
+  opacity: 0.4;
+}
+
+.product-name {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+
+.variant-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.variant-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.variant-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.variant-axis {
+  color: var(--hint-color);
+}
+
+.variant-price {
+  font-weight: 600;
+}
+
+.variant-available {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.badge-low {
+  background: var(--low-bg);
+  color: var(--low-text);
+}
+
+.badge-out {
+  background: var(--out-bg);
+  color: var(--out-text);
+}
+
+.variant-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.variant-controls button {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: none;
+  background: var(--accent-color);
+  color: #fff;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.variant-controls button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
