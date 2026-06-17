@@ -1,7 +1,9 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from app import db
 from app.api import (
@@ -49,3 +51,8 @@ app.include_router(inventory.router)
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+_tma_dist = Path(__file__).resolve().parent.parent / "frontend" / "app" / "dist"
+if _tma_dist.is_dir():
+    app.mount("/", StaticFiles(directory=_tma_dist, html=True), name="tma")
