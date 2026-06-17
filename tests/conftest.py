@@ -2,9 +2,11 @@
 хелпер для побудови валідно підписаного Telegram initData."""
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import json
+import secrets
 import time
 from collections.abc import AsyncGenerator
 from urllib.parse import urlencode
@@ -15,11 +17,18 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from app import db
+from app.api import orders as orders_api
 from app.config import settings
 from app.main import app
 from app.models import Base
 
 TEST_BOT_TOKEN = "123456:TEST-BOT-TOKEN"
+TEST_ENCRYPTION_KEY = base64.b64encode(secrets.token_bytes(32)).decode()
+
+
+async def _noop_notifier(tg_id: int, text: str) -> None:
+    """За замовчуванням нотифікації — no-op у тестах: BOT_TOKEN тут фейковий
+    (потрібен лише для HMAC initData), реальний Telegram API недосяжний."""
 
 
 @pytest.fixture(autouse=True)
@@ -34,6 +43,8 @@ async def _isolated_db(monkeypatch: pytest.MonkeyPatch) -> AsyncGenerator[None, 
     monkeypatch.setattr(db, "engine", test_engine)
     monkeypatch.setattr(db, "async_session", test_session)
     monkeypatch.setattr(settings, "BOT_TOKEN", TEST_BOT_TOKEN)
+    monkeypatch.setattr(settings, "ENCRYPTION_KEY", TEST_ENCRYPTION_KEY)
+    monkeypatch.setattr(orders_api, "notifier", _noop_notifier)
 
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

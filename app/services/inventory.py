@@ -14,11 +14,18 @@ SkladBase — єдиний сервіс зміни складу (CLAUDE.md, ін
 Реальний конкурентний оверсел (два паралельні `fulfill`/`sell_direct` останньої
 одиниці) на SQLite не відтворити — потрібен Postgres з реальним row-level
 locking під конкурентним навантаженням.
+
+Кожна операція приймає `commit: bool = True`. За замовчуванням викликана
+самостійно — комітить себе. Коли кілька операцій мають бути атомарними разом
+(наприклад, резерв усіх позицій замовлення — все або нічого), викликач
+передає `commit=False` і сам керує транзакцією (commit/rollback) навколо
+всієї послідовності (див. `services/orders.py`).
 """
 from __future__ import annotations
 
 from datetime import datetime
 from http import HTTPStatus
+from typing import TypeVar
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,6 +39,8 @@ from app.models import (
     Variant,
     utcnow,
 )
+
+_T = TypeVar("_T")
 
 
 class InventoryError(Exception):
@@ -99,6 +108,15 @@ def _require_positive_qty(qty: int) -> None:
         raise InventoryError(HTTPStatus.BAD_REQUEST, "qty має бути додатнім")
 
 
+async def _finalize(session: AsyncSession, obj: _T, *, commit: bool) -> _T:
+    if commit:
+        await session.commit()
+        await session.refresh(obj)
+    else:
+        await session.flush()
+    return obj
+
+
 # --------------------------------------------------------------------------- #
 #  Резерв (замовлення -> резерв, не пряме списання)                           #
 # --------------------------------------------------------------------------- #
@@ -113,6 +131,7 @@ async def reserve(
     customer_note: str | None = None,
     expires_at: datetime | None = None,
     order_id: int | None = None,
+    commit: bool = True,
 ) -> Reservation:
     _require_positive_qty(qty)
 
@@ -147,12 +166,16 @@ async def reserve(
         order_id=order_id,
     )
 
-    await session.commit()
-    await session.refresh(reservation)
-    return reservation
+    return await _finalize(session, reservation, commit=commit)
 
 
-async def release(session: AsyncSession, *, shop_id: int, reservation_id: int) -> Reservation:
+async def release(
+    session: AsyncSession,
+    *,
+    shop_id: int,
+    reservation_id: int,
+    commit: bool = True,
+) -> Reservation:
     reservation = await _locked_reservation(session, shop_id, reservation_id)
     if reservation.status != ReservationStatus.active:
         raise InventoryError(HTTPStatus.CONFLICT, "Резерв не активний")
@@ -172,12 +195,16 @@ async def release(session: AsyncSession, *, shop_id: int, reservation_id: int) -
         order_id=reservation.order_id,
     )
 
-    await session.commit()
-    await session.refresh(reservation)
-    return reservation
+    return await _finalize(session, reservation, commit=commit)
 
 
-async def fulfill(session: AsyncSession, *, shop_id: int, reservation_id: int) -> Reservation:
+async def fulfill(
+    session: AsyncSession,
+    *,
+    shop_id: int,
+    reservation_id: int,
+    commit: bool = True,
+) -> Reservation:
     reservation = await _locked_reservation(session, shop_id, reservation_id)
     if reservation.status != ReservationStatus.active:
         raise InventoryError(HTTPStatus.CONFLICT, "Резерв не активний")
@@ -201,9 +228,7 @@ async def fulfill(session: AsyncSession, *, shop_id: int, reservation_id: int) -
         order_id=reservation.order_id,
     )
 
-    await session.commit()
-    await session.refresh(reservation)
-    return reservation
+    return await _finalize(session, reservation, commit=commit)
 
 
 # --------------------------------------------------------------------------- #
@@ -216,6 +241,7 @@ async def sell_direct(
     variant_id: int,
     qty: int,
     order_id: int | None = None,
+    commit: bool = True,
 ) -> Variant:
     _require_positive_qty(qty)
 
@@ -237,15 +263,20 @@ async def sell_direct(
         order_id=order_id,
     )
 
-    await session.commit()
-    await session.refresh(variant)
-    return variant
+    return await _finalize(session, variant, commit=commit)
 
 
 # --------------------------------------------------------------------------- #
 #  Поповнення і ручна корекція                                                #
 # --------------------------------------------------------------------------- #
-async def restock(session: AsyncSession, *, shop_id: int, variant_id: int, qty: int) -> Variant:
+async def restock(
+    session: AsyncSession,
+    *,
+    shop_id: int,
+    variant_id: int,
+    qty: int,
+    commit: bool = True,
+) -> Variant:
     _require_positive_qty(qty)
 
     variant = await _locked_variant(session, shop_id, variant_id)
@@ -260,9 +291,7 @@ async def restock(session: AsyncSession, *, shop_id: int, variant_id: int, qty: 
         delta=qty,
     )
 
-    await session.commit()
-    await session.refresh(variant)
-    return variant
+    return await _finalize(session, variant, commit=commit)
 
 
 async def adjust(
@@ -272,6 +301,7 @@ async def adjust(
     variant_id: int,
     new_on_hand: int,
     reason: str | None = None,
+    commit: bool = True,
 ) -> Variant:
     """Ручна корекція залишку. `reason` приймається для контексту викликача,
     але не персистується — у `StockMovement` немає відповідного поля
@@ -298,6 +328,4 @@ async def adjust(
         delta=delta,
     )
 
-    await session.commit()
-    await session.refresh(variant)
-    return variant
+    return await _finalize(session, variant, commit=commit)

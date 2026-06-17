@@ -150,6 +150,11 @@ class Shop(Base):
     accent_color: Mapped[str] = mapped_column(String(7), default="#2E7D32")  # hex
     public_catalog_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    # --- Website API (Стадія 4): server-to-server ключ для /api/website/* ---
+    website_url: Mapped[str | None] = mapped_column(String(500))
+    api_key_encrypted: Mapped[str | None] = mapped_column(String(500))  # AES-256-GCM, plaintext не зберігаємо
+    api_key_prefix: Mapped[str | None] = mapped_column(String(8), index=True)  # для швидкого пошуку Shop за ключем
+
     status: Mapped[ShopStatus] = mapped_column(SAEnum(ShopStatus), default=ShopStatus.active)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 

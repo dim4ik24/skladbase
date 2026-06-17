@@ -12,6 +12,7 @@ class Settings(BaseSettings):
 
     BOT_TOKEN: str = ""
     INIT_DATA_MAX_AGE_HOURS: int = 24
+    ENCRYPTION_KEY: str = ""  # base64, 32 байти — для AES-256-GCM (app/security/crypto.py)
 
     WFP_MERCHANT: str = ""
     WFP_SECRET: str = ""
