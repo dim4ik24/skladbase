@@ -34,10 +34,12 @@ from app.models import (
     Reservation,
     ReservationSource,
     ReservationStatus,
+    Shop,
     Variant,
 )
 from app.services import inventory
 from app.services.inventory import InventoryError
+from app.services.webhooks import dispatch_stock_changed
 
 
 class OrderError(Exception):
@@ -98,6 +100,24 @@ async def _active_reservations(
             )
         ).all()
     )
+
+
+async def _notify_stock_changed(session: AsyncSession, shop_id: int, order: Order) -> None:
+    """Best-effort вихідний вебхук ПІСЛЯ commit (стан складу вже змінився).
+    Викликається з уже завершеної транзакції — помилка вебхука сюди не
+    долетить (`dispatch_stock_changed` сама ловить мережеві винятки)."""
+    shop = await session.get(Shop, shop_id)
+    if shop is None:
+        return
+
+    variant_ids = {item.variant_id for item in order.items}
+    if not variant_ids:
+        return
+
+    variants = list(
+        (await session.scalars(select(Variant).where(Variant.id.in_(variant_ids)))).all()
+    )
+    await dispatch_stock_changed(shop, variants)
 
 
 async def create_website_order(
@@ -173,6 +193,7 @@ async def create_website_order(
     order.total = total
     await session.commit()
     await session.refresh(order, attribute_names=["items"])
+    await _notify_stock_changed(session, shop_id, order)
     return order, True
 
 
@@ -195,6 +216,7 @@ async def confirm_order(session: AsyncSession, *, shop_id: int, order_id: int) -
     order.status = OrderStatus.fulfilled
     await session.commit()
     await session.refresh(order, attribute_names=["items"])
+    await _notify_stock_changed(session, shop_id, order)
     return order
 
 
@@ -217,4 +239,5 @@ async def cancel_order(session: AsyncSession, *, shop_id: int, order_id: int) ->
     order.status = OrderStatus.canceled
     await session.commit()
     await session.refresh(order, attribute_names=["items"])
+    await _notify_stock_changed(session, shop_id, order)
     return order

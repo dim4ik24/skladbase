@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app import db
-from app.api import catalog, finance, me, orders
+from app.api import catalog, finance, me, orders, public, shop
 
 
 @asynccontextmanager
@@ -18,6 +18,8 @@ app.include_router(me.router)
 app.include_router(finance.router)
 app.include_router(catalog.router)
 app.include_router(orders.router)
+app.include_router(public.router)
+app.include_router(shop.router)
 
 
 @app.get("/health")

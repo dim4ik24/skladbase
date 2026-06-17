@@ -155,6 +155,10 @@ class Shop(Base):
     api_key_encrypted: Mapped[str | None] = mapped_column(String(500))  # AES-256-GCM, plaintext не зберігаємо
     api_key_prefix: Mapped[str | None] = mapped_column(String(8), index=True)  # для швидкого пошуку Shop за ключем
 
+    # --- Вихідний вебхук на сайт при зміні залишків (Стадія 4b) ---
+    webhook_url: Mapped[str | None] = mapped_column(String(500))
+    webhook_secret_encrypted: Mapped[str | None] = mapped_column(String(500))  # AES-256-GCM
+
     status: Mapped[ShopStatus] = mapped_column(SAEnum(ShopStatus), default=ShopStatus.active)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
