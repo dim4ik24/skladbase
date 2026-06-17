@@ -30,6 +30,7 @@ from app.models import (
     Subscription,
     SubStatus,
     Variant,
+    ensure_aware_utc,
     utcnow,
 )
 from app.services.subscriptions import SubscriptionService
@@ -83,7 +84,8 @@ async def send_renewal_reminders(session: AsyncSession, notify: Notifier) -> int
         )
     )).all()
     for sub in subs:
-        days = max((sub.current_period_end - now).days, 0)  # type: ignore[operator]
+        period_end = ensure_aware_utc(sub.current_period_end)  # type: ignore[arg-type]
+        days = max((period_end - now).days, 0)
         shop = await session.get(Shop, sub.shop_id)
         await notify(shop.owner_tg_id, f"🔔 Підписка закінчується через {days} дн. Продовжити можна в меню.")  # type: ignore[union-attr]
         sub.renewal_reminder_sent = True

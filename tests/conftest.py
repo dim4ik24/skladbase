@@ -44,6 +44,7 @@ async def _isolated_db(monkeypatch: pytest.MonkeyPatch) -> AsyncGenerator[None, 
     monkeypatch.setattr(db, "async_session", test_session)
     monkeypatch.setattr(settings, "BOT_TOKEN", TEST_BOT_TOKEN)
     monkeypatch.setattr(settings, "ENCRYPTION_KEY", TEST_ENCRYPTION_KEY)
+    monkeypatch.setattr(settings, "RUN_SCHEDULER", False)
     monkeypatch.setattr(orders_api, "notifier", _noop_notifier)
 
     async with test_engine.begin() as conn:

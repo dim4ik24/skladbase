@@ -5,11 +5,20 @@ from fastapi import FastAPI
 
 from app import db
 from app.api import billing, catalog, finance, me, orders, payment_webhooks, public, shop, telegram
+from app.config import settings
+from app.scheduler import create_scheduler
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    scheduler = create_scheduler() if settings.RUN_SCHEDULER else None
+    if scheduler is not None:
+        scheduler.start()
+
     yield
+
+    if scheduler is not None:
+        scheduler.shutdown(wait=False)
     await db.engine.dispose()
 
 

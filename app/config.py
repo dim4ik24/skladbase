@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     BOT_TOKEN: str = ""
     INIT_DATA_MAX_AGE_HOURS: int = 24
     ENCRYPTION_KEY: str = ""  # base64, 32 байти — для AES-256-GCM (app/security/crypto.py)
+    RUN_SCHEDULER: bool = True  # False у тестах — щоб крон-джоби не стріляли під час прогону
 
     WFP_MERCHANT: str = ""
     WFP_SECRET: str = ""
