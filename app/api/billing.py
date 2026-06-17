@@ -1,9 +1,10 @@
 """
-SkladBase — REST API білінгу (Стадія 5a): тарифи, Stars checkout, промокоди,
-скасування.
+SkladBase — REST API білінгу (Стадії 5a/5b): тарифи, чекаути (Stars/картка/
+крипта), промокоди, скасування.
 
-Підписку активуємо ТІЛЬКИ з вебхука Telegram (`app/bot/dispatcher.py`), а не
-звідси (CLAUDE.md, інваріант №2) — ці ендпоінти лише готують інвойс або
+Підписку активуємо ТІЛЬКИ з вебхука провайдера (Telegram — `app/bot/dispatcher.py`;
+WayForPay/NOWPayments — `app/api/payment_webhooks.py`), а не звідси
+(CLAUDE.md, інваріант №2) — ці ендпоінти лише готують інвойс/форму оплати або
 виконують дії, явно дозволені стейт-машиною `SubscriptionService`, і ніколи
 не виставляють `status=active` напряму.
 """
@@ -18,7 +19,8 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.billing.providers import StarsProvider
+from app.billing.providers import NowPaymentsProvider, StarsProvider, WayForPayProvider
+from app.billing.refs import build_ref
 from app.config import settings
 from app.db import get_session
 from app.deps import require_member, require_owner
@@ -50,6 +52,24 @@ class StarsCheckoutOut(BaseModel):
     invoice_link: str
 
 
+class CardCheckoutIn(BaseModel):
+    plan_code: str
+    period: SubPeriod = SubPeriod.month
+
+
+class CardCheckoutOut(BaseModel):
+    form: dict
+
+
+class CryptoCheckoutIn(BaseModel):
+    plan_code: str
+    period: SubPeriod = SubPeriod.month
+
+
+class CryptoCheckoutOut(BaseModel):
+    payment: dict
+
+
 class PromoIn(BaseModel):
     code: str
 
@@ -74,6 +94,15 @@ async def _get_subscription(session: AsyncSession, shop_id: int) -> Subscription
     return subscription
 
 
+async def _get_active_plan(session: AsyncSession, plan_code: str) -> Plan:
+    plan = await session.scalar(
+        select(Plan).where(Plan.code == plan_code, Plan.is_active.is_(True))
+    )
+    if plan is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="План не знайдено")
+    return plan
+
+
 # --------------------------------------------------------------------------- #
 #  Тарифи
 # --------------------------------------------------------------------------- #
@@ -96,11 +125,7 @@ async def create_stars_checkout(
     membership: Membership = Depends(require_member),
     session: AsyncSession = Depends(get_session),
 ) -> StarsCheckoutOut:
-    plan = await session.scalar(
-        select(Plan).where(Plan.code == payload.plan_code, Plan.is_active.is_(True))
-    )
-    if plan is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="План не знайдено")
+    plan = await _get_active_plan(session, payload.plan_code)
 
     bot = Bot(token=settings.BOT_TOKEN)
     try:
@@ -114,6 +139,54 @@ async def create_stars_checkout(
         await bot.session.close()
 
     return StarsCheckoutOut(invoice_link=invoice_link)
+
+
+# --------------------------------------------------------------------------- #
+#  Картка (WayForPay, з рекурентним токеном)                                  #
+# --------------------------------------------------------------------------- #
+@router.post("/checkout/card", response_model=CardCheckoutOut)
+async def create_card_checkout(
+    payload: CardCheckoutIn,
+    membership: Membership = Depends(require_member),
+    session: AsyncSession = Depends(get_session),
+) -> CardCheckoutOut:
+    plan = await _get_active_plan(session, payload.plan_code)
+    amount = SubscriptionService.effective_price_uah(plan, payload.period)
+    order_ref = build_ref(membership.shop_id, plan.code, payload.period.value)
+
+    provider = WayForPayProvider(settings.WFP_MERCHANT, settings.WFP_SECRET, settings.WFP_DOMAIN)
+    form = await provider.create_checkout(
+        order_ref=order_ref,
+        amount=amount,
+        plan_code=plan.code,
+        period=payload.period.value,
+        product=plan.name,
+    )
+    return CardCheckoutOut(form=form)
+
+
+# --------------------------------------------------------------------------- #
+#  Крипта (NOWPayments, разово)                                               #
+# --------------------------------------------------------------------------- #
+@router.post("/checkout/crypto", response_model=CryptoCheckoutOut)
+async def create_crypto_checkout(
+    payload: CryptoCheckoutIn,
+    membership: Membership = Depends(require_member),
+    session: AsyncSession = Depends(get_session),
+) -> CryptoCheckoutOut:
+    plan = await _get_active_plan(session, payload.plan_code)
+    amount_uah = SubscriptionService.effective_price_uah(plan, payload.period)
+    amount_usd = (amount_uah / settings.UAH_USD_RATE).quantize(Decimal("0.01"))
+    order_id = build_ref(membership.shop_id, plan.code, payload.period.value)
+
+    provider = NowPaymentsProvider(settings.NOWPAYMENTS_API_KEY, settings.NOWPAYMENTS_IPN_SECRET)
+    payment = await provider.create_checkout(
+        order_id=order_id,
+        amount_usd=amount_usd,
+        plan_code=plan.code,
+        period=payload.period.value,
+    )
+    return CryptoCheckoutOut(payment=payment)
 
 
 # --------------------------------------------------------------------------- #

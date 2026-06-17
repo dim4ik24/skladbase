@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,6 +22,10 @@ class Settings(BaseSettings):
 
     NOWPAYMENTS_API_KEY: str = ""
     NOWPAYMENTS_IPN_SECRET: str = ""
+    # Свідоме спрощення для MVP: фіксований курс із конфігу, не live-курс
+    # НБУ/біржі. Достатньо для приблизної ціни крипто-чекауту; не використовувати
+    # для точних фінансових розрахунків.
+    UAH_USD_RATE: Decimal = Decimal("41.5")
 
     R2_ACCOUNT_ID: str = ""
     R2_ACCESS_KEY: str = ""
