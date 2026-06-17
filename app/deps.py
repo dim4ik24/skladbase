@@ -13,7 +13,7 @@ from __future__ import annotations
 import hmac
 from datetime import timedelta
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,6 +22,7 @@ from app.db import get_session
 from app.models import MemberRole, Membership, Shop, Subscription
 from app.security.crypto import CryptoError, decrypt
 from app.security.initdata import InitDataError, validate_init_data
+from app.security.rate_limit import InMemoryRateLimiter, client_ip
 from app.services.bootstrap import bootstrap_shop
 
 __all__ = [
@@ -35,8 +36,17 @@ __all__ = [
 
 _API_KEY_PREFIX_LEN = 8
 
+# Новий магазин (Shop + Subscription + демо-каталог) створюється лише тут,
+# при першому запиті від ще не баченого tg_id — найдешевший шлях для абʼюзу
+# (масове штампування магазинів з однієї IP). Ліміт за IP, не за tg_id: саме
+# tg_id тут ще немає в системі, довіряти йому як ключу ліміту нема смислу.
+_bootstrap_limiter = InMemoryRateLimiter(
+    "shop_bootstrap", max_requests=20, window_seconds=60
+)
+
 
 async def resolve_membership(
+    request: Request,
     x_telegram_init_data: str = Header(alias="X-Telegram-Init-Data"),
     session: AsyncSession = Depends(get_session),
 ) -> Membership:
@@ -53,6 +63,11 @@ async def resolve_membership(
         select(Membership).where(Membership.tg_id == init_data.user.id)
     )
     if membership is None:
+        if not _bootstrap_limiter.hit(client_ip(request)):
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Занадто багато нових магазинів з цієї IP, спробуйте пізніше",
+            )
         membership = await bootstrap_shop(session, init_data.user)
 
     return membership
@@ -93,22 +108,27 @@ async def require_api_key(
     x_api_key: str | None = Header(default=None, alias="X-API-Key"),
     session: AsyncSession = Depends(get_session),
 ) -> Shop:
+    """`api_key_prefix` НЕ унікальний (8 символів — теоретично можлива колізія
+    між магазинами, ROADMAP, відкладено зі Стадії 4a). Тож тут перебираємо
+    УСІХ кандидатів з цим префіксом і constant-time звіряємо кожен з повним
+    ключем, замість `scalar()` (який впав би з `MultipleResultsFound` при
+    колізії) чи довіри першому знайденому (який міг би віддати ЧУЖИЙ shop)."""
     if not x_api_key:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="X-API-Key відсутній")
 
     prefix = x_api_key[:_API_KEY_PREFIX_LEN]
-    shop = await session.scalar(select(Shop).where(Shop.api_key_prefix == prefix))
-    if shop is None or not shop.api_key_encrypted:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="невалідний API-ключ")
+    candidates = (
+        await session.scalars(select(Shop).where(Shop.api_key_prefix == prefix))
+    ).all()
 
-    try:
-        expected = decrypt(shop.api_key_encrypted)
-    except CryptoError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="невалідний API-ключ"
-        ) from exc
+    for shop in candidates:
+        if not shop.api_key_encrypted:
+            continue
+        try:
+            expected = decrypt(shop.api_key_encrypted)
+        except CryptoError:
+            continue
+        if hmac.compare_digest(expected, x_api_key):
+            return shop
 
-    if not hmac.compare_digest(expected, x_api_key):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="невалідний API-ключ")
-
-    return shop
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="невалідний API-ключ")

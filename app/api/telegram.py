@@ -16,11 +16,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.bot.dispatcher import dp
 from app.config import settings
 from app.db import get_session
+from app.security.rate_limit import InMemoryRateLimiter, rate_limited
 
 router = APIRouter(prefix="/webhook", tags=["telegram"])
 
+_telegram_webhook_limiter = InMemoryRateLimiter(
+    "telegram_webhook", max_requests=120, window_seconds=60
+)
 
-@router.post("/telegram")
+
+@router.post("/telegram", dependencies=[Depends(rate_limited(_telegram_webhook_limiter))])
 async def telegram_webhook(
     request: Request,
     session: AsyncSession = Depends(get_session),

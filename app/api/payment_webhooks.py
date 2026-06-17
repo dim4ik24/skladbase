@@ -28,11 +28,19 @@ from app.billing.refs import ParsedRef, RefError, parse_ref
 from app.config import settings
 from app.db import get_session
 from app.models import Plan, SubPeriod, SubProvider, Subscription
+from app.security.rate_limit import InMemoryRateLimiter, rate_limited
 from app.services.subscriptions import SubscriptionService
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/webhook", tags=["payment-webhooks"])
+
+# Без авторизації (підпис перевіряється в тілі хендлера) — ліміт на потік
+# запитів захищає від флуду ще до витрат на crypto-перевірку підпису.
+_wayforpay_limiter = InMemoryRateLimiter("wayforpay_webhook", max_requests=60, window_seconds=60)
+_nowpayments_limiter = InMemoryRateLimiter(
+    "nowpayments_webhook", max_requests=60, window_seconds=60
+)
 
 
 async def _resolve_from_ref(
@@ -69,7 +77,7 @@ def _ignored(detail: str) -> JSONResponse:
 # --------------------------------------------------------------------------- #
 #  WayForPay — картка з рекурентним токеном                                   #
 # --------------------------------------------------------------------------- #
-@router.post("/wayforpay")
+@router.post("/wayforpay", dependencies=[Depends(rate_limited(_wayforpay_limiter))])
 async def wayforpay_webhook(
     request: Request, session: AsyncSession = Depends(get_session)
 ) -> JSONResponse:
@@ -114,7 +122,7 @@ async def wayforpay_webhook(
 # --------------------------------------------------------------------------- #
 #  NOWPayments — крипта, разово                                               #
 # --------------------------------------------------------------------------- #
-@router.post("/nowpayments")
+@router.post("/nowpayments", dependencies=[Depends(rate_limited(_nowpayments_limiter))])
 async def nowpayments_webhook(
     request: Request, session: AsyncSession = Depends(get_session)
 ) -> JSONResponse:

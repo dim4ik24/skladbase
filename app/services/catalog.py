@@ -54,6 +54,19 @@ class ProductInput:
     attributes: dict | None = None
 
 
+def _is_sku_conflict(exc: IntegrityError) -> bool:
+    """`Variant` має лише один іменований unique-constraint —
+    `uq_variant_shop_sku` (`shop_id`+`sku`). Postgres віддає назву обмеження
+    у тексті помилки напряму; SQLite — лише назви колонок. Перевіряємо обидва
+    варіанти, щоб НЕ підписувати довільний `IntegrityError` (інша гонка,
+    FK-порушення тощо) як "SKU вже використовується" (ROADMAP, відкладено
+    зі Стадії 2a) — оманливий текст гірший за загальний."""
+    message = str(getattr(exc, "orig", exc)).lower()
+    if "uq_variant_shop_sku" in message:
+        return True
+    return "variants.shop_id" in message and "variants.sku" in message
+
+
 async def _count_active_products(session: AsyncSession, shop_id: int) -> int:
     count = await session.scalar(
         select(func.count(Product.id)).where(
@@ -189,8 +202,12 @@ async def create_product_with_variants(
         await session.flush()
     except IntegrityError as exc:
         await session.rollback()
+        if _is_sku_conflict(exc):
+            raise CatalogError(
+                HTTPStatus.CONFLICT, "SKU вже використовується в цьому магазині"
+            ) from exc
         raise CatalogError(
-            HTTPStatus.CONFLICT, "SKU вже використовується в цьому магазині"
+            HTTPStatus.CONFLICT, "Не вдалося створити товар через конфлікт даних"
         ) from exc
 
     await session.commit()

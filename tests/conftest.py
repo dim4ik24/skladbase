@@ -21,6 +21,7 @@ from app.api import orders as orders_api
 from app.config import settings
 from app.main import app
 from app.models import Base
+from app.security import rate_limit as rate_limit_module
 
 TEST_BOT_TOKEN = "123456:TEST-BOT-TOKEN"
 TEST_ENCRYPTION_KEY = base64.b64encode(secrets.token_bytes(32)).decode()
@@ -46,6 +47,7 @@ async def _isolated_db(monkeypatch: pytest.MonkeyPatch) -> AsyncGenerator[None, 
     monkeypatch.setattr(settings, "ENCRYPTION_KEY", TEST_ENCRYPTION_KEY)
     monkeypatch.setattr(settings, "RUN_SCHEDULER", False)
     monkeypatch.setattr(orders_api, "notifier", _noop_notifier)
+    rate_limit_module.reset_all()  # лімітери — модульні синглтони, спільні між тестами
 
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

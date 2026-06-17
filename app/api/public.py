@@ -18,8 +18,15 @@ from sqlalchemy.orm import selectinload
 
 from app.db import get_session
 from app.models import Product, Shop
+from app.security.rate_limit import InMemoryRateLimiter, rate_limited
 
 router = APIRouter(prefix="/api/public", tags=["public"])
+
+# Без авторизації, доступний усім — найімовірніша ціль скрейпінгу/DoS серед
+# наших ендпоінтів (Стадія 8).
+_public_catalog_limiter = InMemoryRateLimiter(
+    "public_catalog", max_requests=30, window_seconds=60
+)
 
 
 class PublicVariantOut(BaseModel):
@@ -40,7 +47,11 @@ class PublicShopOut(BaseModel):
     products: list[PublicProductOut]
 
 
-@router.get("/{slug}", response_model=PublicShopOut)
+@router.get(
+    "/{slug}",
+    response_model=PublicShopOut,
+    dependencies=[Depends(rate_limited(_public_catalog_limiter))],
+)
 async def get_public_catalog(
     slug: str,
     session: AsyncSession = Depends(get_session),

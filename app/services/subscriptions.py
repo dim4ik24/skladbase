@@ -23,6 +23,7 @@ SkladBase — стейт-машина підписки + SubscriptionService.
 """
 from __future__ import annotations
 
+import logging
 from datetime import timedelta
 from decimal import Decimal
 
@@ -44,6 +45,8 @@ from app.models import (
     ensure_aware_utc,
     utcnow,
 )
+
+logger = logging.getLogger(__name__)
 
 TRIAL_DAYS = 7
 PAST_DUE_GRACE_DAYS = 3        # скільки тримаємо доступ після провалу авто-списання
@@ -142,6 +145,15 @@ class SubscriptionService:
             )
         )
         if existing_payment is not None:
+            logger.info(
+                "payment webhook replay ignored (already recorded)",
+                extra={
+                    "event": "payment_replay",
+                    "shop_id": sub.shop_id,
+                    "provider": provider.value,
+                    "transaction_id": transaction_id,
+                },
+            )
             return existing_payment
 
         now = utcnow()
@@ -173,6 +185,19 @@ class SubscriptionService:
         )
         self.s.add(payment)
         await self.s.flush()
+        logger.info(
+            "payment recorded, subscription extended",
+            extra={
+                "event": "payment_recorded",
+                "shop_id": sub.shop_id,
+                "provider": provider.value,
+                "plan_code": plan.code,
+                "amount": str(amount),
+                "currency": currency,
+                "transaction_id": transaction_id,
+                "current_period_end": sub.current_period_end.isoformat(),
+            },
+        )
         return payment
 
     # --- 3. Авто-списання не пройшло ------------------------------------ #
@@ -195,6 +220,10 @@ class SubscriptionService:
         self._transition(sub, SubStatus.expired)
         sub.auto_renew = False
         await self.s.flush()
+        logger.info(
+            "subscription expired -> read-only",
+            extra={"event": "subscription_expired", "shop_id": sub.shop_id},
+        )
 
     # --- 6. Промокод ---------------------------------------------------- #
     async def redeem_promo(self, shop: Shop, sub: Subscription, code: str) -> Subscription:

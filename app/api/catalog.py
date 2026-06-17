@@ -9,12 +9,13 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.config import settings
 from app.db import get_session
 from app.deps import require_member, require_writable
 from app.models import Membership, Product, ProductTemplate, TemplateCode, Variant
@@ -198,6 +199,7 @@ async def delete_product(
 @router.post("/variants/{variant_id}/photo", response_model=VariantOut)
 async def upload_variant_photo(
     variant_id: int,
+    request: Request,
     file: UploadFile = File(...),
     membership: Membership = Depends(require_writable),
     session: AsyncSession = Depends(get_session),
@@ -213,8 +215,26 @@ async def upload_variant_photo(
     except catalog_service.CatalogError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
-    data = await file.read()
+    max_bytes = media_service.max_upload_bytes()
+
+    # Content-Length перевіряємо ДО читання тіла — завеликий запит відхиляємо
+    # одразу, без буферизації файлу в памʼяті (ROADMAP, відкладено зі Стадії 2b).
+    content_length = request.headers.get("content-length")
+    if content_length is not None:
+        try:
+            declared_size = int(content_length)
+        except ValueError:
+            declared_size = None
+        if declared_size is not None and declared_size > max_bytes:
+            raise HTTPException(
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                detail=f"Файл занадто великий: максимум {settings.MAX_PHOTO_UPLOAD_MB} МБ.",
+            )
+
     try:
+        # Нема Content-Length (chunked) -> читаємо з обмеженням (cap), щоб не
+        # буферизувати необмежений потік цілком.
+        data = await media_service.read_capped(file, max_bytes)
         photo_url = await media_service.upload_variant_photo(
             shop_id=membership.shop_id,
             variant_id=variant.id,

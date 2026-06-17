@@ -16,6 +16,7 @@ import uuid
 from http import HTTPStatus
 
 import aioboto3
+from fastapi import UploadFile
 from PIL import Image, UnidentifiedImageError
 
 from app.config import settings
@@ -23,6 +24,7 @@ from app.config import settings
 ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
 MAX_DIMENSION = 1024
 WEBP_QUALITY = 80
+_READ_CHUNK_SIZE = 64 * 1024
 
 
 class MediaError(Exception):
@@ -70,6 +72,34 @@ def _build_key(shop_id: int, variant_id: int) -> str:
 
 def _public_url(key: str) -> str:
     return f"{settings.R2_PUBLIC_URL.rstrip('/')}/{key}"
+
+
+def max_upload_bytes() -> int:
+    return settings.MAX_PHOTO_UPLOAD_MB * 1024 * 1024
+
+
+def _too_large_error() -> MediaError:
+    return MediaError(
+        HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+        f"Файл занадто великий: максимум {settings.MAX_PHOTO_UPLOAD_MB} МБ.",
+    )
+
+
+async def read_capped(file: UploadFile, max_bytes: int) -> bytes:
+    """Читає `file` по чанках, обриваючи ОДРАЗУ як перевищено `max_bytes` —
+    замість того, щоб спершу прочитати в памʼять потенційно величезне тіло
+    і лише потім перевірити розмір (ROADMAP, відкладено зі Стадії 2b)."""
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await file.read(_READ_CHUNK_SIZE)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_bytes:
+            raise _too_large_error()
+        chunks.append(chunk)
+    return b"".join(chunks)
 
 
 async def upload_variant_photo(
