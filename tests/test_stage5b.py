@@ -26,12 +26,12 @@ from decimal import Decimal
 import httpx
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app import db
 from app.billing.refs import build_ref, parse_ref
 from app.config import settings
-from app.models import Plan, SubProvider, Subscription, SubStatus
+from app.models import Payment, Plan, SubProvider, Subscription, SubStatus
 from app.services.subscriptions import SubscriptionService
 from tests.conftest import make_init_data
 
@@ -233,6 +233,44 @@ async def test_wfp_callback_valid_signature_activates_subscription(client: Async
 
 
 @pytest.mark.asyncio
+async def test_wfp_callback_duplicate_does_not_extend_period_twice(client: AsyncClient) -> None:
+    """Регресія (Стадія 5c): WFP може доставити той самий callback повторно
+    (ретрай) — orderReference однаковий має продовжити період лише один раз,
+    і ОБИДВІ відповіді мають бути валідним підписаним "accept"."""
+    _init_data, shop_id = await _bootstrap(client, 6012)
+
+    order_ref = build_ref(shop_id, "basic", "month")
+    payload = _wfp_callback_payload(order_ref=order_ref, rec_token="rec-dup-1")
+
+    r1 = await client.post("/webhook/wayforpay", json=payload)
+    assert r1.status_code == 200, r1.text
+    sub_after_first = await _get_subscription(shop_id)
+
+    r2 = await client.post("/webhook/wayforpay", json=payload)
+    assert r2.status_code == 200, r2.text
+    sub_after_second = await _get_subscription(shop_id)
+
+    assert sub_after_second.current_period_end == sub_after_first.current_period_end
+    assert sub_after_second.external_sub_id == "rec-dup-1"
+
+    async with db.async_session() as session:
+        payments_count = await session.scalar(
+            select(func.count(Payment.id)).where(Payment.shop_id == shop_id)
+        )
+    assert payments_count == 1
+
+    for r in (r1, r2):
+        body = r.json()
+        assert body["status"] == "accept"
+        assert body["orderReference"] == order_ref
+        msg = ";".join([body["orderReference"], body["status"], str(body["time"])])
+        expected_signature = hmac.new(
+            TEST_WFP_SECRET.encode(), msg.encode(), hashlib.md5
+        ).hexdigest()
+        assert body["signature"] == expected_signature
+
+
+@pytest.mark.asyncio
 async def test_wfp_callback_invalid_signature_does_not_activate(client: AsyncClient) -> None:
     _init_data, shop_id = await _bootstrap(client, 6004)
 
@@ -292,6 +330,35 @@ async def test_nowpayments_ipn_valid_finished_activates_subscription(client: Asy
     assert sub_after.provider == SubProvider.crypto
     assert sub_after.auto_renew is False
     assert sub_after.current_period_end > sub_before.current_period_end
+
+
+@pytest.mark.asyncio
+async def test_nowpayments_ipn_duplicate_does_not_extend_period_twice(client: AsyncClient) -> None:
+    """Регресія (Стадія 5c): NOWPayments може доставити той самий IPN
+    повторно — той самий payment_id має продовжити період лише один раз."""
+    _init_data, shop_id = await _bootstrap(client, 6014)
+
+    order_id = build_ref(shop_id, "basic", "month")
+    payload = _nowpayments_ipn_payload(order_id=order_id, payment_id="np-dup-1")
+    body = json.dumps(payload).encode()
+    signature = _nowpayments_sign(TEST_NOWPAYMENTS_IPN_SECRET, body)
+    headers = {"Content-Type": "application/json", "x-nowpayments-sig": signature}
+
+    r1 = await client.post("/webhook/nowpayments", content=body, headers=headers)
+    assert r1.status_code == 200, r1.text
+    sub_after_first = await _get_subscription(shop_id)
+
+    r2 = await client.post("/webhook/nowpayments", content=body, headers=headers)
+    assert r2.status_code == 200, r2.text
+    sub_after_second = await _get_subscription(shop_id)
+
+    assert sub_after_second.current_period_end == sub_after_first.current_period_end
+
+    async with db.async_session() as session:
+        payments_count = await session.scalar(
+            select(func.count(Payment.id)).where(Payment.shop_id == shop_id)
+        )
+    assert payments_count == 1
 
 
 @pytest.mark.asyncio

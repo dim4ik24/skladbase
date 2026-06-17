@@ -190,6 +190,28 @@ async def test_recurring_payment_extends_period_further(client: AsyncClient) -> 
 
 
 @pytest.mark.asyncio
+async def test_duplicate_stars_payment_does_not_extend_period_twice(client: AsyncClient) -> None:
+    """Регресія (Стадія 5c): Telegram може доставити successful_payment
+    повторно (мережевий ретрай) — той самий charge_id має продовжити період
+    лише один раз."""
+    _init_data, shop_id = await _bootstrap(client, 5014)
+
+    await _feed_payment(5014, charge_id="charge-dup-1")
+    sub_after_first = await _get_subscription(shop_id)
+
+    await _feed_payment(5014, charge_id="charge-dup-1")
+    sub_after_second = await _get_subscription(shop_id)
+
+    assert sub_after_second.current_period_end == sub_after_first.current_period_end
+
+    async with db.async_session() as session:
+        payments_count = await session.scalar(
+            select(func.count(Payment.id)).where(Payment.shop_id == shop_id)
+        )
+    assert payments_count == 1
+
+
+@pytest.mark.asyncio
 async def test_promo_extends_period_and_rejects_second_redeem(client: AsyncClient) -> None:
     init_data, shop_id = await _bootstrap(client, 5003)
     await _insert_promo("WELCOME60")

@@ -112,13 +112,38 @@ class SubscriptionService:
         period: SubPeriod,
         amount: Decimal,
         currency: str,
-        external_id: str | None,
+        transaction_id: str,
+        recurring_token: str | None,
         is_recurring: bool,
         auto_renew: bool,
         raw: dict | None = None,
     ) -> Payment:
         """Єдина точка входу для всіх провайдерів. Активує/продовжує підписку
-        і пише рядок у леджер платежів."""
+        і пише рядок у леджер платежів.
+
+        Два різних ідентифікатори, бо провайдери шлють вебхуки повторно
+        (мережеві ретраї) — без розрізнення кожен повтор ще раз продовжив би
+        період:
+          * `transaction_id` — унікальний per-транзакція (Stars:
+            telegram_payment_charge_id; NOWPayments: payment_id; WayForPay:
+            orderReference). Ключ ідемпотентності: повторний вебхук з тим
+            самим transaction_id повертає вже записаний Payment, період НЕ
+            продовжується вдруге.
+          * `recurring_token` — токен для подальшого керування підпискою
+            (картка: recToken для крона `charge_due_card_subscriptions`;
+            Stars: останній charge_id для `editUserStarSubscription`). Кладеться
+            в `Subscription.external_sub_id`, може повторюватись між
+            транзакціями (картка) або теж бути унікальним (Stars)."""
+        existing_payment = await self.s.scalar(
+            select(Payment).where(
+                Payment.shop_id == sub.shop_id,
+                Payment.external_id == transaction_id,
+                Payment.status == PaymentStatus.succeeded,
+            )
+        )
+        if existing_payment is not None:
+            return existing_payment
+
         now = utcnow()
 
         # продовжуємо від більшої з дат: 'зараз' або поточний кінець періоду
@@ -131,8 +156,8 @@ class SubscriptionService:
         sub.auto_renew = auto_renew
         sub.is_comp = False
         sub.renewal_reminder_sent = False
-        if external_id:
-            sub.external_sub_id = external_id
+        if recurring_token:
+            sub.external_sub_id = recurring_token
         self._transition(sub, SubStatus.active)
 
         payment = Payment(
@@ -143,7 +168,7 @@ class SubscriptionService:
             amount=amount,
             currency=currency,
             is_recurring=is_recurring,
-            external_id=external_id,
+            external_id=transaction_id,
             raw=raw or {},
         )
         self.s.add(payment)

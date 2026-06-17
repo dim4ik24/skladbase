@@ -124,7 +124,8 @@ async def charge_due_card_subscriptions(
                 period=sub.period,
                 amount=amount,
                 currency="UAH",
-                external_id=sub.external_sub_id,
+                transaction_id=order_ref,  # унікальний на цю спробу списання
+                recurring_token=sub.external_sub_id,  # recToken — стабільний між списаннями
                 is_recurring=True,
                 auto_renew=True,
                 raw=result,

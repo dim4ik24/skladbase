@@ -14,6 +14,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import time
 from dataclasses import dataclass
 from decimal import Decimal
 
@@ -179,6 +180,19 @@ class WayForPayProvider:
             plan_code=plan_code,
             raw=data,
         )
+
+    def build_accept_response(self, order_ref: str) -> dict:
+        """Підтвердження прийому колбека: WFP чекає у відповідь
+        {orderReference, status, time, signature}, інакше вважає вебхук
+        невручениим і повторює доставку."""
+        ts = int(time.time())
+        signature = self._sign([order_ref, "accept", ts])
+        return {
+            "orderReference": order_ref,
+            "status": "accept",
+            "time": ts,
+            "signature": signature,
+        }
 
 
 # --------------------------------------------------------------------------- #

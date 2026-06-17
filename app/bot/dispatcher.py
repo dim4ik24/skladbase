@@ -102,7 +102,10 @@ async def on_successful_payment(message: Message, session: AsyncSession) -> None
         period=period,
         amount=result.amount,
         currency=result.currency,
-        external_id=result.external_id,
+        # Stars: charge_id унікальний на кожну транзакцію (і recurring), тож
+        # годиться і для дедуплікації, і як токен для editUserStarSubscription.
+        transaction_id=result.external_id,
+        recurring_token=result.external_id,
         is_recurring=result.is_recurring,
         auto_renew=result.auto_renew,
         raw=result.raw,
