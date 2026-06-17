@@ -29,7 +29,16 @@ from sqlalchemy import func, select
 
 from app import db
 from app.bot.dispatcher import dp
-from app.models import Payment, Product, PromoCode, PromoType, Subscription, SubStatus
+from app.models import (
+    MemberRole,
+    Membership,
+    Payment,
+    Product,
+    PromoCode,
+    PromoType,
+    Subscription,
+    SubStatus,
+)
 from tests.conftest import TEST_BOT_TOKEN, make_init_data
 
 HEADER = "X-Telegram-Init-Data"
@@ -47,6 +56,7 @@ def _successful_payment_update(
     update_id: int,
     tg_id: int,
     charge_id: str,
+    shop_id: int | None = None,
     plan_code: str = "basic",
     period: str = "month",
     is_recurring: bool = False,
@@ -62,7 +72,9 @@ def _successful_payment_update(
             "successful_payment": {
                 "currency": "XTR",
                 "total_amount": total_amount,
-                "invoice_payload": json.dumps({"plan": plan_code, "period": period}),
+                "invoice_payload": json.dumps(
+                    {"shop_id": shop_id, "plan": plan_code, "period": period}
+                ),
                 "telegram_payment_charge_id": charge_id,
                 "provider_payment_charge_id": f"prov-{charge_id}",
                 "is_recurring": is_recurring,
@@ -74,7 +86,9 @@ def _successful_payment_update(
 _next_update_id = 1_000
 
 
-async def _feed_payment(tg_id: int, *, charge_id: str, is_recurring: bool = False) -> None:
+async def _feed_payment(
+    tg_id: int, *, charge_id: str, shop_id: int | None = None, is_recurring: bool = False
+) -> None:
     global _next_update_id
     _next_update_id += 1
 
@@ -84,6 +98,7 @@ async def _feed_payment(tg_id: int, *, charge_id: str, is_recurring: bool = Fals
             update_id=_next_update_id,
             tg_id=tg_id,
             charge_id=charge_id,
+            shop_id=shop_id,
             is_recurring=is_recurring,
         )
     )
@@ -263,6 +278,49 @@ async def test_payment_does_not_affect_other_shop_subscription(client: AsyncClie
     assert sub_a_after.status == SubStatus.active
     assert sub_b_after.status == SubStatus.trial
     assert sub_b_after.current_period_end == sub_b_before.current_period_end
+
+
+@pytest.mark.asyncio
+async def test_payment_credits_shop_from_payload_for_owner_of_two_shops(
+    client: AsyncClient,
+) -> None:
+    """Регресія: інвойс не несе shop_id неявно (tg_id платника не унікально
+    визначає магазин — власник може мати кілька). Оплата має зарахуватись
+    саме shop_id з payload, а не першому-ліпшому Membership цього tg_id."""
+    tg_id = 5010
+    _init_data, shop_a = await _bootstrap(client, tg_id, "Шоп А власника")
+
+    _other_init_data, shop_b = await _bootstrap(client, 5011, "Шоп Б іншого власника")
+    async with db.async_session() as session:
+        session.add(Membership(shop_id=shop_b, tg_id=tg_id, role=MemberRole.manager))
+        await session.commit()
+
+    sub_b_before = await _get_subscription(shop_b)
+
+    await _feed_payment(tg_id, charge_id="charge-multi-1", shop_id=shop_a)
+
+    sub_a_after = await _get_subscription(shop_a)
+    sub_b_after = await _get_subscription(shop_b)
+
+    assert sub_a_after.status == SubStatus.active
+    assert sub_b_after.status == SubStatus.trial
+    assert sub_b_after.current_period_end == sub_b_before.current_period_end
+
+
+@pytest.mark.asyncio
+async def test_payment_ignored_when_payer_not_member_of_payload_shop(client: AsyncClient) -> None:
+    """Захист від підробленого payload: shop_id вказує на магазин, де платник
+    не є членом -> платіж ігнорується, підписка того магазину не змінюється."""
+    _init_a, shop_a = await _bootstrap(client, 5012, "Шоп А")
+    _init_b, _shop_b = await _bootstrap(client, 5013, "Шоп Б")
+
+    sub_a_before = await _get_subscription(shop_a)
+
+    await _feed_payment(5013, charge_id="charge-spoof-1", shop_id=shop_a)
+
+    sub_a_after = await _get_subscription(shop_a)
+    assert sub_a_after.status == SubStatus.trial
+    assert sub_a_after.current_period_end == sub_a_before.current_period_end
 
 
 @pytest.mark.asyncio

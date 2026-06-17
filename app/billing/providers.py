@@ -37,6 +37,7 @@ class PaymentResult:
     period: str          # "month" | "year"
     plan_code: str       # який план оплачено (з payload)
     raw: dict
+    shop_id: int | None = None  # з payload інвойсу — який магазин оплачено
 
 
 # --------------------------------------------------------------------------- #
@@ -52,9 +53,15 @@ class StarsProvider:
     def __init__(self, bot: Bot):
         self.bot = bot
 
-    async def create_checkout(self, *, plan_code: str, price_stars: int, title: str) -> str:
-        """Повертає invoice-link для Mini App (openInvoice) чи кнопки."""
-        payload = json.dumps({"plan": plan_code, "period": "month"})
+    async def create_checkout(
+        self, *, shop_id: int, plan_code: str, price_stars: int, title: str
+    ) -> str:
+        """Повертає invoice-link для Mini App (openInvoice) чи кнопки.
+
+        `shop_id` кладеться у payload інвойсу — це єдиний детермінований спосіб
+        потім (у `successful_payment`) зарахувати оплату саме цьому магазину,
+        а не вгадувати його за tg_id платника (власник може мати кілька шопів)."""
+        payload = json.dumps({"shop_id": shop_id, "plan": plan_code, "period": "month"})
         return await self.bot.create_invoice_link(
             title=title,
             description="Підписка SkladBase (продовжується щомісяця)",
@@ -85,6 +92,7 @@ class StarsProvider:
             auto_renew=True,                       # Stars сам продовжує
             period="month",
             plan_code=meta.get("plan", "basic"),
+            shop_id=meta.get("shop_id"),
             raw={
                 "is_first_recurring": getattr(sp, "is_first_recurring", False),
                 "subscription_expiration_date": getattr(sp, "subscription_expiration_date", None),

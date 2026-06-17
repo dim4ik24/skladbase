@@ -105,7 +105,10 @@ async def create_stars_checkout(
     bot = Bot(token=settings.BOT_TOKEN)
     try:
         invoice_link = await StarsProvider(bot).create_checkout(
-            plan_code=plan.code, price_stars=plan.price_stars, title=plan.name
+            shop_id=membership.shop_id,
+            plan_code=plan.code,
+            price_stars=plan.price_stars,
+            title=plan.name,
         )
     finally:
         await bot.session.close()

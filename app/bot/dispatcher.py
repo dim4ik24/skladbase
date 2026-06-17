@@ -34,6 +34,40 @@ async def on_pre_checkout_query(pre_checkout_query: PreCheckoutQuery) -> None:
     await pre_checkout_query.answer(ok=True)
 
 
+async def _resolve_payer_membership(
+    session: AsyncSession, *, payer_tg_id: int, shop_id: int | None
+) -> Membership | None:
+    """Знаходить магазин, якому належить ця оплата.
+
+    `shop_id` з payload інвойсу — єдине детерміноване джерело: власник може
+    мати кілька магазинів, тож вгадувати shop за tg_id платника небезпечно
+    (зарахує не той магазин). Якщо shop_id присутній, додатково перевіряємо,
+    що платник дійсно член саме цього магазину — захист від підробленого
+    payload."""
+    if shop_id is not None:
+        membership = await session.scalar(
+            select(Membership).where(
+                Membership.tg_id == payer_tg_id, Membership.shop_id == shop_id
+            )
+        )
+        if membership is None:
+            logger.warning(
+                "tg_id=%s не є членом shop_id=%s (з payload інвойсу) — ігноруємо платіж",
+                payer_tg_id,
+                shop_id,
+            )
+        return membership
+
+    # Фолбек для інвойсів без shop_id у payload (старі/сторонні посилання):
+    # менш надійно, бере перший-ліпший membership платника.
+    membership = await session.scalar(
+        select(Membership).where(Membership.tg_id == payer_tg_id)
+    )
+    if membership is None:
+        logger.warning("successful_payment від невідомого tg_id=%s — ігноруємо", payer_tg_id)
+    return membership
+
+
 @dp.message(F.successful_payment)
 async def on_successful_payment(message: Message, session: AsyncSession) -> None:
     sp = message.successful_payment
@@ -42,14 +76,10 @@ async def on_successful_payment(message: Message, session: AsyncSession) -> None
 
     result = StarsProvider.parse_successful_payment(sp, sp.invoice_payload)
 
-    # Знаходимо магазин власника платежу за tg_id того, хто оплатив.
-    membership = await session.scalar(
-        select(Membership).where(Membership.tg_id == message.from_user.id)
+    membership = await _resolve_payer_membership(
+        session, payer_tg_id=message.from_user.id, shop_id=result.shop_id
     )
     if membership is None:
-        logger.warning(
-            "successful_payment від невідомого tg_id=%s — ігноруємо", message.from_user.id
-        )
         return
 
     subscription = await session.scalar(
