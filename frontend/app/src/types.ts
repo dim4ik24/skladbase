@@ -29,3 +29,68 @@ export interface Product {
   archived: boolean;
   variants: Variant[];
 }
+
+export interface TemplateField {
+  key: string;
+  label: string;
+  type: string;
+  options?: string[];
+}
+
+export interface TemplateFieldSchema {
+  attributes: TemplateField[];
+  variant_axes: TemplateField[];
+  extras?: Record<string, unknown>;
+}
+
+export interface Template {
+  id: number;
+  code: string;
+  name: string;
+  field_schema: TemplateFieldSchema;
+}
+
+export interface VariantInput {
+  axis_values: Record<string, string>;
+  price: string;
+  sku?: string;
+  on_hand: number;
+  low_stock_threshold?: number;
+}
+
+export interface ProductInput {
+  name: string;
+  variants: VariantInput[];
+  description?: string;
+  template_id?: number;
+  attributes?: Record<string, unknown>;
+}
+
+export interface ProductPatch {
+  name?: string;
+  description?: string | null;
+  attributes?: Record<string, unknown>;
+  archived?: boolean;
+}
+
+export type ReservationStatus = "active" | "released" | "fulfilled";
+
+export interface Reservation {
+  id: number;
+  variant_id: number;
+  order_id: number | null;
+  qty: number;
+  reason: string | null;
+  customer_note: string | null;
+  source: string;
+  status: ReservationStatus;
+  expires_at: string | null;
+  created_at: string;
+  released_at: string | null;
+}
+
+export interface ReserveInput {
+  qty: number;
+  customer_note?: string;
+  expires_at?: string;
+}

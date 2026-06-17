@@ -5,7 +5,16 @@
  * лише з нього, CLAUDE.md, інваріант №1). Базовий URL — `VITE_API_BASE`.
  */
 import { getInitData } from "./telegram";
-import type { Product, Shop, Variant } from "./types";
+import type {
+  Product,
+  ProductInput,
+  ProductPatch,
+  Reservation,
+  ReserveInput,
+  Shop,
+  Template,
+  Variant,
+} from "./types";
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 
@@ -25,7 +34,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = {
     "X-Telegram-Init-Data": getInitData(),
   };
-  if (init.body) {
+  if (init.body && !(init.body instanceof FormData)) {
     headers["Content-Type"] = "application/json";
   }
 
@@ -71,4 +80,50 @@ export function adjust(variantId: number, newOnHand: number): Promise<Variant> {
     method: "POST",
     body: JSON.stringify({ new_on_hand: newOnHand }),
   });
+}
+
+export function getTemplates(): Promise<Template[]> {
+  return request<Template[]>("/api/templates");
+}
+
+export function createProduct(payload: ProductInput): Promise<Product> {
+  return request<Product>("/api/products", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateProduct(id: number, patch: ProductPatch): Promise<Product> {
+  return request<Product>(`/api/products/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+}
+
+export function uploadVariantPhoto(variantId: number, file: File): Promise<Variant> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return request<Variant>(`/api/variants/${variantId}/photo`, {
+    method: "POST",
+    body: formData,
+  });
+}
+
+export function reserve(variantId: number, payload: ReserveInput): Promise<Reservation> {
+  return request<Reservation>(`/api/variants/${variantId}/reserve`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getReservations(): Promise<Reservation[]> {
+  return request<Reservation[]>("/api/reservations");
+}
+
+export function releaseReservation(id: number): Promise<Reservation> {
+  return request<Reservation>(`/api/reservations/${id}/release`, { method: "POST" });
+}
+
+export function fulfillReservation(id: number): Promise<Reservation> {
+  return request<Reservation>(`/api/reservations/${id}/fulfill`, { method: "POST" });
 }

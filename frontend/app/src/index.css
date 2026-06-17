@@ -203,3 +203,209 @@ body {
   opacity: 0.35;
   cursor: not-allowed;
 }
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.toolbar .search-input {
+  flex: 1 1 200px;
+  margin-bottom: 0;
+}
+
+.toolbar button {
+  border: none;
+  border-radius: 10px;
+  padding: 0 14px;
+  background: var(--accent-color);
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.reservations-section {
+  margin-bottom: 16px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--card-bg);
+}
+
+.reservation-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.reservation-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  padding: 8px;
+  border-radius: 10px;
+  background: var(--bg-color);
+}
+
+.reservation-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.reservation-variant {
+  font-weight: 600;
+}
+
+.variant-row {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.variant-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
+.variant-photo {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.variant-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.variant-photo-placeholder {
+  font-size: 18px;
+  opacity: 0.4;
+}
+
+.variant-photo-upload {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.variant-stock-trio {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--hint-color);
+  font-size: 12px;
+}
+
+.reserve-form {
+  margin-top: 8px;
+  padding: 8px;
+  border-radius: 10px;
+  background: var(--bg-color);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 100;
+}
+
+.modal-card {
+  background: var(--card-bg);
+  border-radius: 16px;
+  padding: 20px;
+  max-width: 480px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+
+.form-field input,
+.form-field select,
+.form-field textarea {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #e3ddd3;
+  font-size: 14px;
+}
+
+.advanced-fields {
+  border-top: 1px solid #e3ddd3;
+  padding-top: 8px;
+  margin-bottom: 8px;
+}
+
+.variant-builder-row {
+  border: 1px solid #e3ddd3;
+  border-radius: 10px;
+  padding: 10px;
+  margin-bottom: 8px;
+}
+
+.link-button {
+  background: none;
+  border: none;
+  color: var(--accent-color);
+  cursor: pointer;
+  padding: 4px 0;
+  font-size: 13px;
+  text-align: left;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.modal-actions button {
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  background: var(--accent-color);
+  color: #fff;
+  cursor: pointer;
+}

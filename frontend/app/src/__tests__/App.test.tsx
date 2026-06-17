@@ -1,7 +1,7 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
-import type { Product, Shop, Variant } from "../types";
+import type { Product, Reservation, Shop, Template, Variant } from "../types";
 
 vi.mock("../api", () => ({
   ApiError: class ApiError extends Error {
@@ -16,11 +16,20 @@ vi.mock("../api", () => ({
   },
   getMe: vi.fn(),
   getProducts: vi.fn(),
+  getTemplates: vi.fn(),
+  getReservations: vi.fn(),
   restock: vi.fn(),
   adjust: vi.fn(),
+  createProduct: vi.fn(),
+  updateProduct: vi.fn(),
+  uploadVariantPhoto: vi.fn(),
+  reserve: vi.fn(),
+  releaseReservation: vi.fn(),
+  fulfillReservation: vi.fn(),
 }));
 
 import * as api from "../api";
+import { ApiError } from "../api";
 
 const shopFixture: Shop = {
   shop_id: 1,
@@ -29,6 +38,19 @@ const shopFixture: Shop = {
   role: "owner",
   logo_url: null,
   accent_color: "#ff8800",
+};
+
+const clothingTemplate: Template = {
+  id: 7,
+  code: "clothing",
+  name: "Одяг",
+  field_schema: {
+    attributes: [{ key: "material", label: "Матеріал", type: "string" }],
+    variant_axes: [
+      { key: "size", label: "Розмір", type: "enum", options: ["XS", "S", "M", "L"] },
+      { key: "color", label: "Колір", type: "string" },
+    ],
+  },
 };
 
 function makeVariant(overrides: Partial<Variant> = {}): Variant {
@@ -60,11 +82,36 @@ function makeProduct(overrides: Partial<Product> = {}): Product {
   };
 }
 
+function makeReservation(overrides: Partial<Reservation> = {}): Reservation {
+  return {
+    id: 100,
+    variant_id: 1,
+    order_id: null,
+    qty: 1,
+    reason: null,
+    customer_note: null,
+    source: "manual",
+    status: "active",
+    expires_at: null,
+    created_at: "2026-06-01T00:00:00Z",
+    released_at: null,
+    ...overrides,
+  };
+}
+
 beforeEach(() => {
   vi.mocked(api.getMe).mockReset();
   vi.mocked(api.getProducts).mockReset();
+  vi.mocked(api.getTemplates).mockReset().mockResolvedValue([]);
+  vi.mocked(api.getReservations).mockReset().mockResolvedValue([]);
   vi.mocked(api.restock).mockReset();
   vi.mocked(api.adjust).mockReset();
+  vi.mocked(api.createProduct).mockReset();
+  vi.mocked(api.updateProduct).mockReset();
+  vi.mocked(api.uploadVariantPhoto).mockReset();
+  vi.mocked(api.reserve).mockReset();
+  vi.mocked(api.releaseReservation).mockReset();
+  vi.mocked(api.fulfillReservation).mockReset();
   document.documentElement.style.removeProperty("--accent-color");
 });
 
@@ -83,7 +130,8 @@ describe("App catalog screen", () => {
     expect(await screen.findByText("Футболка")).toBeInTheDocument();
     expect(screen.getByText("450.00 ₴")).toBeInTheDocument();
     expect(screen.getByTestId("available-11")).toHaveTextContent("5 шт.");
-    expect(screen.getByText("📦")).toBeInTheDocument();
+    // Плейсхолдер показується і на рівні картки товару, і на рівні варіанта (своє фото).
+    expect(screen.getAllByText("📦").length).toBeGreaterThan(0);
   });
 
   it("renders the variant photo when photo_url is set instead of the placeholder", async () => {
@@ -194,5 +242,216 @@ describe("App catalog screen", () => {
     await screen.findByTestId("available-43");
 
     expect(screen.getByLabelText("Зменшити залишок: SKU-43")).toBeDisabled();
+  });
+});
+
+describe("Add product form", () => {
+  it("renders fields for the selected template and creates the product without a template", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.getTemplates).mockResolvedValue([clothingTemplate]);
+    const created = makeProduct({ id: 99, name: "Свічка", variants: [makeVariant({ id: 990 })] });
+    vi.mocked(api.createProduct).mockResolvedValue(created);
+
+    render(<App />);
+    await screen.findByText("Тестовий магазин");
+
+    fireEvent.click(screen.getByRole("button", { name: "Додати товар" }));
+
+    fireEvent.change(screen.getByLabelText("Назва"), { target: { value: "Свічка" } });
+    fireEvent.change(screen.getByLabelText("Ціна"), { target: { value: "120" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Зберегти" }));
+
+    await waitFor(() => {
+      expect(api.createProduct).toHaveBeenCalledWith({
+        name: "Свічка",
+        description: undefined,
+        template_id: undefined,
+        attributes: {},
+        variants: [{ axis_values: {}, price: "120", sku: undefined, on_hand: 0 }],
+      });
+    });
+
+    expect(await screen.findByText("Свічка")).toBeInTheDocument();
+  });
+
+  it("generates clothing variant rows from template axes with correct axis_values", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.getTemplates).mockResolvedValue([clothingTemplate]);
+    vi.mocked(api.createProduct).mockResolvedValue(makeProduct({ id: 5, name: "Футболка" }));
+
+    render(<App />);
+    await screen.findByText("Тестовий магазин");
+
+    fireEvent.click(screen.getByRole("button", { name: "Додати товар" }));
+    fireEvent.change(screen.getByLabelText("Шаблон"), { target: { value: "7" } });
+    fireEvent.change(screen.getByLabelText("Назва"), { target: { value: "Футболка" } });
+
+    const rows = document.querySelectorAll(".variant-builder-row");
+    expect(rows).toHaveLength(1);
+    const firstRow = within(rows[0] as HTMLElement);
+    fireEvent.change(firstRow.getByLabelText("Розмір"), { target: { value: "M" } });
+    fireEvent.change(firstRow.getByLabelText("Колір"), { target: { value: "Чорний" } });
+    fireEvent.change(firstRow.getByLabelText("Ціна"), { target: { value: "300" } });
+    fireEvent.change(firstRow.getByLabelText("Початковий залишок"), { target: { value: "10" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Додати варіант" }));
+    const rowsAfterAdd = document.querySelectorAll(".variant-builder-row");
+    expect(rowsAfterAdd).toHaveLength(2);
+    const secondRow = within(rowsAfterAdd[1] as HTMLElement);
+    fireEvent.change(secondRow.getByLabelText("Розмір"), { target: { value: "L" } });
+    fireEvent.change(secondRow.getByLabelText("Колір"), { target: { value: "Білий" } });
+    fireEvent.change(secondRow.getByLabelText("Ціна"), { target: { value: "320" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Зберегти" }));
+
+    await waitFor(() => {
+      expect(api.createProduct).toHaveBeenCalledWith({
+        name: "Футболка",
+        description: undefined,
+        template_id: 7,
+        attributes: {},
+        variants: [
+          { axis_values: { size: "M", color: "Чорний" }, price: "300", sku: undefined, on_hand: 10 },
+          { axis_values: { size: "L", color: "Білий" }, price: "320", sku: undefined, on_hand: 0 },
+        ],
+      });
+    });
+  });
+});
+
+describe("Variant photo upload", () => {
+  it("uploads a photo and shows it instead of the placeholder", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    const variant = makeVariant({ id: 51, sku: "SKU-51", photo_url: null });
+    vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ variants: [variant] })]);
+    vi.mocked(api.uploadVariantPhoto).mockResolvedValue({
+      ...variant,
+      photo_url: "https://cdn.example.test/v51.webp",
+    });
+
+    render(<App />);
+    await screen.findByTestId("available-51");
+
+    const file = new File(["data"], "photo.png", { type: "image/png" });
+    const input = screen.getByLabelText("Завантажити фото: SKU-51");
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(api.uploadVariantPhoto).toHaveBeenCalledWith(51, file);
+    });
+    await waitFor(() => {
+      const img = document.querySelector(".variant-photo img");
+      expect(img).toHaveAttribute("src", "https://cdn.example.test/v51.webp");
+    });
+  });
+
+  it("shows a clear message when photo upload returns 402 (plan limit)", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    const variant = makeVariant({ id: 52, sku: "SKU-52", photo_url: null });
+    vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ variants: [variant] })]);
+    vi.mocked(api.uploadVariantPhoto).mockRejectedValue(
+      new ApiError(402, "Фото недоступні на поточному плані"),
+    );
+
+    render(<App />);
+    await screen.findByTestId("available-52");
+
+    const file = new File(["data"], "photo.png", { type: "image/png" });
+    fireEvent.change(screen.getByLabelText("Завантажити фото: SKU-52"), {
+      target: { files: [file] },
+    });
+
+    expect(await screen.findByText("Фото недоступні на поточному плані")).toBeInTheDocument();
+  });
+});
+
+describe("Reservations", () => {
+  it("reserve updates reserved/available on the variant and lists it as active", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    const variant = makeVariant({ id: 61, sku: "SKU-61", on_hand: 5, reserved: 0, available: 5 });
+    vi.mocked(api.getProducts).mockResolvedValue([
+      makeProduct({ name: "Сукня", variants: [variant] }),
+    ]);
+    const reservation = makeReservation({ id: 200, variant_id: 61, qty: 2 });
+    vi.mocked(api.reserve).mockResolvedValue(reservation);
+
+    render(<App />);
+    await screen.findByTestId("available-61");
+
+    fireEvent.click(screen.getByRole("button", { name: "Відклади" }));
+    fireEvent.change(screen.getByLabelText("Кількість (доступно 5)"), {
+      target: { value: "2" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Відкласти" }));
+
+    await waitFor(() => {
+      expect(api.reserve).toHaveBeenCalledWith(61, {
+        qty: 2,
+        customer_note: undefined,
+        expires_at: undefined,
+      });
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("available-61")).toHaveTextContent("3 шт.");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Резерви (1)" }));
+    expect(screen.getByText("2 шт.")).toBeInTheDocument();
+    expect(screen.getByText("Сукня (M)")).toBeInTheDocument();
+  });
+
+  it("release calls the endpoint and restores availability", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    const variant = makeVariant({ id: 71, sku: "SKU-71", on_hand: 5, reserved: 2, available: 3 });
+    vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ variants: [variant] })]);
+    const reservation = makeReservation({ id: 300, variant_id: 71, qty: 2 });
+    vi.mocked(api.getReservations).mockResolvedValue([reservation]);
+    vi.mocked(api.releaseReservation).mockResolvedValue({
+      ...reservation,
+      status: "released",
+    });
+
+    render(<App />);
+    await screen.findByTestId("available-71");
+
+    fireEvent.click(screen.getByRole("button", { name: "Резерви (1)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Зняти" }));
+
+    await waitFor(() => {
+      expect(api.releaseReservation).toHaveBeenCalledWith(300);
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("available-71")).toHaveTextContent("5 шт.");
+    });
+    expect(screen.getByText("Активних резервів немає")).toBeInTheDocument();
+  });
+
+  it("fulfill calls the endpoint and deducts on_hand", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    const variant = makeVariant({ id: 81, sku: "SKU-81", on_hand: 5, reserved: 2, available: 3 });
+    vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ variants: [variant] })]);
+    const reservation = makeReservation({ id: 400, variant_id: 81, qty: 2 });
+    vi.mocked(api.getReservations).mockResolvedValue([reservation]);
+    vi.mocked(api.fulfillReservation).mockResolvedValue({
+      ...reservation,
+      status: "fulfilled",
+    });
+
+    render(<App />);
+    await screen.findByTestId("available-81");
+
+    fireEvent.click(screen.getByRole("button", { name: "Резерви (1)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Продано" }));
+
+    await waitFor(() => {
+      expect(api.fulfillReservation).toHaveBeenCalledWith(400);
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("available-81")).toHaveTextContent("3 шт.");
+    });
+    expect(screen.getByText("Активних резервів немає")).toBeInTheDocument();
   });
 });

@@ -1,13 +1,21 @@
-import type { Product } from "../types";
+import type { Product, ReserveInput } from "../types";
 import { VariantRow } from "./VariantRow";
 
 interface ProductCardProps {
   product: Product;
   onRestock: (variantId: number, qty: number) => void;
   onAdjust: (variantId: number, newOnHand: number) => void;
+  onUploadPhoto: (variantId: number, file: File) => Promise<void>;
+  onReserve: (variantId: number, payload: ReserveInput) => Promise<void>;
 }
 
-export function ProductCard({ product, onRestock, onAdjust }: ProductCardProps) {
+export function ProductCard({
+  product,
+  onRestock,
+  onAdjust,
+  onUploadPhoto,
+  onReserve,
+}: ProductCardProps) {
   const photoUrl = product.variants.find((variant) => variant.photo_url)?.photo_url ?? null;
 
   return (
@@ -29,6 +37,8 @@ export function ProductCard({ product, onRestock, onAdjust }: ProductCardProps) 
             variant={variant}
             onRestock={onRestock}
             onAdjust={onAdjust}
+            onUploadPhoto={onUploadPhoto}
+            onReserve={onReserve}
           />
         ))}
       </ul>
