@@ -89,6 +89,21 @@ async def _enforce_product_limit(session: AsyncSession, shop_id: int) -> None:
         )
 
 
+async def enforce_photo_upload_allowed(session: AsyncSession, shop_id: int) -> None:
+    """Фото — платна фіча (ROADMAP, ризик "Вартість зберігання фото"). Тріал ->
+    повний доступ, як і ліміт товарів (свідомо, для конверсії — CLAUDE.md).
+    Free-план (`limits.photos` не True) -> 402."""
+    subscription = await session.scalar(
+        select(Subscription).where(Subscription.shop_id == shop_id)
+    )
+    if subscription is None or subscription.status == SubStatus.trial:
+        return
+
+    plan = await session.get(Plan, subscription.plan_id) if subscription.plan_id else None
+    if plan is None or plan.limits.get("photos") is not True:
+        raise CatalogError(HTTPStatus.PAYMENT_REQUIRED, "Фото недоступні на поточному плані")
+
+
 def _validate_axis_values(template: ProductTemplate | None, variant: VariantInput) -> None:
     axes = (template.field_schema.get("variant_axes") if template else None) or []
     axis_keys = {axis["key"] for axis in axes}

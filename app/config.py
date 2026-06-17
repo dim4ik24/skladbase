@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     R2_ACCESS_KEY: str = ""
     R2_SECRET_KEY: str = ""
     R2_BUCKET: str = ""
+    R2_PUBLIC_URL: str = ""  # публічний домен бакета (custom domain або r2.dev), без кінцевого "/"
+    MAX_PHOTO_UPLOAD_MB: int = 5  # ліміт розміру вхідного фото (Стадія 2b)
 
 
 settings = Settings()

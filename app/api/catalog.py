@@ -1,15 +1,15 @@
 """
-SkladBase — REST API каталогу (шаблони, товари, варіанти).
+SkladBase — REST API каталогу (шаблони, товари, варіанти, фото).
 
-Усі ендпоінти під `require_member`: shop_id виключно з `membership.shop_id`
-(валідований Telegram initData), ніколи з тіла/параметрів запиту
-(CLAUDE.md, інваріант №1). Стадія 2a — без фото (буде в 2b).
+Усі ендпоінти під `require_member`/`require_writable`: shop_id виключно з
+`membership.shop_id` (валідований Telegram initData), ніколи з тіла/параметрів
+запиту (CLAUDE.md, інваріант №1).
 """
 from __future__ import annotations
 
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,8 +17,9 @@ from sqlalchemy.orm import selectinload
 
 from app.db import get_session
 from app.deps import require_member, require_writable
-from app.models import Membership, Product, ProductTemplate, TemplateCode
+from app.models import Membership, Product, ProductTemplate, TemplateCode, Variant
 from app.services import catalog as catalog_service
+from app.services import media as media_service
 
 router = APIRouter(prefix="/api", tags=["catalog"])
 
@@ -54,6 +55,7 @@ class VariantOut(BaseModel):
     reserved: int
     available: int
     low_stock_threshold: int
+    photo_url: str | None
 
 
 class ProductIn(BaseModel):
@@ -188,3 +190,41 @@ async def delete_product(
     product = await _get_owned_product(session, membership.shop_id, product_id)
     product.archived = True
     await session.commit()
+
+
+# --------------------------------------------------------------------------- #
+#  Фото (Стадія 2b)
+# --------------------------------------------------------------------------- #
+@router.post("/variants/{variant_id}/photo", response_model=VariantOut)
+async def upload_variant_photo(
+    variant_id: int,
+    file: UploadFile = File(...),
+    membership: Membership = Depends(require_writable),
+    session: AsyncSession = Depends(get_session),
+) -> Variant:
+    variant = await session.scalar(
+        select(Variant).where(Variant.id == variant_id, Variant.shop_id == membership.shop_id)
+    )
+    if variant is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Варіант не знайдено")
+
+    try:
+        await catalog_service.enforce_photo_upload_allowed(session, membership.shop_id)
+    except catalog_service.CatalogError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+    data = await file.read()
+    try:
+        photo_url = await media_service.upload_variant_photo(
+            shop_id=membership.shop_id,
+            variant_id=variant.id,
+            content_type=file.content_type or "",
+            data=data,
+        )
+    except media_service.MediaError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+    variant.photo_url = photo_url
+    await session.commit()
+    await session.refresh(variant)
+    return variant
