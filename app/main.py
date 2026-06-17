@@ -4,7 +4,18 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app import db
-from app.api import billing, catalog, finance, me, orders, payment_webhooks, public, shop, telegram
+from app.api import (
+    billing,
+    catalog,
+    finance,
+    inventory,
+    me,
+    orders,
+    payment_webhooks,
+    public,
+    shop,
+    telegram,
+)
 from app.config import settings
 from app.scheduler import create_scheduler
 
@@ -32,6 +43,7 @@ app.include_router(shop.router)
 app.include_router(billing.router)
 app.include_router(telegram.router)
 app.include_router(payment_webhooks.router)
+app.include_router(inventory.router)
 
 
 @app.get("/health")
