@@ -6,6 +6,7 @@
  */
 import { getInitData } from "./telegram";
 import type {
+  Plan,
   Product,
   ProductInput,
   ProductPatch,
@@ -126,4 +127,19 @@ export function releaseReservation(id: number): Promise<Reservation> {
 
 export function fulfillReservation(id: number): Promise<Reservation> {
   return request<Reservation>(`/api/reservations/${id}/fulfill`, { method: "POST" });
+}
+
+export function getPlans(): Promise<Plan[]> {
+  return request<Plan[]>("/api/billing/plans");
+}
+
+export function checkoutStars(planCode: string): Promise<{ invoice_link: string }> {
+  return request<{ invoice_link: string }>("/api/billing/checkout/stars", {
+    method: "POST",
+    body: JSON.stringify({ plan_code: planCode }),
+  });
+}
+
+export function clearDemos(): Promise<{ removed: number }> {
+  return request<{ removed: number }>("/api/shop/clear-demos", { method: "POST" });
 }

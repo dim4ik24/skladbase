@@ -1,23 +1,37 @@
 import { useEffect, useState } from "react";
 import * as api from "./api";
+import { DemoBanner } from "./components/DemoBanner";
 import { Header } from "./components/Header";
 import { ProductCard } from "./components/ProductCard";
 import { ProductFormModal } from "./components/ProductFormModal";
 import { ReservationsPanel } from "./components/ReservationsPanel";
+import { SubscriptionPaywall } from "./components/SubscriptionPaywall";
+import { TrialBanner } from "./components/TrialBanner";
 import { errorMessage } from "./errors";
 import { initTelegram, setAccentColor } from "./telegram";
-import type { Product, ProductInput, Reservation, ReserveInput, Shop, Template, Variant } from "./types";
+import type {
+  Plan,
+  Product,
+  ProductInput,
+  Reservation,
+  ReserveInput,
+  Shop,
+  Template,
+  Variant,
+} from "./types";
 
 export default function App() {
   const [shop, setShop] = useState<Shop | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [plans, setPlans] = useState<Plan[]>([]);
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showProductForm, setShowProductForm] = useState(false);
   const [showReservations, setShowReservations] = useState(false);
+  const [clearingDemos, setClearingDemos] = useState(false);
 
   useEffect(() => {
     initTelegram();
@@ -25,12 +39,13 @@ export default function App() {
 
     async function load() {
       try {
-        const [meResult, productsResult, templatesResult, reservationsResult] =
+        const [meResult, productsResult, templatesResult, reservationsResult, plansResult] =
           await Promise.all([
             api.getMe(),
             api.getProducts(),
             api.getTemplates(),
             api.getReservations(),
+            api.getPlans(),
           ]);
         if (!mounted) return;
         setShop(meResult);
@@ -38,6 +53,7 @@ export default function App() {
         setProducts(productsResult);
         setTemplates(templatesResult);
         setReservations(reservationsResult);
+        setPlans(plansResult);
       } catch (err) {
         if (!mounted) return;
         setError(errorMessage(err, "Не вдалося завантажити дані"));
@@ -143,6 +159,18 @@ export default function App() {
     }
   }
 
+  async function handleClearDemos() {
+    setClearingDemos(true);
+    try {
+      await api.clearDemos();
+      setProducts(await api.getProducts());
+    } catch (err) {
+      setError(errorMessage(err, "Не вдалося очистити приклади"));
+    } finally {
+      setClearingDemos(false);
+    }
+  }
+
   function variantLabel(variantId: number): string {
     for (const product of products) {
       const variant = product.variants.find((v) => v.id === variantId);
@@ -157,12 +185,37 @@ export default function App() {
   const filteredProducts = products.filter((product) =>
     product.name.toLowerCase().includes(query.toLowerCase()),
   );
+  const writable = shop?.is_writable ?? false;
+  const hasDemo = products.some((product) => product.is_demo);
 
   return (
     <div className="app">
       <Header shop={shop} />
 
       {error ? <p className="error-banner">{error}</p> : null}
+
+      {shop?.status === "trial" && shop.trial_ends_at ? (
+        <TrialBanner trialEndsAt={shop.trial_ends_at} />
+      ) : null}
+
+      {shop && !shop.is_writable ? (
+        <>
+          <p className="banner banner-readonly">Підписку призупинено, дані збережено</p>
+          <SubscriptionPaywall
+            plans={plans}
+            role={shop.role}
+            onCheckout={api.checkoutStars}
+          />
+        </>
+      ) : null}
+
+      {hasDemo ? (
+        <DemoBanner
+          canClear={shop?.role === "owner"}
+          clearing={clearingDemos}
+          onClear={handleClearDemos}
+        />
+      ) : null}
 
       <div className="toolbar">
         <input
@@ -173,7 +226,7 @@ export default function App() {
           onChange={(event) => setQuery(event.target.value)}
           aria-label="Пошук товарів"
         />
-        <button type="button" onClick={() => setShowProductForm(true)}>
+        <button type="button" disabled={!writable} onClick={() => setShowProductForm(true)}>
           Додати товар
         </button>
         <button type="button" onClick={() => setShowReservations((prev) => !prev)}>
@@ -186,6 +239,7 @@ export default function App() {
           <h2>Резерви</h2>
           <ReservationsPanel
             reservations={reservations}
+            writable={writable}
             variantLabel={variantLabel}
             onRelease={handleRelease}
             onFulfill={handleFulfill}
@@ -203,6 +257,7 @@ export default function App() {
             <ProductCard
               key={product.id}
               product={product}
+              writable={writable}
               onRestock={handleRestock}
               onAdjust={handleAdjust}
               onUploadPhoto={handleUploadPhoto}

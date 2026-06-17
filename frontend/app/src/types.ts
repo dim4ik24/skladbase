@@ -1,3 +1,5 @@
+export type SubscriptionStatus = "trial" | "active" | "past_due" | "canceled" | "expired";
+
 export interface Shop {
   shop_id: number;
   shop_name: string;
@@ -5,6 +7,20 @@ export interface Shop {
   role: "owner" | "manager";
   logo_url: string | null;
   accent_color: string;
+  status: SubscriptionStatus | null;
+  is_writable: boolean;
+  trial_ends_at: string | null;
+  current_period_end: string | null;
+  plan_code: string | null;
+}
+
+export interface Plan {
+  code: string;
+  name: string;
+  period: "month" | "year";
+  price_uah: string;
+  price_stars: number;
+  limits: Record<string, unknown>;
 }
 
 export interface Variant {

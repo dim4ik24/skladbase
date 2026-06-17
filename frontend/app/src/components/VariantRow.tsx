@@ -6,6 +6,7 @@ import { ReserveForm } from "./ReserveForm";
 
 interface VariantRowProps {
   variant: Variant;
+  writable: boolean;
   onRestock: (variantId: number, qty: number) => void;
   onAdjust: (variantId: number, newOnHand: number) => void;
   onUploadPhoto: (variantId: number, file: File) => Promise<void>;
@@ -14,6 +15,7 @@ interface VariantRowProps {
 
 export function VariantRow({
   variant,
+  writable,
   onRestock,
   onAdjust,
   onUploadPhoto,
@@ -61,7 +63,7 @@ export function VariantRow({
             type="file"
             accept="image/*"
             hidden
-            disabled={uploading}
+            disabled={uploading || !writable}
             onChange={handleFileChange}
             aria-label={`Завантажити фото: ${variant.sku ?? variant.id}`}
           />
@@ -90,7 +92,7 @@ export function VariantRow({
           <button
             type="button"
             aria-label={`Зменшити залишок: ${variant.sku ?? variant.id}`}
-            disabled={variant.on_hand <= 0}
+            disabled={variant.on_hand <= 0 || !writable}
             onClick={() => onAdjust(variant.id, variant.on_hand - 1)}
           >
             −
@@ -98,13 +100,14 @@ export function VariantRow({
           <button
             type="button"
             aria-label={`Збільшити залишок: ${variant.sku ?? variant.id}`}
+            disabled={!writable}
             onClick={() => onRestock(variant.id, 1)}
           >
             +
           </button>
           <button
             type="button"
-            disabled={variant.available <= 0}
+            disabled={variant.available <= 0 || !writable}
             onClick={() => setShowReserveForm((prev) => !prev)}
           >
             Відклади

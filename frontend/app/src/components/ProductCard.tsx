@@ -3,6 +3,7 @@ import { VariantRow } from "./VariantRow";
 
 interface ProductCardProps {
   product: Product;
+  writable: boolean;
   onRestock: (variantId: number, qty: number) => void;
   onAdjust: (variantId: number, newOnHand: number) => void;
   onUploadPhoto: (variantId: number, file: File) => Promise<void>;
@@ -11,6 +12,7 @@ interface ProductCardProps {
 
 export function ProductCard({
   product,
+  writable,
   onRestock,
   onAdjust,
   onUploadPhoto,
@@ -35,6 +37,7 @@ export function ProductCard({
           <VariantRow
             key={variant.id}
             variant={variant}
+            writable={writable}
             onRestock={onRestock}
             onAdjust={onAdjust}
             onUploadPhoto={onUploadPhoto}

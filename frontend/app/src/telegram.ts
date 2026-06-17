@@ -23,6 +23,7 @@ interface TelegramWebApp {
   themeParams: TelegramThemeParams;
   ready: () => void;
   expand: () => void;
+  openInvoice?: (url: string, callback?: (status: string) => void) => void;
 }
 
 declare global {
@@ -67,4 +68,13 @@ export function getInitData(): string {
 /** Брендинг магазину (з GET /api/me) — accent_color у CSS-змінну. */
 export function setAccentColor(color: string): void {
   document.documentElement.style.setProperty("--accent-color", color);
+}
+
+/** Відкриває інвойс Stars у клієнті Telegram. Поза Telegram (звичайний браузер)
+ * `openInvoice` недоступний — повертає `false`, щоб викликач показав лінк сам. */
+export function openInvoice(link: string, onClose?: (status: string) => void): boolean {
+  const webApp = window.Telegram?.WebApp;
+  if (!webApp?.openInvoice) return false;
+  webApp.openInvoice(link, onClose);
+  return true;
 }

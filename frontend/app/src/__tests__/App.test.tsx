@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
-import type { Product, Reservation, Shop, Template, Variant } from "../types";
+import type { Plan, Product, Reservation, Shop, Template, Variant } from "../types";
 
 vi.mock("../api", () => ({
   ApiError: class ApiError extends Error {
@@ -18,6 +18,7 @@ vi.mock("../api", () => ({
   getProducts: vi.fn(),
   getTemplates: vi.fn(),
   getReservations: vi.fn(),
+  getPlans: vi.fn(),
   restock: vi.fn(),
   adjust: vi.fn(),
   createProduct: vi.fn(),
@@ -26,6 +27,8 @@ vi.mock("../api", () => ({
   reserve: vi.fn(),
   releaseReservation: vi.fn(),
   fulfillReservation: vi.fn(),
+  checkoutStars: vi.fn(),
+  clearDemos: vi.fn(),
 }));
 
 import * as api from "../api";
@@ -38,6 +41,20 @@ const shopFixture: Shop = {
   role: "owner",
   logo_url: null,
   accent_color: "#ff8800",
+  status: "active",
+  is_writable: true,
+  trial_ends_at: null,
+  current_period_end: "2026-12-01T00:00:00Z",
+  plan_code: "pro",
+};
+
+const planFixture: Plan = {
+  code: "pro",
+  name: "Pro",
+  period: "month",
+  price_uah: "299.00",
+  price_stars: 500,
+  limits: { max_products: null, photos: true },
 };
 
 const clothingTemplate: Template = {
@@ -104,6 +121,7 @@ beforeEach(() => {
   vi.mocked(api.getProducts).mockReset();
   vi.mocked(api.getTemplates).mockReset().mockResolvedValue([]);
   vi.mocked(api.getReservations).mockReset().mockResolvedValue([]);
+  vi.mocked(api.getPlans).mockReset().mockResolvedValue([]);
   vi.mocked(api.restock).mockReset();
   vi.mocked(api.adjust).mockReset();
   vi.mocked(api.createProduct).mockReset();
@@ -112,6 +130,8 @@ beforeEach(() => {
   vi.mocked(api.reserve).mockReset();
   vi.mocked(api.releaseReservation).mockReset();
   vi.mocked(api.fulfillReservation).mockReset();
+  vi.mocked(api.checkoutStars).mockReset();
+  vi.mocked(api.clearDemos).mockReset();
   document.documentElement.style.removeProperty("--accent-color");
 });
 
@@ -453,5 +473,148 @@ describe("Reservations", () => {
       expect(screen.getByTestId("available-81")).toHaveTextContent("3 шт.");
     });
     expect(screen.getByText("Активних резервів немає")).toBeInTheDocument();
+  });
+});
+
+describe("Trial banner", () => {
+  it("shows days remaining computed from trial_ends_at", async () => {
+    const trialEndsAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
+    vi.mocked(api.getMe).mockResolvedValue({
+      ...shopFixture,
+      status: "trial",
+      is_writable: true,
+      trial_ends_at: trialEndsAt,
+    });
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+
+    render(<App />);
+
+    expect(await screen.findByText("Тріал: залишилось 3 днів")).toBeInTheDocument();
+  });
+
+  it("does not render when status is not trial", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+
+    render(<App />);
+    await screen.findByText("Тестовий магазин");
+
+    expect(screen.queryByText(/Тріал:/)).not.toBeInTheDocument();
+  });
+});
+
+describe("Paywall + read-only state", () => {
+  it("shows the read-only banner, the plans paywall, and disables write actions", async () => {
+    vi.mocked(api.getMe).mockResolvedValue({
+      ...shopFixture,
+      status: "expired",
+      is_writable: false,
+    });
+    const variant = makeVariant({ id: 91, sku: "SKU-91", on_hand: 5, available: 5 });
+    vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ variants: [variant] })]);
+    vi.mocked(api.getPlans).mockResolvedValue([planFixture]);
+
+    render(<App />);
+    await screen.findByTestId("available-91");
+
+    expect(screen.getByText("Підписку призупинено, дані збережено")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Оберіть тариф" })).toBeInTheDocument();
+    expect(screen.getByText("Pro")).toBeInTheDocument();
+
+    expect(screen.getByRole("button", { name: "Додати товар" })).toBeDisabled();
+    expect(screen.getByLabelText("Збільшити залишок: SKU-91")).toBeDisabled();
+    expect(screen.getByLabelText("Зменшити залишок: SKU-91")).toBeDisabled();
+    expect(screen.getByLabelText("Завантажити фото: SKU-91")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Відклади" })).toBeDisabled();
+  });
+
+  it("checks out via Stars and opens the invoice link", async () => {
+    vi.mocked(api.getMe).mockResolvedValue({
+      ...shopFixture,
+      status: "expired",
+      is_writable: false,
+    });
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.getPlans).mockResolvedValue([planFixture]);
+    vi.mocked(api.checkoutStars).mockResolvedValue({
+      invoice_link: "https://t.me/invoice/abc",
+    });
+
+    render(<App />);
+    await screen.findByText("Pro");
+
+    fireEvent.click(screen.getByRole("button", { name: "Оформити через Stars" }));
+
+    await waitFor(() => {
+      expect(api.checkoutStars).toHaveBeenCalledWith("pro");
+    });
+    expect(
+      await screen.findByText("https://t.me/invoice/abc"),
+    ).toBeInTheDocument();
+  });
+
+  it("hides billing UI for managers", async () => {
+    vi.mocked(api.getMe).mockResolvedValue({
+      ...shopFixture,
+      role: "manager",
+      status: "expired",
+      is_writable: false,
+    });
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.getPlans).mockResolvedValue([planFixture]);
+
+    render(<App />);
+
+    expect(
+      await screen.findByText("Підписку призупинено. Оформлення доступне лише власнику магазину."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Pro")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Оформити через Stars" })).not.toBeInTheDocument();
+  });
+});
+
+describe("Demo banner", () => {
+  it("shows the demo banner and clears demos via the endpoint", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    const demoProduct = makeProduct({ id: 1, name: "Демо товар", is_demo: true });
+    const ownProduct = makeProduct({
+      id: 2,
+      name: "Свій товар",
+      is_demo: false,
+      variants: [makeVariant({ id: 95 })],
+    });
+    vi.mocked(api.getProducts)
+      .mockResolvedValueOnce([demoProduct, ownProduct])
+      .mockResolvedValueOnce([ownProduct]);
+    vi.mocked(api.clearDemos).mockResolvedValue({ removed: 1 });
+
+    render(<App />);
+    await screen.findByText("Демо товар");
+
+    expect(screen.getByText(/Це приклади/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Очистити приклади" }));
+
+    await waitFor(() => {
+      expect(api.clearDemos).toHaveBeenCalled();
+    });
+    await waitFor(() => {
+      expect(screen.queryByText("Демо товар")).not.toBeInTheDocument();
+    });
+    expect(screen.queryByText(/Це приклади/)).not.toBeInTheDocument();
+    expect(screen.getByText("Свій товар")).toBeInTheDocument();
+  });
+
+  it("hides the clear button for managers but still shows the banner", async () => {
+    vi.mocked(api.getMe).mockResolvedValue({ ...shopFixture, role: "manager" });
+    vi.mocked(api.getProducts).mockResolvedValue([
+      makeProduct({ id: 1, name: "Демо товар", is_demo: true }),
+    ]);
+
+    render(<App />);
+    await screen.findByText("Демо товар");
+
+    expect(screen.getByText(/Це приклади/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Очистити приклади" })).not.toBeInTheDocument();
   });
 });
