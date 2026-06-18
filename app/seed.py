@@ -10,11 +10,13 @@ SkladBase — сід даних.
 """
 from __future__ import annotations
 
+import asyncio
 from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import db
 from app.models import (
     Plan,
     Product,
@@ -176,3 +178,19 @@ async def clear_demo_catalog(session: AsyncSession, shop: Shop) -> int:
         await session.delete(p)   # cascade прибере варіанти
     await session.commit()
     return len(demos)
+
+
+# --------------------------------------------------------------------------- #
+#  Прод-entrypoint: `python -m app.seed`                                       #
+# --------------------------------------------------------------------------- #
+async def main() -> None:
+    """Сід системних шаблонів і тарифів на новій (прод) БД. Безпечно
+    запускати повторно — обидві функції перевіряють існування перед
+    insert, дублікатів не буде."""
+    async with db.async_session() as session:
+        await seed_system_templates(session)
+        await seed_plans(session)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
