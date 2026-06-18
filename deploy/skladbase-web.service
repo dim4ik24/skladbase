@@ -1,0 +1,26 @@
+[Unit]
+Description=SkladBase web (FastAPI/uvicorn)
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=skladbase
+Group=skladbase
+WorkingDirectory=/opt/skladbase
+EnvironmentFile=/opt/skladbase/.env
+# RUN_SCHEDULER=False має бути в /opt/skladbase/.env для цього юніта — крони
+# піднімає лише skladbase-scheduler.service (CLAUDE.md, ROADMAP Стадія 9a:
+# один процес планувальника, інакше джоби стріляють N разів на N web-реплік).
+ExecStartPre=/opt/skladbase/venv/bin/alembic upgrade head
+ExecStart=/opt/skladbase/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=on-failure
+RestartSec=5
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

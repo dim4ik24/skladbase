@@ -15,7 +15,13 @@ class Settings(BaseSettings):
     BOT_TOKEN: str = ""
     INIT_DATA_MAX_AGE_HOURS: int = 24
     ENCRYPTION_KEY: str = ""  # base64, 32 байти — для AES-256-GCM (app/security/crypto.py)
-    RUN_SCHEDULER: bool = True  # False у тестах — щоб крон-джоби не стріляли під час прогону
+    RUN_SCHEDULER: bool = True  # False у web-процесі прода — крон живе в app/worker.py (один процес)
+
+    # IP проксі (nginx/Cloudflare), яким довіряємо заголовок X-Forwarded-For
+    # (app/security/proxy_headers.py). Інакше клієнт сам підставляє довільний
+    # X-Forwarded-For і обходить rate limiting за IP. CSV; дефолт — лише
+    # loopback (nginx на тому самому хості).
+    TRUSTED_PROXY_IPS: str = "127.0.0.1,::1"
 
     WFP_MERCHANT: str = ""
     WFP_SECRET: str = ""

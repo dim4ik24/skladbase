@@ -48,6 +48,9 @@ def reset_all() -> None:
 
 
 def client_ip(request: Request) -> str:
+    """За трастед-проксі (`ProxyHeadersMiddleware`) `request.client` —
+    вже реальний клієнт, не nginx/Cloudflare: middleware переписує scope
+    раніше за будь-яку залежність."""
     return request.client.host if request.client else "unknown"
 
 

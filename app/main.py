@@ -21,10 +21,16 @@ from app.api import (
 )
 from app.config import settings
 from app.scheduler import create_scheduler
+from app.security.proxy_headers import ProxyHeadersMiddleware
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    # Прод: RUN_SCHEDULER=False тут — web-воркери не піднімають крони, інакше
+    # кожна реплікa web-процесу запустила б свій AsyncIOScheduler і джоби
+    # стрільнули б N разів. Планувальник живе окремим процесом — app/worker.py
+    # (python -m app.worker), там RUN_SCHEDULER=True не потрібен — він і не
+    # читає цей прапорець.
     scheduler = create_scheduler() if settings.RUN_SCHEDULER else None
     if scheduler is not None:
         scheduler.start()
@@ -37,6 +43,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 
 app = FastAPI(title="SkladBase", lifespan=lifespan)
+app.add_middleware(
+    ProxyHeadersMiddleware,
+    trusted_proxies=frozenset(
+        ip.strip() for ip in settings.TRUSTED_PROXY_IPS.split(",") if ip.strip()
+    ),
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
