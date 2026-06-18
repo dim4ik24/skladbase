@@ -9,9 +9,11 @@ User=skladbase
 Group=skladbase
 WorkingDirectory=/opt/skladbase
 EnvironmentFile=/opt/skladbase/.env
-# RUN_SCHEDULER=False має бути в /opt/skladbase/.env для цього юніта — крони
-# піднімає лише skladbase-scheduler.service (CLAUDE.md, ROADMAP Стадія 9a:
-# один процес планувальника, інакше джоби стріляють N разів на N web-реплік).
+# Explicit Environment= overrides EnvironmentFile, тож web-процес ніколи не
+# піднімає планувальник незалежно від .env — крони піднімає лише
+# skladbase-scheduler.service (CLAUDE.md, ROADMAP Стадія 9a: один процес
+# планувальника, інакше джоби стріляють N разів на N web-реплік).
+Environment=RUN_SCHEDULER=False
 ExecStartPre=/opt/skladbase/venv/bin/alembic upgrade head
 ExecStart=/opt/skladbase/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
 Restart=on-failure
