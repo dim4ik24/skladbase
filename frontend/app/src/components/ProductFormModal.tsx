@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { errorMessage } from "../errors";
 import type { ProductInput, Template, TemplateField, VariantInput } from "../types";
+import { Panel } from "./ui/Panel";
 
 interface ProductFormModalProps {
   templates: Template[];
@@ -109,7 +110,7 @@ export function ProductFormModal({ templates, onSubmit, onClose }: ProductFormMo
 
   return (
     <div className="modal-overlay" role="presentation" onClick={onClose}>
-      <div
+      <Panel
         className="modal-card"
         role="dialog"
         aria-modal="true"
@@ -266,7 +267,7 @@ export function ProductFormModal({ templates, onSubmit, onClose }: ProductFormMo
             </button>
           </div>
         </form>
-      </div>
+      </Panel>
     </div>
   );
 }

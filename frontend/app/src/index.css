@@ -1,40 +1,105 @@
+@import "tailwindcss";
+@import "@fontsource/unbounded/600.css";
+@import "@fontsource/unbounded/700.css";
+@import "@fontsource/dm-mono/400.css";
+@import "@fontsource/dm-mono/500.css";
+
+/* SkladBase brand palette — єдине джерело правди. Дзеркалиться у Tailwind
+   theme нижче, щоб старий CSS і нові Tailwind-компоненти брали кольори
+   з одного місця. Інших кольорів не вводити. */
+@theme {
+  --color-cream: #f5f4ed;
+  --color-pink: #f8e5e5;
+  --color-green: #def1d0;
+  --color-blue: #cdebf1;
+  --color-ink: #0e1a13;
+  --color-ink-2: #13241a;
+  --font-display: "Unbounded", system-ui, sans-serif;
+  --font-mono-price: "DM Mono", ui-monospace, monospace;
+}
+
 :root {
-  /* М'яка пастельна палітра за замовчуванням — до завантаження брендингу
-     магазину (accent-color) і теми Telegram (--tg-*). */
+  --cream: #f5f4ed;
+  --pink: #f8e5e5;
+  --green: #def1d0;
+  --blue: #cdebf1;
+  --ink: #0e1a13;
+  --ink-2: #13241a;
+  --panel: rgba(255, 255, 255, 0.045);
+  --line: rgba(245, 244, 237, 0.12);
+  --text-muted: rgba(245, 244, 237, 0.55);
+
+  /* Точковий бренд-акцент КОНКРЕТНОГО магазину (Header-аватар, прев'ю
+     вітрини) — JS перезаписує через setAccentColor(). НЕ перефарбовує
+     каркас адмінки: той завжди в палітрі SkladBase вище. */
   --accent-color: #a7c7e7;
-  --bg-color: #faf8f5;
-  --card-bg: #ffffff;
-  --text-color: #3a3a3a;
-  --hint-color: #8a8580;
-  --low-bg: #fce7b8;
-  --low-text: #8a6d1f;
-  --out-bg: #fad4d4;
-  --out-text: #9b3b3b;
 
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-  color: var(--text-color);
-  background-color: var(--tg-bg-color, var(--bg-color));
+  color: var(--cream);
+  background-color: var(--ink);
 }
 
 * {
   box-sizing: border-box;
 }
 
+html,
+body,
+#root {
+  height: 100%;
+}
+
 body {
   margin: 0;
+  background: var(--ink);
 }
 
 .app {
+  position: relative;
+  z-index: 1;
+  height: 100dvh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   max-width: 960px;
   margin: 0 auto;
   padding: 12px 16px 32px;
 }
 
+/* --- Атмосферний фон (Beams + статичний фолбек) --- */
+.atmosphere-wrap {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.6;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.atmosphere-fallback {
+  position: absolute;
+  inset: 0;
+  background: var(--ink);
+  overflow: hidden;
+}
+
+.aurora-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(70px);
+  opacity: 0.55;
+}
+
+.beams-canvas-layer {
+  position: absolute;
+  inset: 0;
+}
+
+/* --- Шапка --- */
 .shop-header {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 0 16px;
+  padding: 16px 0 12px;
 }
 
 .shop-logo {
@@ -42,6 +107,7 @@ body {
   height: 44px;
   border-radius: 12px;
   object-fit: cover;
+  border: 1px solid var(--line);
 }
 
 .shop-logo-placeholder {
@@ -49,241 +115,47 @@ body {
   align-items: center;
   justify-content: center;
   background: var(--accent-color);
-  color: #fff;
-  font-weight: 600;
+  color: var(--ink);
+  font-weight: 700;
   font-size: 18px;
 }
 
 .shop-name {
-  font-size: 20px;
-  font-weight: 600;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   margin: 0;
+  color: var(--cream);
 }
 
+.section-title {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 600;
+  margin: 4px 0 12px;
+  color: var(--cream);
+}
+
+/* --- Пошук/тулбар --- */
 .search-input {
   width: 100%;
   padding: 10px 14px;
   border-radius: 12px;
-  border: 1px solid #e3ddd3;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--cream);
   font-size: 15px;
   margin-bottom: 16px;
 }
 
+.search-input::placeholder {
+  color: rgba(245, 244, 237, 0.4);
+}
+
 .search-input:focus {
-  outline: 2px solid var(--accent-color);
-}
-
-.status-text,
-.error-banner {
-  color: var(--hint-color);
-  text-align: center;
-  padding: 24px 0;
-}
-
-.error-banner {
-  color: var(--out-text);
-}
-
-.banner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 10px 14px;
-  border-radius: 12px;
-  margin-bottom: 12px;
-  font-size: 13px;
-}
-
-.banner-trial {
-  background: var(--low-bg);
-  color: var(--low-text);
-  justify-content: center;
-}
-
-.banner-readonly {
-  background: var(--out-bg);
-  color: var(--out-text);
-  justify-content: center;
-}
-
-.banner-demo {
-  background: var(--card-bg);
-  border: 1px dashed var(--hint-color);
-}
-
-.banner-demo button {
-  border: none;
-  border-radius: 8px;
-  padding: 6px 12px;
-  background: var(--accent-color);
-  color: #fff;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.paywall {
-  background: var(--card-bg);
-  border-radius: 12px;
-  padding: 12px 14px;
-  margin-bottom: 12px;
-}
-
-.plan-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.plan-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 8px;
-  border-radius: 10px;
-  background: var(--bg-color);
-}
-
-.plan-name {
-  font-weight: 600;
-}
-
-.plan-row button {
-  border: none;
-  border-radius: 8px;
-  padding: 6px 12px;
-  background: var(--accent-color);
-  color: #fff;
-  cursor: pointer;
-}
-
-.paywall-fallback {
-  font-size: 13px;
-  word-break: break-all;
-}
-
-.product-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 14px;
-}
-
-.product-card {
-  background: var(--card-bg);
-  border-radius: 16px;
-  padding: 12px;
-  box-shadow: 0 1px 3px rgb(0 0 0 / 0.06);
-}
-
-.product-photo {
-  width: 100%;
-  aspect-ratio: 1 / 1;
-  border-radius: 12px;
-  overflow: hidden;
-  background: var(--bg-color);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 8px;
-}
-
-.product-photo img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.product-photo-placeholder {
-  font-size: 40px;
-  opacity: 0.4;
-}
-
-.product-name {
-  font-size: 15px;
-  font-weight: 600;
-  margin: 0 0 8px;
-}
-
-.variant-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.variant-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 13px;
-}
-
-.variant-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.variant-axis {
-  color: var(--hint-color);
-}
-
-.variant-price {
-  font-weight: 600;
-}
-
-.variant-available {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.badge {
-  display: inline-block;
-  padding: 1px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.badge-low {
-  background: var(--low-bg);
-  color: var(--low-text);
-}
-
-.badge-out {
-  background: var(--out-bg);
-  color: var(--out-text);
-}
-
-.variant-controls {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.variant-controls button {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  border: none;
-  background: var(--accent-color);
-  color: #fff;
-  font-size: 16px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.variant-controls button:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
+  outline: 2px solid var(--green);
+  border-color: transparent;
 }
 
 .toolbar {
@@ -300,19 +172,347 @@ body {
 
 .toolbar button {
   border: none;
-  border-radius: 10px;
-  padding: 0 14px;
-  background: var(--accent-color);
-  color: #fff;
+  border-radius: 12px;
+  padding: 0 16px;
+  background: var(--green);
+  color: var(--ink);
   font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+
+.toolbar button:not(:disabled):hover {
+  filter: brightness(1.08);
+}
+
+.toolbar button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* --- Статуси/банери --- */
+.status-text,
+.error-banner {
+  text-align: center;
+  padding: 24px 0;
+}
+
+.status-text {
+  color: var(--text-muted);
+}
+
+.error-banner {
+  color: var(--pink);
+  font-weight: 600;
+  padding: 4px 0;
+}
+
+.banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(12px);
+}
+
+.banner-trial,
+.banner-readonly {
+  color: var(--pink);
+  justify-content: center;
+}
+
+.banner-demo {
+  border-style: dashed;
+  color: var(--cream);
+}
+
+.banner-demo button {
+  border: none;
+  border-radius: 10px;
+  padding: 6px 14px;
+  background: var(--green);
+  color: var(--ink);
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* --- Paywall/тарифи --- */
+.paywall {
+  border-radius: 18px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  color: var(--cream);
+}
+
+.plan-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.plan-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--ink-2);
+  border: 1px solid var(--line);
+}
+
+.plan-name {
+  font-weight: 600;
+  color: var(--cream);
+}
+
+.plan-price {
+  font-family: var(--font-mono-price);
+  color: var(--blue);
+}
+
+.plan-row button {
+  border: none;
+  border-radius: 10px;
+  padding: 8px 14px;
+  background: var(--green);
+  color: var(--ink);
+  font-weight: 600;
   cursor: pointer;
 }
 
+.paywall-fallback {
+  font-size: 13px;
+  word-break: break-all;
+  color: var(--text-muted);
+}
+
+.paywall-fallback a {
+  color: var(--blue);
+}
+
+/* --- Каталог --- */
+.product-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.product-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 12px;
+  backdrop-filter: blur(14px);
+  transition: border-color 0.2s ease;
+}
+
+.product-card:hover {
+  border-color: rgba(245, 244, 237, 0.22);
+}
+
+.product-photo {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--ink-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+
+.product-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.product-photo-placeholder {
+  font-size: 40px;
+  opacity: 0.5;
+}
+
+.product-name {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 8px;
+  color: var(--cream);
+}
+
+.variant-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.variant-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  font-size: 13px;
+  padding: 8px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.variant-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
+.variant-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.variant-axis {
+  color: var(--text-muted);
+}
+
+.variant-price {
+  font-family: var(--font-mono-price);
+  font-weight: 600;
+  color: var(--cream);
+}
+
+.variant-available {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 1px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.badge-low {
+  background: var(--pink);
+  color: var(--ink);
+}
+
+.badge-out {
+  background: var(--line);
+  color: var(--text-muted);
+}
+
+.variant-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.variant-controls button {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: var(--ink-2);
+  color: var(--cream);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.variant-controls button:not(:disabled):hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--green);
+}
+
+.variant-controls button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.variant-photo {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--ink-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.variant-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.variant-photo-placeholder {
+  font-size: 18px;
+  opacity: 0.5;
+}
+
+.variant-photo-upload {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--green);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.variant-stock-trio {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.reserve-form {
+  margin-top: 8px;
+  padding: 10px;
+  border-radius: 12px;
+  background: var(--ink-2);
+  border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* --- Резерви --- */
 .reservations-section {
   margin-bottom: 16px;
-  padding: 12px;
-  border-radius: 12px;
-  background: var(--card-bg);
+  padding: 14px;
+  border-radius: 18px;
 }
 
 .reservation-list {
@@ -330,9 +530,10 @@ body {
   justify-content: space-between;
   gap: 8px;
   font-size: 13px;
-  padding: 8px;
-  border-radius: 10px;
-  background: var(--bg-color);
+  padding: 10px;
+  border-radius: 12px;
+  background: var(--ink-2);
+  border: 1px solid var(--line);
 }
 
 .reservation-info {
@@ -343,82 +544,15 @@ body {
 
 .reservation-variant {
   font-weight: 600;
+  color: var(--cream);
 }
 
-.variant-row {
-  flex-direction: column;
-  align-items: stretch;
-}
-
-.variant-main {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  width: 100%;
-}
-
-.variant-photo {
-  position: relative;
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
-  overflow: hidden;
-  background: var(--bg-color);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.variant-photo img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.variant-photo-placeholder {
-  font-size: 18px;
-  opacity: 0.4;
-}
-
-.variant-photo-upload {
-  position: absolute;
-  bottom: -2px;
-  right: -2px;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--accent-color);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 10px;
-  cursor: pointer;
-}
-
-.variant-stock-trio {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--hint-color);
-  font-size: 12px;
-}
-
-.reserve-form {
-  margin-top: 8px;
-  padding: 8px;
-  border-radius: 10px;
-  background: var(--bg-color);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
+/* --- Модалка додавання товару --- */
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgb(0 0 0 / 0.4);
+  background: rgba(14, 26, 19, 0.6);
+  backdrop-filter: blur(2px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -427,13 +561,13 @@ body {
 }
 
 .modal-card {
-  background: var(--card-bg);
-  border-radius: 16px;
+  border-radius: 18px;
   padding: 20px;
   max-width: 480px;
   width: 100%;
   max-height: 90vh;
   overflow-y: auto;
+  color: var(--cream);
 }
 
 .form-field {
@@ -442,34 +576,45 @@ body {
   gap: 4px;
   margin-bottom: 10px;
   font-size: 13px;
+  color: var(--text-muted);
 }
 
 .form-field input,
 .form-field select,
 .form-field textarea {
   padding: 8px 10px;
-  border-radius: 8px;
-  border: 1px solid #e3ddd3;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--ink-2);
+  color: var(--cream);
   font-size: 14px;
 }
 
+.form-field input:focus,
+.form-field select:focus,
+.form-field textarea:focus {
+  outline: 2px solid var(--green);
+  border-color: transparent;
+}
+
 .advanced-fields {
-  border-top: 1px solid #e3ddd3;
+  border-top: 1px solid var(--line);
   padding-top: 8px;
   margin-bottom: 8px;
 }
 
 .variant-builder-row {
-  border: 1px solid #e3ddd3;
-  border-radius: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
   padding: 10px;
   margin-bottom: 8px;
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .link-button {
   background: none;
   border: none;
-  color: var(--accent-color);
+  color: var(--blue);
   cursor: pointer;
   padding: 4px 0;
   font-size: 13px;
@@ -485,9 +630,15 @@ body {
 
 .modal-actions button {
   border: none;
-  border-radius: 8px;
-  padding: 8px 14px;
-  background: var(--accent-color);
-  color: #fff;
+  border-radius: 10px;
+  padding: 8px 16px;
+  background: var(--green);
+  color: var(--ink);
+  font-weight: 600;
   cursor: pointer;
+}
+
+.modal-actions button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }

@@ -1,10 +1,13 @@
+import type { RefObject } from "react";
+import { ScrollFloat } from "./ScrollFloat";
 import type { Shop } from "../types";
 
 interface HeaderProps {
   shop: Shop | null;
+  scrollContainerRef?: RefObject<HTMLElement | null>;
 }
 
-export function Header({ shop }: HeaderProps) {
+export function Header({ shop, scrollContainerRef }: HeaderProps) {
   if (!shop) {
     return null;
   }
@@ -18,7 +21,9 @@ export function Header({ shop }: HeaderProps) {
           {shop.shop_name.charAt(0).toUpperCase()}
         </div>
       )}
-      <h1 className="shop-name">{shop.shop_name}</h1>
+      <ScrollFloat as="h1" className="shop-name" scrollContainerRef={scrollContainerRef}>
+        {shop.shop_name}
+      </ScrollFloat>
     </header>
   );
 }

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { errorMessage } from "../errors";
 import { openInvoice } from "../telegram";
 import type { Plan } from "../types";
+import { Panel } from "./ui/Panel";
 
 interface SubscriptionPaywallProps {
   plans: Plan[];
@@ -16,11 +17,11 @@ export function SubscriptionPaywall({ plans, role, onCheckout }: SubscriptionPay
 
   if (role === "manager") {
     return (
-      <section className="paywall">
+      <Panel as="section" className="paywall">
         <p className="status-text">
           Підписку призупинено. Оформлення доступне лише власнику магазину.
         </p>
-      </section>
+      </Panel>
     );
   }
 
@@ -41,7 +42,7 @@ export function SubscriptionPaywall({ plans, role, onCheckout }: SubscriptionPay
   }
 
   return (
-    <section className="paywall">
+    <Panel as="section" className="paywall">
       <h2>Оберіть тариф</h2>
       {error ? <p className="error-banner">{error}</p> : null}
       {fallbackLink ? (
@@ -67,6 +68,6 @@ export function SubscriptionPaywall({ plans, role, onCheckout }: SubscriptionPay
           </li>
         ))}
       </ul>
-    </section>
+    </Panel>
   );
 }

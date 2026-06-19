@@ -1,18 +1,25 @@
-import { useEffect, useState } from "react";
+import { Ban, BookmarkCheck, Package, TriangleAlert } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import * as api from "./api";
+import { AtmosphereBackground } from "./components/background/AtmosphereBackground";
 import { DemoBanner } from "./components/DemoBanner";
 import { Header } from "./components/Header";
+import type { MetricCardData } from "./components/MetricCarousel";
+import { MetricCarousel } from "./components/MetricCarousel";
 import { ProductCard } from "./components/ProductCard";
 import { ProductFormModal } from "./components/ProductFormModal";
 import { ReservationsPanel } from "./components/ReservationsPanel";
+import { ScrollFloat } from "./components/ScrollFloat";
 import { SubscriptionPaywall } from "./components/SubscriptionPaywall";
 import { TrialBanner } from "./components/TrialBanner";
+import { Panel } from "./components/ui/Panel";
 import { errorMessage } from "./errors";
 import { initTelegram, setAccentColor } from "./telegram";
 import type {
   Plan,
   Product,
   ProductInput,
+  ProductPatch,
   Reservation,
   ReserveInput,
   Shop,
@@ -32,6 +39,7 @@ export default function App() {
   const [showProductForm, setShowProductForm] = useState(false);
   const [showReservations, setShowReservations] = useState(false);
   const [clearingDemos, setClearingDemos] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     initTelegram();
@@ -112,6 +120,15 @@ export default function App() {
     setShowProductForm(false);
   }
 
+  async function handleUpdateProduct(productId: number, patch: ProductPatch) {
+    try {
+      const updated = await api.updateProduct(productId, patch);
+      setProducts((prev) => prev.map((product) => (product.id === productId ? updated : product)));
+    } catch (err) {
+      setError(errorMessage(err, "Не вдалося оновити товар"));
+    }
+  }
+
   async function handleUploadPhoto(variantId: number, file: File) {
     // Помилку показує сам VariantRow поруч із контролом — без дубля у глобальному банері.
     applyVariantUpdate(await api.uploadVariantPhoto(variantId, file));
@@ -188,92 +205,119 @@ export default function App() {
   const writable = shop?.is_writable ?? false;
   const hasDemo = products.some((product) => product.is_demo);
 
+  let lowStockCount = 0;
+  let outOfStockCount = 0;
+  for (const product of products) {
+    for (const variant of product.variants) {
+      if (variant.available === 0) outOfStockCount += 1;
+      else if (variant.available <= variant.low_stock_threshold) lowStockCount += 1;
+    }
+  }
+  const metricCards: MetricCardData[] = [
+    { id: "products", title: "Товари", value: products.length, bgClass: "bg-green", textClass: "text-ink", icon: Package },
+    { id: "reservations", title: "Резерви", value: reservations.length, bgClass: "bg-blue", textClass: "text-ink", icon: BookmarkCheck },
+    { id: "low", title: "Мало", value: lowStockCount, bgClass: "bg-pink", textClass: "text-ink", icon: TriangleAlert },
+    { id: "out", title: "Нема", value: outOfStockCount, bgClass: "bg-ink-2", textClass: "text-cream", icon: Ban },
+  ];
+
   return (
-    <div className="app">
-      <Header shop={shop} />
+    <>
+      <AtmosphereBackground />
+      <div className="app" ref={scrollContainerRef}>
+        <Header shop={shop} scrollContainerRef={scrollContainerRef} />
 
-      {error ? <p className="error-banner">{error}</p> : null}
+        {error ? <p className="error-banner">{error}</p> : null}
 
-      {shop?.status === "trial" && shop.trial_ends_at ? (
-        <TrialBanner trialEndsAt={shop.trial_ends_at} />
-      ) : null}
+        {shop?.status === "trial" && shop.trial_ends_at ? (
+          <TrialBanner trialEndsAt={shop.trial_ends_at} />
+        ) : null}
 
-      {shop && !shop.is_writable ? (
-        <>
-          <p className="banner banner-readonly">Підписку призупинено, дані збережено</p>
-          <SubscriptionPaywall
-            plans={plans}
-            role={shop.role}
-            onCheckout={api.checkoutStars}
-          />
-        </>
-      ) : null}
-
-      {hasDemo ? (
-        <DemoBanner
-          canClear={shop?.role === "owner"}
-          clearing={clearingDemos}
-          onClear={handleClearDemos}
-        />
-      ) : null}
-
-      <div className="toolbar">
-        <input
-          className="search-input"
-          type="search"
-          placeholder="Пошук товарів..."
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          aria-label="Пошук товарів"
-        />
-        <button type="button" disabled={!writable} onClick={() => setShowProductForm(true)}>
-          Додати товар
-        </button>
-        <button type="button" onClick={() => setShowReservations((prev) => !prev)}>
-          Резерви ({reservations.length})
-        </button>
-      </div>
-
-      {showReservations ? (
-        <section className="reservations-section">
-          <h2>Резерви</h2>
-          <ReservationsPanel
-            reservations={reservations}
-            writable={writable}
-            variantLabel={variantLabel}
-            onRelease={handleRelease}
-            onFulfill={handleFulfill}
-          />
-        </section>
-      ) : null}
-
-      {loading ? (
-        <p className="status-text">Завантаження...</p>
-      ) : filteredProducts.length === 0 ? (
-        <p className="status-text">Нічого не знайдено</p>
-      ) : (
-        <div className="product-grid">
-          {filteredProducts.map((product) => (
-            <ProductCard
-              key={product.id}
-              product={product}
-              writable={writable}
-              onRestock={handleRestock}
-              onAdjust={handleAdjust}
-              onUploadPhoto={handleUploadPhoto}
-              onReserve={handleReserve}
+        {shop && !shop.is_writable ? (
+          <>
+            <p className="banner banner-readonly">Підписку призупинено, дані збережено</p>
+            <SubscriptionPaywall
+              plans={plans}
+              role={shop.role}
+              onCheckout={api.checkoutStars}
             />
-          ))}
-        </div>
-      )}
+          </>
+        ) : null}
 
-      {showProductForm ? (
-        <ProductFormModal
-          templates={templates}
-          onSubmit={handleCreateProduct}
-          onClose={() => setShowProductForm(false)}
-        />
-      ) : null}
-    </div>
+        {hasDemo ? (
+          <DemoBanner
+            canClear={shop?.role === "owner"}
+            clearing={clearingDemos}
+            onClear={handleClearDemos}
+          />
+        ) : null}
+
+        {shop ? <MetricCarousel cards={metricCards} /> : null}
+
+        <div className="toolbar">
+          <input
+            className="search-input"
+            type="search"
+            placeholder="Пошук товарів..."
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            aria-label="Пошук товарів"
+          />
+          <button type="button" disabled={!writable} onClick={() => setShowProductForm(true)}>
+            Додати товар
+          </button>
+          <button type="button" onClick={() => setShowReservations((prev) => !prev)}>
+            Резерви ({reservations.length})
+          </button>
+        </div>
+
+        {showReservations ? (
+          <Panel as="section" className="reservations-section">
+            <ScrollFloat as="h2" className="section-title" scrollContainerRef={scrollContainerRef}>
+              Резерви
+            </ScrollFloat>
+            <ReservationsPanel
+              reservations={reservations}
+              writable={writable}
+              variantLabel={variantLabel}
+              onRelease={handleRelease}
+              onFulfill={handleFulfill}
+            />
+          </Panel>
+        ) : null}
+
+        <ScrollFloat as="h2" className="section-title" scrollContainerRef={scrollContainerRef}>
+          Каталог
+        </ScrollFloat>
+
+        {loading ? (
+          <p className="status-text">Завантаження...</p>
+        ) : filteredProducts.length === 0 ? (
+          <p className="status-text">Нічого не знайдено</p>
+        ) : (
+          <div className="product-grid">
+            {filteredProducts.map((product) => (
+              <ProductCard
+                key={product.id}
+                product={product}
+                writable={writable}
+                onRestock={handleRestock}
+                onAdjust={handleAdjust}
+                onUploadPhoto={handleUploadPhoto}
+                onReserve={handleReserve}
+                onUpdateProduct={handleUpdateProduct}
+              />
+            ))}
+          </div>
+        )}
+
+        {showProductForm ? (
+          <ProductFormModal
+            templates={templates}
+            onSubmit={handleCreateProduct}
+            onClose={() => setShowProductForm(false)}
+          />
+        ) : null}
+      </div>
+    </>
   );
 }
