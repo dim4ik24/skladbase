@@ -6,6 +6,8 @@
  */
 import { getInitData } from "./telegram";
 import type {
+  AnalyticsPeriod,
+  AnalyticsSummary,
   Plan,
   Product,
   ProductInput,
@@ -142,4 +144,10 @@ export function checkoutStars(planCode: string): Promise<{ invoice_link: string 
 
 export function clearDemos(): Promise<{ removed: number }> {
   return request<{ removed: number }>("/api/shop/clear-demos", { method: "POST" });
+}
+
+/** Owner-only зведення продажів/виручки. Лише запит — підключення в UI
+ * (метрика «Продано»/owner-панель) лишено на потім, дизайн на паузі. */
+export function getAnalyticsSummary(period: AnalyticsPeriod = "7d"): Promise<AnalyticsSummary> {
+  return request<AnalyticsSummary>(`/api/analytics/summary?period=${period}`);
 }

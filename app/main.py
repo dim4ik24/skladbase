@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app import db
 from app.api import (
+    analytics,
     billing,
     catalog,
     finance,
@@ -58,6 +59,7 @@ app.add_middleware(
 )
 app.include_router(me.router)
 app.include_router(finance.router)
+app.include_router(analytics.router)
 app.include_router(catalog.router)
 app.include_router(orders.router)
 app.include_router(public.router)

@@ -110,3 +110,20 @@ export interface ReserveInput {
   customer_note?: string;
   expires_at?: string;
 }
+
+export type AnalyticsPeriod = "today" | "7d" | "30d" | "all";
+
+export interface TopProductSales {
+  product_id: number;
+  name: string;
+  units_sold: number;
+  revenue: string;
+}
+
+export interface AnalyticsSummary {
+  period: string;
+  units_sold: number;
+  revenue: string;
+  sales_count: number;
+  top_products: TopProductSales[];
+}
