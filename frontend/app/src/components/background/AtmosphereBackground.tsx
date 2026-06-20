@@ -11,7 +11,7 @@ import type { ReactNode } from "react";
 
 const LazyBeams = lazy(() => import("./Beams"));
 
-const INK = "#0e1a13";
+const INK = "#0a0b0f";
 const GREEN = "#def1d0";
 const PINK = "#f8e5e5";
 const BLUE = "#cdebf1";
@@ -67,7 +67,14 @@ function supportsWebGL(): boolean {
   }
 }
 
-export function AtmosphereBackground() {
+interface AtmosphereBackgroundProps {
+  /** Призупиняє важкий WebGL-фон (Beams), коли на екрані вже є інший
+   * важкий ефект (напр. Sparkles на екрані підписки) — один важкий ефект
+   * за раз. Статична аврора лишається завжди. */
+  suspended?: boolean;
+}
+
+export function AtmosphereBackground({ suspended = false }: AtmosphereBackgroundProps) {
   const [active, setActive] = useState(() => !document.hidden);
   const [canRenderBeams] = useState(
     () => !prefersReducedMotion() && !isWeakDevice() && supportsWebGL(),
@@ -84,7 +91,7 @@ export function AtmosphereBackground() {
   return (
     <div className="atmosphere-wrap">
       <AuroraFallback />
-      {canRenderBeams ? (
+      {canRenderBeams && !suspended ? (
         <BeamsErrorBoundary>
           <Suspense fallback={null}>
             <div className="beams-canvas-layer">

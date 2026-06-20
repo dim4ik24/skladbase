@@ -12,8 +12,8 @@
   --color-pink: #f8e5e5;
   --color-green: #def1d0;
   --color-blue: #cdebf1;
-  --color-ink: #0e1a13;
-  --color-ink-2: #13241a;
+  --color-ink: #0a0b0f;
+  --color-ink-2: #121319;
   --font-display: "Unbounded", system-ui, sans-serif;
   --font-mono-price: "DM Mono", ui-monospace, monospace;
 }
@@ -23,8 +23,8 @@
   --pink: #f8e5e5;
   --green: #def1d0;
   --blue: #cdebf1;
-  --ink: #0e1a13;
-  --ink-2: #13241a;
+  --ink: #0a0b0f;
+  --ink-2: #121319;
   --panel: rgba(255, 255, 255, 0.045);
   --line: rgba(245, 244, 237, 0.12);
   --text-muted: rgba(245, 244, 237, 0.55);

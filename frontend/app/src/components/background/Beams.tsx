@@ -293,7 +293,7 @@ export default function Beams({
   noiseIntensity = 1.75,
   scale = 0.2,
   rotation = 0,
-  backgroundColor = "#0e1a13",
+  backgroundColor = "#0a0b0f",
   dpr = [1, 1.5],
   active = true,
 }: BeamsProps) {

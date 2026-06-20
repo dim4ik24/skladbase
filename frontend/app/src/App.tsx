@@ -222,7 +222,7 @@ export default function App() {
 
   return (
     <>
-      <AtmosphereBackground />
+      <AtmosphereBackground suspended={Boolean(shop && !shop.is_writable)} />
       <div className="app" ref={scrollContainerRef}>
         <Header shop={shop} scrollContainerRef={scrollContainerRef} />
 
@@ -235,6 +235,12 @@ export default function App() {
         {shop && !shop.is_writable ? (
           <>
             <p className="banner banner-readonly">Підписку призупинено, дані збережено</p>
+            {/* currentPlanCode тут навмисно не передаємо: цей блок рендериться
+                лише коли !is_writable (підписка вже НЕ активна), тож
+                shop.plan_code — це попередній план, а не діючий. Позначати
+                його як "поточний, не можна купити повторно" заблокувало б
+                реактивацію того самого тарифу. Проп лишився в компоненті
+                для майбутнього writable-сценарію "керувати планом". */}
             <SubscriptionPaywall
               plans={plans}
               role={shop.role}
