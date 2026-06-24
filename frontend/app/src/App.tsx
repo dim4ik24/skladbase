@@ -214,10 +214,10 @@ export default function App() {
     }
   }
   const metricCards: MetricCardData[] = [
-    { id: "products", title: "Товари", value: products.length, bgClass: "bg-green", textClass: "text-ink", icon: Package },
-    { id: "reservations", title: "Резерви", value: reservations.length, bgClass: "bg-blue", textClass: "text-ink", icon: BookmarkCheck },
-    { id: "low", title: "Мало", value: lowStockCount, bgClass: "bg-pink", textClass: "text-ink", icon: TriangleAlert },
-    { id: "out", title: "Нема", value: outOfStockCount, bgClass: "bg-ink-2", textClass: "text-cream", icon: Ban },
+    { id: "products", title: "Товари", value: products.length, bgClass: "bg-cream", textClass: "text-green-deep", icon: Package },
+    { id: "reservations", title: "Резерви", value: reservations.length, bgClass: "bg-green-deep", textClass: "text-cream", icon: BookmarkCheck },
+    { id: "low", title: "Мало", value: lowStockCount, bgClass: "bg-green-deep", textClass: "text-cream", icon: TriangleAlert },
+    { id: "out", title: "Нема", value: outOfStockCount, bgClass: "bg-green-deep", textClass: "text-cream", icon: Ban },
   ];
 
   return (

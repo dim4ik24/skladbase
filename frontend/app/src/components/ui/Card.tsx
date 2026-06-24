@@ -1,8 +1,6 @@
 /**
- * Card/CardHeader/CardContent — локальна міні-заміна shadcn Card (нема
- * shadcn-проєкту/CSS-змінних --card/--card-foreground). Стилізовано під
- * нашу палітру (--panel/--line), без власної motion-анімації — реveal
- * картки на рівні обгортки (Reveal), не тут.
+ * Card/CardHeader/CardContent — cream-інверсна картка (editorial sport-poster).
+ * Використовується для плану підписки: cream поверхня на green-deep фоні paywall.
  */
 import type { HTMLAttributes } from "react";
 import { cn } from "../../lib/cn";
@@ -10,10 +8,7 @@ import { cn } from "../../lib/cn";
 export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn(
-        "rounded-2xl border border-[var(--line)] bg-[var(--panel)] backdrop-blur-xl",
-        className,
-      )}
+      className={cn("rounded-2xl bg-cream", className)}
       {...props}
     />
   );

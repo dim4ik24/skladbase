@@ -1,9 +1,6 @@
 /**
- * EditableRow — один рядок інлайн-редагування (іконка + лейбл + поле,
- * перемикач view/edit). Адаптовано з пасти EditableRow (motion/react):
- * прибрано @hugeicons (стандартизація на lucide-react per CLAUDE-бриф),
- * прибрано event-специфічні варіанти (time-range/url) — лишились
- * текстове/multiline поля, потрібні для назви/опису товару.
+ * EditableRow — рядок інлайн-редагування. Живе всередині InlineEditCard
+ * (green-deep фон), тому cream-текст ок. Кнопки: cream=save, green=cancel.
  */
 import { useId, useState } from "react";
 import type { LucideIcon } from "lucide-react";
@@ -49,7 +46,7 @@ export function EditableRow({ icon: Icon, label, value, multiline = false, onSav
         </label>
       </div>
 
-      <div className="group/content relative flex min-h-[38px] w-full items-center gap-2 rounded-xl px-2 transition-colors hover:bg-white/[0.03]">
+      <div className="group/content relative flex min-h-[38px] w-full items-center gap-2 rounded-xl px-2 transition-colors hover:bg-white/[0.05]">
         {multiline ? (
           <textarea
             id={inputId}
@@ -87,7 +84,7 @@ export function EditableRow({ icon: Icon, label, value, multiline = false, onSav
                   whileTap={{ scale: 0.95 }}
                   onClick={handleSave}
                   aria-label={`Зберегти: ${label}`}
-                  className="flex size-7 items-center justify-center rounded-lg bg-green text-ink"
+                  className="flex size-7 items-center justify-center rounded-lg bg-cream text-green-deep"
                 >
                   <Check size={15} />
                 </motion.button>
@@ -96,7 +93,7 @@ export function EditableRow({ icon: Icon, label, value, multiline = false, onSav
                   whileTap={{ scale: 0.95 }}
                   onClick={handleCancel}
                   aria-label={`Скасувати: ${label}`}
-                  className="flex size-7 items-center justify-center rounded-lg bg-ink-2 text-cream"
+                  className="flex size-7 items-center justify-center rounded-lg bg-green text-cream"
                 >
                   <X size={15} />
                 </motion.button>

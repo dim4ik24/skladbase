@@ -1,21 +1,10 @@
 /**
- * SubscriptionPaywall — екран підписки/планів. Інтегрує наданий
- * pricing-section (три плани, motion-reveal, NumberFlow-ціни, Sparkles-фон)
- * на місці попереднього текстового paywall: той самий тригер показу
- * (App.tsx: `shop && !shop.is_writable`), той самий контракт оплати
- * (`onCheckout` -> `api.checkoutStars`, openInvoice/fallbackLink/error —
- * без змін).
- *
- * Дані — лише реальні: назва/ціна (₴)/⭐ з `/api/plans`, фічі — з
- * `Plan.limits` (max_products/photos/integrations), без вигаданих рядків.
- * monthly/yearly-світч не показуємо: у наявних планах нема річних цін
- * (кожен `Plan` уже несе свій `period`, перемикач їх не подвоює).
- *
- * Sparkles — лінькво, density знижено (300, не 1800), вимкнено під
- * prefers-reduced-motion. Beams на цьому екрані призупиняється з App.tsx
- * (проп `suspended` в AtmosphereBackground) — один важкий ефект за раз.
+ * SubscriptionPaywall — екран підписки/планів. Editorial sport-poster:
+ * green-deep Panel, cream Card-картки планів (інверсія), NumberFlow-ціни,
+ * VerticalCutReveal-заголовок. Sparkles прибрані (tsparticles → бандл схуд).
+ * Контракт оплати (onCheckout → checkoutStars, openInvoice) — без змін.
  */
-import { lazy, Suspense, useState } from "react";
+import { useState } from "react";
 import { Check } from "lucide-react";
 import NumberFlow from "@number-flow/react";
 import { errorMessage } from "../errors";
@@ -25,15 +14,6 @@ import { Reveal } from "./Reveal";
 import { Card, CardContent, CardHeader } from "./ui/Card";
 import { Panel } from "./ui/Panel";
 import { VerticalCutReveal } from "./VerticalCutReveal";
-
-const LazySparkles = lazy(() =>
-  import("./ui/Sparkles").then((module) => ({ default: module.Sparkles })),
-);
-
-function prefersReducedMotion(): boolean {
-  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
 
 interface SubscriptionPaywallProps {
   plans: Plan[];
@@ -64,7 +44,6 @@ export function SubscriptionPaywall({
   const [checkingOutCode, setCheckingOutCode] = useState<string | null>(null);
   const [fallbackLink, setFallbackLink] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [canShowSparkles] = useState(() => !prefersReducedMotion());
 
   if (role === "manager") {
     return (
@@ -92,9 +71,6 @@ export function SubscriptionPaywall({
     }
   }
 
-  // Підсвічуємо поточний активний план; якщо такого нема (тріал) —
-  // найдорожчий тариф як рекомендований. Це лише вибір ОФОРМЛЕННЯ картки,
-  // не вигадані дані — назви/ціни нижче завжди реальні з /api/plans.
   const mostExpensive = plans.reduce<Plan | undefined>(
     (best, plan) => (Number(plan.price_uah) > Number(best?.price_uah ?? -1) ? plan : best),
     undefined,
@@ -102,30 +78,8 @@ export function SubscriptionPaywall({
   const featuredCode = currentPlanCode ?? mostExpensive?.code;
 
   return (
-    <Panel as="section" className="paywall relative overflow-hidden p-6">
-      <div className="pointer-events-none absolute inset-0 z-0" aria-hidden="true">
-        <div
-          className="absolute inset-x-0 top-0 h-full"
-          style={{
-            background: "radial-gradient(circle at 50% 0%, var(--blue) 0%, transparent 70%)",
-            opacity: 0.35,
-            mixBlendMode: "screen",
-          }}
-        />
-        {canShowSparkles ? (
-          <Suspense fallback={null}>
-            <LazySparkles
-              density={300}
-              color="#F5F4ED"
-              speed={0.4}
-              opacity={0.5}
-              className="absolute inset-0 h-full w-full"
-            />
-          </Suspense>
-        ) : null}
-      </div>
-
-      <div className="relative z-10 mb-6 space-y-2 text-center">
+    <Panel as="section" className="paywall p-6">
+      <div className="mb-6 space-y-2 text-center">
         <h2 className="section-title">
           <VerticalCutReveal
             splitBy="words"
@@ -141,9 +95,9 @@ export function SubscriptionPaywall({
         </Reveal>
       </div>
 
-      {error ? <p className="error-banner relative z-10">{error}</p> : null}
+      {error ? <p className="error-banner">{error}</p> : null}
       {fallbackLink ? (
-        <p className="paywall-fallback relative z-10">
+        <p className="paywall-fallback">
           Відкрийте посилання в Telegram, щоб оплатити:{" "}
           <a href={fallbackLink} target="_blank" rel="noreferrer">
             {fallbackLink}
@@ -151,7 +105,7 @@ export function SubscriptionPaywall({
         </p>
       ) : null}
 
-      <div className="relative z-10 grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-3">
         {plans.map((plan, index) => {
           const isCurrent = plan.code === currentPlanCode;
           const isFeatured = plan.code === featuredCode;
@@ -162,24 +116,24 @@ export function SubscriptionPaywall({
               <Card
                 className={
                   isFeatured
-                    ? "flex h-full flex-col shadow-[0_0_50px_-12px_var(--green)] ring-1 ring-[var(--green)]/40"
+                    ? "flex h-full flex-col ring-2 ring-green"
                     : "flex h-full flex-col"
                 }
               >
                 <CardHeader>
-                  <h3 className="font-display text-xl font-semibold text-cream">{plan.name}</h3>
+                  <h3 className="font-display text-xl font-semibold text-green-deep">{plan.name}</h3>
                   <div className="flex items-baseline gap-1">
                     <NumberFlow
                       value={Number(plan.price_uah)}
                       locales="uk-UA"
                       format={{ style: "currency", currency: "UAH", maximumFractionDigits: 0 }}
-                      className="font-mono-price text-2xl font-bold text-cream"
+                      className="font-mono-price text-2xl font-bold text-green-deep"
                     />
-                    <span className="text-sm text-cream/50">
+                    <span className="text-sm text-green-deep/50">
                       /{plan.period === "year" ? "рік" : "міс"}
                     </span>
                   </div>
-                  <p className="text-xs text-cream/45">{plan.price_stars} ⭐ через Telegram Stars</p>
+                  <p className="text-xs text-green-deep/45">{plan.price_stars} ⭐ через Telegram Stars</p>
                 </CardHeader>
 
                 <CardContent className="flex flex-1 flex-col">
@@ -187,7 +141,7 @@ export function SubscriptionPaywall({
                     <button
                       type="button"
                       disabled
-                      className="mb-4 w-full rounded-xl bg-ink-2 py-3 text-sm font-semibold text-cream/60"
+                      className="mb-4 w-full rounded-xl bg-green/10 py-3 text-sm font-semibold text-green-deep/50"
                     >
                       Поточний план
                     </button>
@@ -198,8 +152,8 @@ export function SubscriptionPaywall({
                       onClick={() => handleCheckout(plan.code)}
                       className={
                         isFeatured
-                          ? "mb-4 w-full rounded-xl bg-green py-3 text-sm font-semibold text-ink disabled:opacity-50"
-                          : "mb-4 w-full rounded-xl border border-[var(--line)] bg-ink-2 py-3 text-sm font-semibold text-cream disabled:opacity-50"
+                          ? "mb-4 w-full rounded-xl bg-green py-3 text-sm font-bold text-cream disabled:opacity-50"
+                          : "mb-4 w-full rounded-xl border border-green/25 bg-green/8 py-3 text-sm font-semibold text-green-deep disabled:opacity-50"
                       }
                     >
                       {checkingOutCode === plan.code ? "Оформлюємо..." : "Оформити через Stars"}
@@ -209,7 +163,7 @@ export function SubscriptionPaywall({
                   {features.length > 0 ? (
                     <ul className="flex flex-1 flex-col gap-2">
                       {features.map((feature) => (
-                        <li key={feature} className="flex items-center gap-2 text-sm text-cream/70">
+                        <li key={feature} className="flex items-center gap-2 text-sm text-green-deep/70">
                           <Check size={14} className="shrink-0 text-green" />
                           <span>{feature}</span>
                         </li>

@@ -1,9 +1,7 @@
 /**
- * MetricCarousel — дашборд-метрики магазину зверху каталогу. Адаптовано
- * з пасти MinimalCarousel (motion/react, layoutId-перехід картка<->грід):
- * прибрано домен криптокошельків (Copy Address/Edit), залишено
- * expand/collapse-взаємодію. Дані — лише з уже завантажених
- * products/reservations (App.tsx), нових запитів немає.
+ * MetricCarousel — табло метрик магазину. Editorial sport-poster:
+ * велетенські Unbounded-цифри на green-deep плоских блоках, expand-анімація
+ * через motion layoutId. Без тіней/скла.
  */
 import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
@@ -36,13 +34,17 @@ export function MetricCarousel({ cards }: MetricCarouselProps) {
               key={activeCard.id}
               layoutId={activeCard.id}
               onClick={() => setActiveId(null)}
-              transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-              className={`relative flex h-36 w-full cursor-pointer flex-col justify-between rounded-[26px] p-5 shadow-lg ${activeCard.bgClass} ${activeCard.textClass}`}
+              transition={{ type: "spring", bounce: 0.15, duration: 0.5 }}
+              className={`relative flex h-40 w-full cursor-pointer flex-col justify-between rounded-2xl p-5 ${activeCard.bgClass} ${activeCard.textClass}`}
             >
-              <activeCard.icon size={32} strokeWidth={1.75} />
+              <activeCard.icon size={28} strokeWidth={1.5} />
               <div>
-                <h3 className="text-base font-medium opacity-80">{activeCard.title}</h3>
-                <p className="font-mono-price text-3xl font-bold">{activeCard.value}</p>
+                <p className="text-[11px] font-semibold uppercase tracking-widest opacity-60 mb-1">
+                  {activeCard.title}
+                </p>
+                <p className="font-display text-6xl font-bold leading-none tracking-tight">
+                  {activeCard.value}
+                </p>
               </div>
             </motion.div>
           ) : null}
@@ -54,17 +56,17 @@ export function MetricCarousel({ cards }: MetricCarouselProps) {
               key={card.id}
               layoutId={card.id}
               onClick={() => setActiveId(card.id)}
-              transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-              className={`flex cursor-pointer flex-col justify-between rounded-[18px] p-3 shadow-md ${card.bgClass} ${card.textClass} ${activeId ? "h-20" : "h-24"}`}
+              transition={{ type: "spring", bounce: 0.15, duration: 0.5 }}
+              className={`flex cursor-pointer flex-col justify-between rounded-2xl p-3 ${card.bgClass} ${card.textClass} ${activeId ? "h-20" : "h-24"}`}
             >
-              <card.icon size={activeId ? 16 : 20} strokeWidth={1.75} />
+              <card.icon size={activeId ? 14 : 18} strokeWidth={1.5} />
               <div>
                 <p
-                  className={`truncate font-medium opacity-80 ${activeId ? "text-[10px]" : "text-xs"}`}
+                  className={`truncate font-semibold uppercase tracking-widest opacity-60 ${activeId ? "text-[9px]" : "text-[10px]"}`}
                 >
                   {card.title}
                 </p>
-                <p className={`font-mono-price font-bold ${activeId ? "text-sm" : "text-lg"}`}>
+                <p className={`font-display font-bold leading-none tracking-tight ${activeId ? "text-xl" : "text-3xl"}`}>
                   {card.value}
                 </p>
               </div>

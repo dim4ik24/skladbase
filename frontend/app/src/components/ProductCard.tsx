@@ -50,7 +50,7 @@ export function ProductCard({
           disabled={!writable}
           aria-label={`Редагувати товар: ${product.name}`}
           onClick={() => setEditing((prev) => !prev)}
-          className="shrink-0 rounded-lg p-1 text-cream/50 transition-colors hover:bg-white/[0.06] hover:text-cream disabled:cursor-not-allowed disabled:opacity-30"
+          className="shrink-0 rounded-lg p-1 text-green-deep/40 transition-colors hover:bg-green/[0.08] hover:text-green-deep disabled:cursor-not-allowed disabled:opacity-30"
         >
           <Pencil size={15} />
         </button>

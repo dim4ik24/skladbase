@@ -4,39 +4,38 @@
 @import "@fontsource/dm-mono/400.css";
 @import "@fontsource/dm-mono/500.css";
 
-/* SkladBase brand palette — єдине джерело правди. Дзеркалиться у Tailwind
-   theme нижче, щоб старий CSS і нові Tailwind-компоненти брали кольори
-   з одного місця. Інших кольорів не вводити. */
+/* SkladBase brand palette — єдине джерело правди (editorial sport-poster).
+   Інших кольорів не вводити. Дзеркалиться у Tailwind @theme нижче. */
 @theme {
-  --color-cream: #f5f4ed;
-  --color-pink: #f8e5e5;
-  --color-green: #def1d0;
-  --color-blue: #cdebf1;
-  --color-ink: #0a0b0f;
-  --color-ink-2: #121319;
+  --color-green: #2E7D46;
+  --color-green-deep: #1E5733;
+  --color-cream: #F5F4ED;
+  --color-state-ok: #DEF1D0;
+  --color-state-low: #F8E5E5;
+  --color-state-rsv: #CDEBF1;
   --font-display: "Unbounded", system-ui, sans-serif;
   --font-mono-price: "DM Mono", ui-monospace, monospace;
 }
 
 :root {
-  --cream: #f5f4ed;
-  --pink: #f8e5e5;
-  --green: #def1d0;
-  --blue: #cdebf1;
-  --ink: #0a0b0f;
-  --ink-2: #121319;
-  --panel: rgba(255, 255, 255, 0.045);
-  --line: rgba(245, 244, 237, 0.12);
+  --green: #2E7D46;
+  --green-deep: #1E5733;
+  --cream: #F5F4ED;
+  --state-ok: #DEF1D0;
+  --state-low: #F8E5E5;
+  --state-rsv: #CDEBF1;
+
+  /* Compat aliases — Tailwind arbitrary values типу bg-[var(--panel)] */
+  --panel: #1E5733;
+  --line: rgba(245, 244, 237, 0.18);
   --text-muted: rgba(245, 244, 237, 0.55);
 
-  /* Точковий бренд-акцент КОНКРЕТНОГО магазину (Header-аватар, прев'ю
-     вітрини) — JS перезаписує через setAccentColor(). НЕ перефарбовує
-     каркас адмінки: той завжди в палітрі SkladBase вище. */
+  /* Точковий акцент магазину (аватар/лого) — JS ставить через setAccentColor() */
   --accent-color: #a7c7e7;
 
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   color: var(--cream);
-  background-color: var(--ink);
+  background-color: var(--green);
 }
 
 * {
@@ -51,7 +50,7 @@ body,
 
 body {
   margin: 0;
-  background: var(--ink);
+  background: var(--green);
 }
 
 .app {
@@ -63,35 +62,6 @@ body {
   max-width: 960px;
   margin: 0 auto;
   padding: 12px 16px 32px;
-}
-
-/* --- Атмосферний фон (Beams + статичний фолбек) --- */
-.atmosphere-wrap {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  opacity: 0.6;
-  pointer-events: none;
-  overflow: hidden;
-}
-
-.atmosphere-fallback {
-  position: absolute;
-  inset: 0;
-  background: var(--ink);
-  overflow: hidden;
-}
-
-.aurora-blob {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(70px);
-  opacity: 0.55;
-}
-
-.beams-canvas-layer {
-  position: absolute;
-  inset: 0;
 }
 
 /* --- Шапка --- */
@@ -107,7 +77,7 @@ body {
   height: 44px;
   border-radius: 12px;
   object-fit: cover;
-  border: 1px solid var(--line);
+  border: 2px solid rgba(245, 244, 237, 0.25);
 }
 
 .shop-logo-placeholder {
@@ -115,7 +85,7 @@ body {
   align-items: center;
   justify-content: center;
   background: var(--accent-color);
-  color: var(--ink);
+  color: var(--green-deep);
   font-weight: 700;
   font-size: 18px;
 }
@@ -124,7 +94,7 @@ body {
   font-family: var(--font-display);
   font-size: 22px;
   font-weight: 700;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
   margin: 0;
   color: var(--cream);
 }
@@ -133,6 +103,7 @@ body {
   font-family: var(--font-display);
   font-size: 17px;
   font-weight: 600;
+  letter-spacing: -0.01em;
   margin: 4px 0 12px;
   color: var(--cream);
 }
@@ -142,8 +113,8 @@ body {
   width: 100%;
   padding: 10px 14px;
   border-radius: 12px;
-  border: 1px solid var(--line);
-  background: var(--panel);
+  border: 1px solid rgba(245, 244, 237, 0.2);
+  background: var(--green-deep);
   color: var(--cream);
   font-size: 15px;
   margin-bottom: 16px;
@@ -154,7 +125,7 @@ body {
 }
 
 .search-input:focus {
-  outline: 2px solid var(--green);
+  outline: 2px solid var(--cream);
   border-color: transparent;
 }
 
@@ -174,20 +145,21 @@ body {
   border: none;
   border-radius: 12px;
   padding: 0 16px;
-  background: var(--green);
-  color: var(--ink);
+  background: var(--cream);
+  color: var(--green-deep);
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
-  transition: filter 0.15s ease;
+  transition: opacity 0.15s ease;
+  min-height: 42px;
 }
 
 .toolbar button:not(:disabled):hover {
-  filter: brightness(1.08);
+  opacity: 0.88;
 }
 
 .toolbar button:disabled {
-  opacity: 0.4;
+  opacity: 0.35;
   cursor: not-allowed;
 }
 
@@ -203,7 +175,7 @@ body {
 }
 
 .error-banner {
-  color: var(--pink);
+  color: var(--state-low);
   font-weight: 600;
   padding: 4px 0;
 }
@@ -217,15 +189,15 @@ body {
   border-radius: 14px;
   margin-bottom: 12px;
   font-size: 13px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  backdrop-filter: blur(12px);
+  background: var(--green-deep);
+  border: 1px solid rgba(245, 244, 237, 0.15);
 }
 
 .banner-trial,
 .banner-readonly {
-  color: var(--pink);
+  color: var(--state-low);
   justify-content: center;
+  border-color: rgba(248, 229, 229, 0.3);
 }
 
 .banner-demo {
@@ -237,9 +209,9 @@ body {
   border: none;
   border-radius: 10px;
   padding: 6px 14px;
-  background: var(--green);
-  color: var(--ink);
-  font-weight: 600;
+  background: var(--cream);
+  color: var(--green-deep);
+  font-weight: 700;
   cursor: pointer;
   flex-shrink: 0;
 }
@@ -250,6 +222,7 @@ body {
   padding: 14px 16px;
   margin-bottom: 12px;
   color: var(--cream);
+  background: var(--green-deep);
 }
 
 .plan-list {
@@ -268,18 +241,17 @@ body {
   gap: 8px;
   padding: 10px 12px;
   border-radius: 12px;
-  background: var(--ink-2);
-  border: 1px solid var(--line);
+  background: var(--cream);
 }
 
 .plan-name {
   font-weight: 600;
-  color: var(--cream);
+  color: var(--green-deep);
 }
 
 .plan-price {
   font-family: var(--font-mono-price);
-  color: var(--blue);
+  color: var(--green);
 }
 
 .plan-row button {
@@ -287,8 +259,8 @@ body {
   border-radius: 10px;
   padding: 8px 14px;
   background: var(--green);
-  color: var(--ink);
-  font-weight: 600;
+  color: var(--cream);
+  font-weight: 700;
   cursor: pointer;
 }
 
@@ -299,7 +271,7 @@ body {
 }
 
 .paywall-fallback a {
-  color: var(--blue);
+  color: var(--state-rsv);
 }
 
 /* --- Каталог --- */
@@ -309,17 +281,16 @@ body {
   gap: 14px;
 }
 
+/* Cream-картка з green-текстом — інверсія постера */
 .product-card {
-  background: var(--panel);
-  border: 1px solid var(--line);
+  background: var(--cream);
   border-radius: 18px;
   padding: 12px;
-  backdrop-filter: blur(14px);
-  transition: border-color 0.2s ease;
+  transition: opacity 0.2s ease;
 }
 
 .product-card:hover {
-  border-color: rgba(245, 244, 237, 0.22);
+  opacity: 0.95;
 }
 
 .product-photo {
@@ -327,7 +298,7 @@ body {
   aspect-ratio: 1 / 1;
   border-radius: 14px;
   overflow: hidden;
-  background: var(--ink-2);
+  background: var(--green);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -342,15 +313,16 @@ body {
 
 .product-photo-placeholder {
   font-size: 40px;
-  opacity: 0.5;
+  opacity: 0.55;
 }
 
 .product-name {
   font-family: var(--font-display);
   font-size: 16px;
   font-weight: 600;
+  letter-spacing: -0.01em;
   margin: 0 0 8px;
-  color: var(--cream);
+  color: var(--green-deep);
 }
 
 .variant-list {
@@ -370,7 +342,7 @@ body {
   font-size: 13px;
   padding: 8px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(46, 125, 70, 0.07);
 }
 
 .variant-main {
@@ -388,13 +360,14 @@ body {
 }
 
 .variant-axis {
-  color: var(--text-muted);
+  color: rgba(30, 87, 51, 0.55);
+  font-size: 12px;
 }
 
 .variant-price {
   font-family: var(--font-mono-price);
   font-weight: 600;
-  color: var(--cream);
+  color: var(--green-deep);
 }
 
 .variant-available {
@@ -412,13 +385,13 @@ body {
 }
 
 .badge-low {
-  background: var(--pink);
-  color: var(--ink);
+  background: var(--state-low);
+  color: #7A1C1C;
 }
 
 .badge-out {
-  background: var(--line);
-  color: var(--text-muted);
+  background: rgba(46, 125, 70, 0.10);
+  color: rgba(30, 87, 51, 0.55);
 }
 
 .variant-controls {
@@ -431,22 +404,21 @@ body {
   width: 30px;
   height: 30px;
   border-radius: 9px;
-  border: 1px solid var(--line);
-  background: var(--ink-2);
+  border: none;
+  background: var(--green);
   color: var(--cream);
   font-size: 16px;
   line-height: 1;
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition: opacity 0.15s ease;
 }
 
 .variant-controls button:not(:disabled):hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: var(--green);
+  opacity: 0.82;
 }
 
 .variant-controls button:disabled {
-  opacity: 0.35;
+  opacity: 0.3;
   cursor: not-allowed;
 }
 
@@ -456,7 +428,7 @@ body {
   height: 42px;
   border-radius: 10px;
   overflow: hidden;
-  background: var(--ink-2);
+  background: var(--green);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -471,7 +443,7 @@ body {
 
 .variant-photo-placeholder {
   font-size: 18px;
-  opacity: 0.5;
+  opacity: 0.55;
 }
 
 .variant-photo-upload {
@@ -481,7 +453,8 @@ body {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: var(--green);
+  background: var(--cream);
+  color: var(--green-deep);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -493,16 +466,16 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: var(--text-muted);
+  color: rgba(30, 87, 51, 0.60);
   font-size: 12px;
 }
 
+/* На cream-картці reserve-form — dark green block (editorial inversion) */
 .reserve-form {
   margin-top: 8px;
   padding: 10px;
   border-radius: 12px;
-  background: var(--ink-2);
-  border: 1px solid var(--line);
+  background: var(--green-deep);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -532,8 +505,8 @@ body {
   font-size: 13px;
   padding: 10px;
   border-radius: 12px;
-  background: var(--ink-2);
-  border: 1px solid var(--line);
+  background: var(--cream);
+  color: var(--green-deep);
 }
 
 .reservation-info {
@@ -544,15 +517,14 @@ body {
 
 .reservation-variant {
   font-weight: 600;
-  color: var(--cream);
+  color: var(--green-deep);
 }
 
-/* --- Модалка додавання товару --- */
+/* --- Модалка --- */
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(14, 26, 19, 0.6);
-  backdrop-filter: blur(2px);
+  background: rgba(14, 42, 24, 0.65);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -568,6 +540,7 @@ body {
   max-height: 90vh;
   overflow-y: auto;
   color: var(--cream);
+  background: var(--green-deep);
 }
 
 .form-field {
@@ -584,8 +557,8 @@ body {
 .form-field textarea {
   padding: 8px 10px;
   border-radius: 10px;
-  border: 1px solid var(--line);
-  background: var(--ink-2);
+  border: 1px solid rgba(245, 244, 237, 0.2);
+  background: var(--green);
   color: var(--cream);
   font-size: 14px;
 }
@@ -593,28 +566,28 @@ body {
 .form-field input:focus,
 .form-field select:focus,
 .form-field textarea:focus {
-  outline: 2px solid var(--green);
+  outline: 2px solid var(--cream);
   border-color: transparent;
 }
 
 .advanced-fields {
-  border-top: 1px solid var(--line);
+  border-top: 1px solid rgba(245, 244, 237, 0.15);
   padding-top: 8px;
   margin-bottom: 8px;
 }
 
 .variant-builder-row {
-  border: 1px solid var(--line);
+  border: 1px solid rgba(245, 244, 237, 0.15);
   border-radius: 12px;
   padding: 10px;
   margin-bottom: 8px;
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(245, 244, 237, 0.04);
 }
 
 .link-button {
   background: none;
   border: none;
-  color: var(--blue);
+  color: var(--state-rsv);
   cursor: pointer;
   padding: 4px 0;
   font-size: 13px;
@@ -632,13 +605,25 @@ body {
   border: none;
   border-radius: 10px;
   padding: 8px 16px;
-  background: var(--green);
-  color: var(--ink);
-  font-weight: 600;
+  background: var(--cream);
+  color: var(--green-deep);
+  font-weight: 700;
   cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.modal-actions button:not(:disabled):hover {
+  opacity: 0.88;
 }
 
 .modal-actions button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
