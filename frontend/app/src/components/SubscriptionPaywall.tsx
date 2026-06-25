@@ -1,9 +1,8 @@
 /**
- * SubscriptionPaywall — напівблокувальна модалка підписки.
+ * SubscriptionPaywall — напівблокувальна модалка підписки (light fintech).
  * Монтується тільки коли !shop.is_writable. Першим показом — розгорнута
- * (portal overlay з затемненням), але закривається кнопкою «Переглянути склад»
- * → каталог доступний для перегляду, дії заблоковані через writable=false.
- * У згорнутому стані — стійкий банер з кнопкою «Оформити» (розгортає назад).
+ * (portal overlay), але закривається кнопкою «Переглянути склад».
+ * У згорнутому стані — стійкий банер з кнопкою «Оформити».
  */
 import { createPortal } from "react-dom";
 import { useState } from "react";
@@ -69,7 +68,7 @@ export function SubscriptionPaywall({
   );
   const featuredCode = currentPlanCode ?? mostExpensive?.code;
 
-  // ── Згорнутий стан: стійкий банер ──────────────────────────────────────
+  // ── Collapsed banner ────────────────────────────────────────────────
   if (!isOpen) {
     return (
       <div className="banner banner-paywall" role="status">
@@ -78,7 +77,7 @@ export function SubscriptionPaywall({
           <button
             type="button"
             onClick={() => setIsOpen(true)}
-            className="rounded-lg bg-state-low px-3 py-1 text-xs font-bold text-green-deep transition-opacity duration-150 hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green"
+            className="rounded-xl bg-green px-3 py-1.5 text-xs font-bold text-white transition-opacity duration-150 hover:opacity-85"
           >
             Оформити
           </button>
@@ -87,37 +86,37 @@ export function SubscriptionPaywall({
     );
   }
 
-  // ── Контент для manager (без планів і кнопок оплати) ────────────────────
+  // ── Manager content (no plans, no payment) ──────────────────────────
   const managerContent = (
-    <div className="flex flex-col items-center text-center py-6 gap-4">
-      <div className="rounded-full bg-cream/10 p-4">
-        <Lock size={32} className="text-cream/60" aria-hidden="true" />
+    <div className="flex flex-col items-center text-center py-8 gap-4">
+      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-pastel-mint">
+        <Lock size={26} className="text-green-deep" aria-hidden="true" />
       </div>
       <div>
-        <h2 className="font-display text-xl font-bold text-cream mb-2 text-balance">
+        <h2 className="font-sans text-xl font-bold text-text mb-2 text-balance">
           Підписку призупинено
         </h2>
-        <p className="text-sm text-cream/60">
+        <p className="text-sm text-text-soft">
           Оформлення доступне лише власнику магазину.
         </p>
       </div>
     </div>
   );
 
-  // ── Контент для owner (плани з цінами і кнопками) ───────────────────────
+  // ── Owner content (plan cards) ──────────────────────────────────────
   const ownerContent = (
     <>
       <div className="mb-6 text-center">
         <div className="flex justify-center mb-4">
-          <div className="rounded-full bg-cream/10 p-4">
-            <Lock size={28} className="text-cream/70" aria-hidden="true" />
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-pastel-mint">
+            <Lock size={26} className="text-green-deep" aria-hidden="true" />
           </div>
         </div>
-        <h2 className="font-display text-2xl font-bold text-cream mb-2 text-balance">
+        <h2 className="font-sans text-xl font-bold text-text mb-1.5 text-balance">
           Оберіть тариф
         </h2>
-        <p className="text-sm text-cream/60">
-          Пробний період завершився — оберіть план, щоб продовжити роботу.
+        <p className="text-sm text-text-soft">
+          Пробний період завершився — оберіть план, щоб продовжити.
         </p>
       </div>
 
@@ -140,21 +139,25 @@ export function SubscriptionPaywall({
           return (
             <Reveal key={plan.code} index={index}>
               <div
-                className={`rounded-2xl bg-cream p-4${isFeatured ? " ring-2 ring-green" : ""}`}
+                className={`rounded-2xl p-4 ${
+                  isFeatured
+                    ? "bg-surface ring-2 ring-green shadow-[var(--shadow-card)]"
+                    : "bg-bg"
+                }`}
               >
                 <div className="flex items-start justify-between gap-3 mb-3">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2 mb-1">
-                      <h3 className="font-display text-base font-semibold text-green-deep leading-tight">
+                      <h3 className="font-sans text-base font-bold text-text leading-tight">
                         {plan.name}
                       </h3>
                       {isFeatured && !isCurrent ? (
-                        <span className="rounded-full bg-green px-2 py-0.5 text-[10px] font-bold text-cream shrink-0">
+                        <span className="rounded-full bg-green px-2 py-0.5 text-[10px] font-bold text-white shrink-0">
                           Рекомендовано
                         </span>
                       ) : null}
                     </div>
-                    <p className="font-mono-price text-[11px] text-green-deep/45">
+                    <p className="font-mono-price text-[11px] text-text-soft">
                       або {plan.price_stars}&nbsp;⭐
                     </p>
                   </div>
@@ -163,9 +166,9 @@ export function SubscriptionPaywall({
                       value={Number(plan.price_uah)}
                       locales="uk-UA"
                       format={{ style: "currency", currency: "UAH", maximumFractionDigits: 0 }}
-                      className="font-display text-3xl font-bold text-green-deep block"
+                      className="font-sans text-3xl font-bold text-text block"
                     />
-                    <p className="font-mono-price text-[11px] text-green-deep/50 mt-0.5">
+                    <p className="font-mono-price text-[11px] text-text-soft mt-0.5">
                       /{plan.period === "year" ? "рік" : "міс"}
                     </p>
                   </div>
@@ -176,7 +179,7 @@ export function SubscriptionPaywall({
                     {features.map((feature) => (
                       <li
                         key={feature}
-                        className="flex items-center gap-2 text-sm text-green-deep/70"
+                        className="flex items-center gap-2 text-sm text-text-soft"
                       >
                         <Check size={13} className="shrink-0 text-green" aria-hidden="true" />
                         <span>{feature}</span>
@@ -189,7 +192,7 @@ export function SubscriptionPaywall({
                   <button
                     type="button"
                     disabled
-                    className="w-full rounded-xl bg-green/10 py-2.5 text-sm font-semibold text-green-deep/50"
+                    className="w-full rounded-xl bg-bg py-2.5 text-sm font-semibold text-text-soft"
                   >
                     Поточний план
                   </button>
@@ -200,8 +203,8 @@ export function SubscriptionPaywall({
                     onClick={() => void handleCheckout(plan.code)}
                     className={
                       isFeatured
-                        ? "w-full rounded-xl bg-green py-2.5 text-sm font-bold text-cream transition-opacity duration-150 hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green disabled:opacity-50"
-                        : "w-full rounded-xl border border-green/30 py-2.5 text-sm font-semibold text-green-deep transition-opacity duration-150 hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green disabled:opacity-50"
+                        ? "w-full rounded-xl bg-green py-2.5 text-sm font-bold text-white shadow-[var(--shadow-fab)] transition-opacity duration-150 hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green disabled:opacity-50"
+                        : "w-full rounded-xl border border-[var(--line)] py-2.5 text-sm font-semibold text-text transition-opacity duration-150 hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green disabled:opacity-50"
                     }
                   >
                     {checkingOutCode === plan.code ? "Оформлюємо…" : "Оформити через Stars"}
@@ -215,7 +218,7 @@ export function SubscriptionPaywall({
     </>
   );
 
-  // ── Розгорнутий стан: portal bottom-sheet overlay ───────────────────────
+  // ── Expanded modal (portal) ─────────────────────────────────────────
   return createPortal(
     <div
       className="paywall-overlay"
@@ -233,13 +236,12 @@ export function SubscriptionPaywall({
             : { type: "spring", bounce: 0.08, duration: 0.45 }
         }
       >
-        {/* Кнопка згортання — завжди у верхньому правому куті шиту */}
         <div className="flex justify-end mb-3">
           <button
             type="button"
             aria-label="Переглянути склад"
             onClick={() => setIsOpen(false)}
-            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-cream/55 transition-colors duration-150 hover:bg-cream/10 hover:text-cream focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cream/40"
+            className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold text-text-soft transition-colors duration-150 hover:bg-bg hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green"
           >
             <X size={13} aria-hidden="true" />
             Переглянути склад

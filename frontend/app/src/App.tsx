@@ -1,5 +1,6 @@
 import { Ban, BookmarkCheck, Package, TriangleAlert } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { motion } from "motion/react";
 import * as api from "./api";
 import { AtmosphereBackground } from "./components/background/AtmosphereBackground";
 import { DemoBanner } from "./components/DemoBanner";
@@ -26,6 +27,15 @@ import type {
   Template,
   Variant,
 } from "./types";
+
+const cardVariants = {
+  hidden: { opacity: 0, y: 18 },
+  visible: (i: number) => ({
+    opacity: 1,
+    y: 0,
+    transition: { delay: i * 0.055, duration: 0.38, ease: [0, 0, 0.2, 1] as const },
+  }),
+} as const;
 
 export default function App() {
   const [shop, setShop] = useState<Shop | null>(null);
@@ -130,12 +140,10 @@ export default function App() {
   }
 
   async function handleUploadPhoto(variantId: number, file: File) {
-    // Помилку показує сам VariantRow поруч із контролом — без дубля у глобальному банері.
     applyVariantUpdate(await api.uploadVariantPhoto(variantId, file));
   }
 
   async function handleReserve(variantId: number, payload: ReserveInput) {
-    // Помилку показує ReserveForm поруч із полями — без дубля у глобальному банері.
     const reservation = await api.reserve(variantId, payload);
     const variant = products
       .flatMap((product) => product.variants)
@@ -213,11 +221,12 @@ export default function App() {
       else if (variant.available <= variant.low_stock_threshold) lowStockCount += 1;
     }
   }
+
   const metricCards: MetricCardData[] = [
-    { id: "products", title: "Товари", value: products.length, bgClass: "bg-cream", textClass: "text-green-deep", icon: Package },
-    { id: "reservations", title: "Резерви", value: reservations.length, bgClass: "bg-green-deep", textClass: "text-cream", icon: BookmarkCheck },
-    { id: "low", title: "Мало", value: lowStockCount, bgClass: "bg-green-deep", textClass: "text-cream", icon: TriangleAlert },
-    { id: "out", title: "Нема", value: outOfStockCount, bgClass: "bg-green-deep", textClass: "text-cream", icon: Ban },
+    { id: "products", title: "Товари", value: products.length, iconBg: "bg-pastel-mint", iconColor: "text-green-deep", icon: Package },
+    { id: "reservations", title: "Резерви", value: reservations.length, iconBg: "bg-pastel-lavender", iconColor: "text-green-deep", icon: BookmarkCheck },
+    { id: "low", title: "Мало", value: lowStockCount, iconBg: "bg-pastel-rose", iconColor: "text-pink", icon: TriangleAlert },
+    { id: "out", title: "Нема", value: outOfStockCount, iconBg: "bg-pastel-peach", iconColor: "text-text-soft", icon: Ban },
   ];
 
   return (
@@ -232,10 +241,7 @@ export default function App() {
           <TrialBanner trialEndsAt={shop.trial_ends_at} />
         ) : null}
 
-        {/* Paywall modal рендериться як portal поверх усього — тут тільки умова.
-            currentPlanCode навмисно не передаємо: !is_writable означає, що
-            shop.plan_code — попередній план, не діючий; позначати його як
-            "поточний" заблокувало б реактивацію того самого тарифу. */}
+        {/* Paywall portal — монтується тільки при !is_writable, логіку не чіпати */}
         {shop && !shop.is_writable ? (
           <SubscriptionPaywall
             plans={plans}
@@ -272,17 +278,19 @@ export default function App() {
         </div>
 
         {showReservations ? (
-          <Panel as="section" className="reservations-section">
-            <ScrollFloat as="h2" className="section-title" scrollContainerRef={scrollContainerRef}>
+          <Panel as="section" className="reservations-section p-0">
+            <ScrollFloat as="h2" className="section-title px-4 pt-4" scrollContainerRef={scrollContainerRef}>
               Резерви
             </ScrollFloat>
-            <ReservationsPanel
-              reservations={reservations}
-              writable={writable}
-              variantLabel={variantLabel}
-              onRelease={handleRelease}
-              onFulfill={handleFulfill}
-            />
+            <div className="px-4 pb-4">
+              <ReservationsPanel
+                reservations={reservations}
+                writable={writable}
+                variantLabel={variantLabel}
+                onRelease={handleRelease}
+                onFulfill={handleFulfill}
+              />
+            </div>
           </Panel>
         ) : null}
 
@@ -291,22 +299,29 @@ export default function App() {
         </ScrollFloat>
 
         {loading ? (
-          <p className="status-text">Завантаження...</p>
+          <p className="status-text">Завантаження…</p>
         ) : filteredProducts.length === 0 ? (
           <p className="status-text">Нічого не знайдено</p>
         ) : (
           <div className="product-grid">
-            {filteredProducts.map((product) => (
-              <ProductCard
+            {filteredProducts.map((product, i) => (
+              <motion.div
                 key={product.id}
-                product={product}
-                writable={writable}
-                onRestock={handleRestock}
-                onAdjust={handleAdjust}
-                onUploadPhoto={handleUploadPhoto}
-                onReserve={handleReserve}
-                onUpdateProduct={handleUpdateProduct}
-              />
+                custom={i}
+                initial="hidden"
+                animate="visible"
+                variants={cardVariants}
+              >
+                <ProductCard
+                  product={product}
+                  writable={writable}
+                  onRestock={handleRestock}
+                  onAdjust={handleAdjust}
+                  onUploadPhoto={handleUploadPhoto}
+                  onReserve={handleReserve}
+                  onUpdateProduct={handleUpdateProduct}
+                />
+              </motion.div>
             ))}
           </div>
         )}

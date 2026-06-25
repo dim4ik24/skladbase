@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@fontsource/dm-mono": "^5.2.7",
+    "@fontsource/manrope": "^5.2.8",
     "@fontsource/unbounded": "^5.2.8",
     "@number-flow/react": "^0.6.0",
     "gsap": "^3.15.0",

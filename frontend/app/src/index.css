@@ -1,41 +1,91 @@
 @import "tailwindcss";
-@import "@fontsource/unbounded/600.css";
-@import "@fontsource/unbounded/700.css";
+@import "@fontsource/manrope/400.css";
+@import "@fontsource/manrope/500.css";
+@import "@fontsource/manrope/600.css";
+@import "@fontsource/manrope/700.css";
 @import "@fontsource/dm-mono/400.css";
 @import "@fontsource/dm-mono/500.css";
 
-/* SkladBase brand palette — єдине джерело правди (editorial sport-poster).
-   Інших кольорів не вводити. Дзеркалиться у Tailwind @theme нижче. */
+/* ── Design tokens — єдине джерело правди ──────────────────────────────
+   Семантичні токени. Tailwind @theme генерує utility-класи (bg-surface,
+   text-text тощо), а CSS-змінні в :root/:dark перевизначаються за темою.
+   Зелений — ТІЛЬКИ акцент, НЕ фон. */
 @theme {
-  --color-green: #2E7D46;
-  --color-green-deep: #1E5733;
-  --color-cream: #F5F4ED;
-  --color-state-ok: #DEF1D0;
+  /* Semantic (light defaults — overridden in [data-theme="dark"]) */
+  --color-bg:         #F4F6F5;
+  --color-surface:    #FFFFFF;
+  --color-text:       #1C2520;
+  --color-text-soft:  #7A857E;
+
+  /* Brand accents (theme-invariant) */
+  --color-green:      #34C759;
+  --color-green-deep: #2BA84A;
+  --color-pink:       #FF6B9D;
+  --color-pink-soft:  #FFD9E6;
+
+  /* Pastel icon circles */
+  --color-pastel-peach:    #FFE0D2;
+  --color-pastel-lavender: #E6E0FF;
+  --color-pastel-mint:     #D6F5E3;
+  --color-pastel-rose:     #FFE0EC;
+
+  /* State chips */
+  --color-state-ok:  #DEF1D0;
   --color-state-low: #F8E5E5;
   --color-state-rsv: #CDEBF1;
-  --font-display: "Unbounded", system-ui, sans-serif;
+
+  /* Typography */
+  --font-sans:       "Manrope", system-ui, -apple-system, sans-serif;
   --font-mono-price: "DM Mono", ui-monospace, monospace;
 }
 
+/* ── Runtime CSS variables (light theme — default) ──────────────────── */
 :root {
-  --green: #2E7D46;
-  --green-deep: #1E5733;
-  --cream: #F5F4ED;
-  --state-ok: #DEF1D0;
+  /* Semantic surfaces */
+  --bg:        #F4F6F5;
+  --surface:   #FFFFFF;
+  --text:      #1C2520;
+  --text-soft: #7A857E;
+  --line:      rgba(28, 37, 32, 0.08);
+
+  /* Shadows */
+  --shadow-card: 0 2px 12px rgba(28, 37, 32, 0.07);
+  --shadow-fab:  0 4px 16px rgba(43, 168, 74, 0.30);
+
+  /* Brand accents */
+  --green:      #34C759;
+  --green-deep: #2BA84A;
+  --pink:       #FF6B9D;
+  --pink-soft:  #FFD9E6;
+
+  /* Pastels */
+  --pastel-peach:    #FFE0D2;
+  --pastel-lavender: #E6E0FF;
+  --pastel-mint:     #D6F5E3;
+  --pastel-rose:     #FFE0EC;
+
+  /* State */
+  --state-ok:  #DEF1D0;
   --state-low: #F8E5E5;
   --state-rsv: #CDEBF1;
 
-  /* Compat aliases — Tailwind arbitrary values типу bg-[var(--panel)] */
-  --panel: #1E5733;
-  --line: rgba(245, 244, 237, 0.18);
-  --text-muted: rgba(245, 244, 237, 0.55);
-
-  /* Точковий акцент магазину (аватар/лого) — JS ставить через setAccentColor() */
+  /* Shop branding (set by JS) */
   --accent-color: #a7c7e7;
 
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-  color: var(--cream);
-  background-color: var(--green);
+  font-family: "Manrope", system-ui, -apple-system, sans-serif;
+  color: var(--text);
+  background-color: var(--bg);
+}
+
+/* ── Dark theme overrides ───────────────────────────────────────────── */
+[data-theme="dark"] {
+  --bg:        #14181A;
+  --surface:   #1E2426;
+  --text:      #ECF1EE;
+  --text-soft: #8FA39A;
+  --line:      rgba(255, 255, 255, 0.08);
+  --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.25);
+  --shadow-fab:  0 4px 16px rgba(43, 168, 74, 0.40);
 }
 
 * {
@@ -50,9 +100,29 @@ body,
 
 body {
   margin: 0;
-  background: var(--green);
+  background: var(--bg);
 }
 
+/* ── Pink glow animation ────────────────────────────────────────────── */
+@keyframes glow-pink {
+  0%, 100% { box-shadow: var(--shadow-fab), 0 0 0 0 rgba(255, 107, 157, 0.35); }
+  50%       { box-shadow: var(--shadow-fab), 0 0 0 7px rgba(255, 107, 157, 0); }
+}
+
+@keyframes glow-low {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 107, 157, 0.3); }
+  50%       { box-shadow: 0 0 0 4px rgba(255, 107, 157, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── Layout ─────────────────────────────────────────────────────────── */
 .app {
   position: relative;
   z-index: 1;
@@ -61,23 +131,25 @@ body {
   -webkit-overflow-scrolling: touch;
   max-width: 960px;
   margin: 0 auto;
-  padding: 12px 16px 32px;
+  padding: 12px 16px 48px;
+  background: var(--bg);
 }
 
-/* --- Шапка --- */
+/* ── Header ─────────────────────────────────────────────────────────── */
 .shop-header {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 16px 0 12px;
+  padding: 16px 0 14px;
 }
 
 .shop-logo {
   width: 44px;
   height: 44px;
-  border-radius: 12px;
+  border-radius: 14px;
   object-fit: cover;
-  border: 2px solid rgba(245, 244, 237, 0.25);
+  flex-shrink: 0;
+  box-shadow: var(--shadow-card);
 }
 
 .shop-logo-placeholder {
@@ -85,49 +157,52 @@ body {
   align-items: center;
   justify-content: center;
   background: var(--accent-color);
-  color: var(--green-deep);
+  color: #fff;
   font-weight: 700;
   font-size: 18px;
 }
 
 .shop-name {
-  font-family: var(--font-display);
+  font-family: "Manrope", system-ui, sans-serif;
   font-size: 22px;
   font-weight: 700;
   letter-spacing: -0.02em;
   margin: 0;
-  color: var(--cream);
+  color: var(--text);
 }
 
+/* ── Section titles ──────────────────────────────────────────────────── */
 .section-title {
-  font-family: var(--font-display);
+  font-family: "Manrope", system-ui, sans-serif;
   font-size: 17px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: -0.01em;
   margin: 4px 0 12px;
-  color: var(--cream);
+  color: var(--text);
   text-wrap: balance;
 }
 
-/* --- Пошук/тулбар --- */
+/* ── Search / toolbar ────────────────────────────────────────────────── */
 .search-input {
   width: 100%;
   padding: 10px 14px;
-  border-radius: 12px;
-  border: 1px solid rgba(245, 244, 237, 0.2);
-  background: var(--green-deep);
-  color: var(--cream);
+  border-radius: 14px;
+  border: 1.5px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  font-family: "Manrope", system-ui, sans-serif;
   font-size: 15px;
   margin-bottom: 16px;
+  transition: border-color 0.15s ease;
 }
 
 .search-input::placeholder {
-  color: rgba(245, 244, 237, 0.4);
+  color: var(--text-soft);
 }
 
 .search-input:focus {
-  outline: 2px solid var(--cream);
-  border-color: transparent;
+  outline: none;
+  border-color: var(--green);
 }
 
 .toolbar {
@@ -142,17 +217,33 @@ body {
   margin-bottom: 0;
 }
 
+/* Primary CTA — green fill, pink pulse */
+.toolbar button:first-of-type:not(:disabled) {
+  background: var(--green);
+  color: #fff;
+  animation: glow-pink 2.6s ease-in-out infinite;
+}
+
+.toolbar button:first-of-type:disabled {
+  background: var(--line);
+  color: var(--text-soft);
+  animation: none;
+}
+
 .toolbar button {
   border: none;
-  border-radius: 12px;
-  padding: 0 16px;
-  background: var(--cream);
-  color: var(--green-deep);
+  border-radius: 14px;
+  padding: 0 18px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: "Manrope", system-ui, sans-serif;
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
+  min-height: 44px;
+  box-shadow: var(--shadow-card);
   transition: opacity 0.15s ease;
-  min-height: 42px;
+  touch-action: manipulation;
 }
 
 .toolbar button:not(:disabled):hover {
@@ -160,11 +251,12 @@ body {
 }
 
 .toolbar button:disabled {
-  opacity: 0.35;
+  opacity: 0.45;
   cursor: not-allowed;
+  box-shadow: none;
 }
 
-/* --- Статуси/банери --- */
+/* ── Status / banners ────────────────────────────────────────────────── */
 .status-text,
 .error-banner {
   text-align: center;
@@ -172,11 +264,11 @@ body {
 }
 
 .status-text {
-  color: var(--text-muted);
+  color: var(--text-soft);
 }
 
 .error-banner {
-  color: var(--state-low);
+  color: #c0392b;
   font-weight: 600;
   padding: 4px 0;
 }
@@ -190,88 +282,101 @@ body {
   border-radius: 14px;
   margin-bottom: 12px;
   font-size: 13px;
-  background: var(--green-deep);
-  border: 1px solid rgba(245, 244, 237, 0.15);
+  font-weight: 500;
+  background: var(--surface);
+  border: 1.5px solid var(--line);
+  box-shadow: var(--shadow-card);
+  color: var(--text);
 }
 
-.banner-trial,
-.banner-readonly {
-  color: var(--state-low);
+.banner-trial {
+  color: var(--green-deep);
   justify-content: center;
-  border-color: rgba(248, 229, 229, 0.3);
+  border-color: rgba(43, 168, 74, 0.25);
+  background: var(--state-ok);
 }
 
-/* Collapsed paywall banner — space-between so the 'Оформити' button sits on the right */
-.banner-paywall {
-  color: var(--state-low);
-  border-color: rgba(248, 229, 229, 0.3);
+.banner-readonly {
+  color: #b0460e;
+  justify-content: center;
+  border-color: rgba(255, 107, 157, 0.25);
+  background: var(--state-low);
 }
 
 .banner-demo {
   border-style: dashed;
-  color: var(--cream);
+  color: var(--text-soft);
 }
 
 .banner-demo button {
   border: none;
   border-radius: 10px;
   padding: 6px 14px;
-  background: var(--cream);
-  color: var(--green-deep);
+  background: var(--green);
+  color: #fff;
   font-weight: 700;
   cursor: pointer;
   flex-shrink: 0;
+  touch-action: manipulation;
 }
 
-/* --- Paywall modal overlay --- */
+/* Collapsed paywall banner — space-between so 'Оформити' aligns right */
+.banner-paywall {
+  color: #b0460e;
+  border-color: rgba(255, 107, 157, 0.25);
+  background: var(--state-low);
+}
+
+/* ── Paywall modal overlay ───────────────────────────────────────────── */
 .paywall-overlay {
   position: fixed;
   inset: 0;
   z-index: 200;
-  background: rgba(14, 42, 24, 0.78);
+  background: rgba(28, 37, 32, 0.42);
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
 }
 
 .paywall-sheet {
-  background: var(--green-deep);
+  background: var(--surface);
   border-radius: 24px 24px 0 0;
   max-height: 85dvh;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 28px 20px max(32px, env(safe-area-inset-bottom));
-  color: var(--cream);
+  padding: 20px 20px max(32px, env(safe-area-inset-bottom));
+  color: var(--text);
 }
 
 .paywall-fallback {
   font-size: 13px;
   word-break: break-all;
-  color: var(--text-muted);
+  color: var(--text-soft);
   margin-bottom: 12px;
 }
 
 .paywall-fallback a {
-  color: var(--state-rsv);
+  color: var(--green-deep);
 }
 
-/* --- Каталог --- */
+/* ── Catalog grid ────────────────────────────────────────────────────── */
 .product-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 14px;
 }
 
-/* Cream-картка з green-текстом — інверсія постера */
+/* ── Product card ────────────────────────────────────────────────────── */
 .product-card {
-  background: var(--cream);
-  border-radius: 18px;
-  padding: 12px;
-  transition: opacity 0.2s ease;
+  background: var(--surface);
+  border-radius: 20px;
+  padding: 14px;
+  box-shadow: var(--shadow-card);
+  transition: box-shadow 0.2s ease;
 }
 
 .product-card:hover {
-  opacity: 0.95;
+  box-shadow: 0 6px 20px rgba(28, 37, 32, 0.12);
 }
 
 .product-photo {
@@ -279,11 +384,11 @@ body {
   aspect-ratio: 1 / 1;
   border-radius: 14px;
   overflow: hidden;
-  background: var(--green);
+  background: var(--bg);
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 .product-photo img {
@@ -293,26 +398,27 @@ body {
 }
 
 .product-photo-placeholder {
-  font-size: 40px;
-  opacity: 0.55;
+  font-size: 38px;
+  opacity: 0.45;
 }
 
 .product-name {
-  font-family: var(--font-display);
-  font-size: 16px;
-  font-weight: 600;
+  font-family: "Manrope", system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 700;
   letter-spacing: -0.01em;
   margin: 0 0 8px;
-  color: var(--green-deep);
+  color: var(--text);
 }
 
+/* ── Variant list ────────────────────────────────────────────────────── */
 .variant-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .variant-row {
@@ -323,7 +429,7 @@ body {
   font-size: 13px;
   padding: 8px;
   border-radius: 12px;
-  background: rgba(46, 125, 70, 0.07);
+  background: rgba(52, 199, 89, 0.06);
 }
 
 .variant-main {
@@ -341,14 +447,15 @@ body {
 }
 
 .variant-axis {
-  color: rgba(30, 87, 51, 0.55);
+  color: var(--text-soft);
   font-size: 12px;
 }
 
 .variant-price {
-  font-family: var(--font-mono-price);
+  font-family: "DM Mono", ui-monospace, monospace;
   font-weight: 600;
-  color: var(--green-deep);
+  font-size: 14px;
+  color: var(--text);
 }
 
 .variant-available {
@@ -359,7 +466,7 @@ body {
 
 .badge {
   display: inline-block;
-  padding: 1px 9px;
+  padding: 2px 9px;
   border-radius: 999px;
   font-size: 11px;
   font-weight: 700;
@@ -367,12 +474,21 @@ body {
 
 .badge-low {
   background: var(--state-low);
-  color: var(--green-deep);
+  color: #c0392b;
+  animation: glow-low 2.6s ease-in-out infinite;
 }
 
 .badge-out {
-  background: rgba(46, 125, 70, 0.10);
-  color: rgba(30, 87, 51, 0.55);
+  background: var(--bg);
+  color: var(--text-soft);
+}
+
+.variant-stock-trio {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-soft);
+  font-size: 12px;
 }
 
 .variant-controls {
@@ -382,16 +498,17 @@ body {
 }
 
 .variant-controls button {
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
   border: none;
   background: var(--green);
-  color: var(--cream);
+  color: #fff;
   font-size: 16px;
   line-height: 1;
   cursor: pointer;
   transition: opacity 0.15s ease;
+  touch-action: manipulation;
 }
 
 .variant-controls button:not(:disabled):hover {
@@ -399,17 +516,19 @@ body {
 }
 
 .variant-controls button:disabled {
-  opacity: 0.3;
+  background: var(--line);
+  color: var(--text-soft);
+  opacity: 1;
   cursor: not-allowed;
 }
 
 .variant-photo {
   position: relative;
-  width: 42px;
-  height: 42px;
-  border-radius: 10px;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
   overflow: hidden;
-  background: var(--green);
+  background: var(--bg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -424,7 +543,7 @@ body {
 
 .variant-photo-placeholder {
   font-size: 18px;
-  opacity: 0.55;
+  opacity: 0.5;
 }
 
 .variant-photo-upload {
@@ -434,39 +553,35 @@ body {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: var(--cream);
-  color: var(--green-deep);
+  background: var(--surface);
+  color: var(--text-soft);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 10px;
   cursor: pointer;
+  box-shadow: 0 1px 4px rgba(28, 37, 32, 0.15);
 }
 
-.variant-stock-trio {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: rgba(30, 87, 51, 0.60);
-  font-size: 12px;
-}
-
-/* На cream-картці reserve-form — dark green block (editorial inversion) */
+/* Reserve form — light inset block */
 .reserve-form {
   margin-top: 8px;
   padding: 10px;
   border-radius: 12px;
-  background: var(--green-deep);
+  background: var(--bg);
+  border: 1.5px solid var(--line);
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-/* --- Резерви --- */
+/* ── Reservations ────────────────────────────────────────────────────── */
 .reservations-section {
   margin-bottom: 16px;
   padding: 14px;
-  border-radius: 18px;
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
 }
 
 .reservation-list {
@@ -484,10 +599,10 @@ body {
   justify-content: space-between;
   gap: 8px;
   font-size: 13px;
-  padding: 10px;
+  padding: 10px 12px;
   border-radius: 12px;
-  background: var(--cream);
-  color: var(--green-deep);
+  background: var(--bg);
+  color: var(--text);
 }
 
 .reservation-info {
@@ -498,14 +613,14 @@ body {
 
 .reservation-variant {
   font-weight: 600;
-  color: var(--green-deep);
+  color: var(--text);
 }
 
-/* --- Модалка --- */
+/* ── Modal ───────────────────────────────────────────────────────────── */
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(14, 42, 24, 0.65);
+  background: rgba(28, 37, 32, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -514,14 +629,16 @@ body {
 }
 
 .modal-card {
-  border-radius: 18px;
-  padding: 20px;
+  border-radius: 20px;
+  padding: 22px;
   max-width: 480px;
   width: 100%;
   max-height: 90vh;
   overflow-y: auto;
-  color: var(--cream);
-  background: var(--green-deep);
+  overscroll-behavior: contain;
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: 0 12px 40px rgba(28, 37, 32, 0.18);
 }
 
 .form-field {
@@ -530,48 +647,52 @@ body {
   gap: 4px;
   margin-bottom: 10px;
   font-size: 13px;
-  color: var(--text-muted);
+  color: var(--text-soft);
+  font-weight: 500;
 }
 
 .form-field input,
 .form-field select,
 .form-field textarea {
-  padding: 8px 10px;
+  padding: 9px 12px;
   border-radius: 10px;
-  border: 1px solid rgba(245, 244, 237, 0.2);
-  background: var(--green);
-  color: var(--cream);
+  border: 1.5px solid var(--line);
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Manrope", system-ui, sans-serif;
   font-size: 14px;
+  transition: border-color 0.15s ease;
 }
 
 .form-field input:focus,
 .form-field select:focus,
 .form-field textarea:focus {
-  outline: 2px solid var(--cream);
-  border-color: transparent;
+  outline: none;
+  border-color: var(--green);
 }
 
 .advanced-fields {
-  border-top: 1px solid rgba(245, 244, 237, 0.15);
+  border-top: 1.5px solid var(--line);
   padding-top: 8px;
   margin-bottom: 8px;
 }
 
 .variant-builder-row {
-  border: 1px solid rgba(245, 244, 237, 0.15);
+  border: 1.5px solid var(--line);
   border-radius: 12px;
   padding: 10px;
   margin-bottom: 8px;
-  background: rgba(245, 244, 237, 0.04);
+  background: var(--bg);
 }
 
 .link-button {
   background: none;
   border: none;
-  color: var(--state-rsv);
+  color: var(--green-deep);
   cursor: pointer;
   padding: 4px 0;
   font-size: 13px;
+  font-weight: 600;
   text-align: left;
 }
 
@@ -579,18 +700,26 @@ body {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  margin-top: 8px;
+  margin-top: 10px;
 }
 
 .modal-actions button {
   border: none;
-  border-radius: 10px;
-  padding: 8px 16px;
-  background: var(--cream);
-  color: var(--green-deep);
+  border-radius: 12px;
+  padding: 9px 18px;
+  background: var(--green);
+  color: #fff;
+  font-family: "Manrope", system-ui, sans-serif;
   font-weight: 700;
   cursor: pointer;
   transition: opacity 0.15s ease;
+  touch-action: manipulation;
+}
+
+.modal-actions button:first-child {
+  background: var(--bg);
+  color: var(--text-soft);
+  border: 1.5px solid var(--line);
 }
 
 .modal-actions button:not(:disabled):hover {
@@ -598,13 +727,6 @@ body {
 }
 
 .modal-actions button:disabled {
-  opacity: 0.4;
+  opacity: 0.45;
   cursor: not-allowed;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  * {
-    animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
-  }
 }
