@@ -517,7 +517,7 @@ describe("Paywall + read-only state", () => {
     render(<App />);
     await screen.findByTestId("available-91");
 
-    expect(screen.getByText("Підписку призупинено, дані збережено")).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Оберіть тариф" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Оберіть тариф" })).toBeInTheDocument();
     expect(screen.getByText("Pro")).toBeInTheDocument();
 
@@ -565,9 +565,8 @@ describe("Paywall + read-only state", () => {
 
     render(<App />);
 
-    expect(
-      await screen.findByText("Підписку призупинено. Оформлення доступне лише власнику магазину."),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Підписку призупинено")).toBeInTheDocument();
+    expect(screen.getByText("Оформлення доступне лише власнику магазину.")).toBeInTheDocument();
     expect(screen.queryByText("Pro")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Оформити через Stars" })).not.toBeInTheDocument();
   });

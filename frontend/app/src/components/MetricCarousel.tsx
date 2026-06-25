@@ -21,7 +21,7 @@ interface MetricCarouselProps {
 }
 
 export function MetricCarousel({ cards }: MetricCarouselProps) {
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(cards[0]?.id ?? null);
   const activeCard = cards.find((card) => card.id === activeId) ?? null;
   const secondaryCards = cards.filter((card) => card.id !== activeId);
 

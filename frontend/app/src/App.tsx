@@ -232,21 +232,16 @@ export default function App() {
           <TrialBanner trialEndsAt={shop.trial_ends_at} />
         ) : null}
 
+        {/* Paywall modal рендериться як portal поверх усього — тут тільки умова.
+            currentPlanCode навмисно не передаємо: !is_writable означає, що
+            shop.plan_code — попередній план, не діючий; позначати його як
+            "поточний" заблокувало б реактивацію того самого тарифу. */}
         {shop && !shop.is_writable ? (
-          <>
-            <p className="banner banner-readonly">Підписку призупинено, дані збережено</p>
-            {/* currentPlanCode тут навмисно не передаємо: цей блок рендериться
-                лише коли !is_writable (підписка вже НЕ активна), тож
-                shop.plan_code — це попередній план, а не діючий. Позначати
-                його як "поточний, не можна купити повторно" заблокувало б
-                реактивацію того самого тарифу. Проп лишився в компоненті
-                для майбутнього writable-сценарію "керувати планом". */}
-            <SubscriptionPaywall
-              plans={plans}
-              role={shop.role}
-              onCheckout={api.checkoutStars}
-            />
-          </>
+          <SubscriptionPaywall
+            plans={plans}
+            role={shop.role}
+            onCheckout={api.checkoutStars}
+          />
         ) : null}
 
         {hasDemo ? (

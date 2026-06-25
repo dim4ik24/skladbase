@@ -1,19 +1,17 @@
 /**
- * SubscriptionPaywall — екран підписки/планів. Editorial sport-poster:
- * green-deep Panel, cream Card-картки планів (інверсія), NumberFlow-ціни,
- * VerticalCutReveal-заголовок. Sparkles прибрані (tsparticles → бандл схуд).
- * Контракт оплати (onCheckout → checkoutStars, openInvoice) — без змін.
+ * SubscriptionPaywall — блокувальна модалка підписки (portal, bottom-sheet).
+ * Показується ТІЛЬКИ коли !shop.is_writable (тріал і активна підписка пропускаються).
+ * Без кнопки закриття: paywall не закривається без оплати.
  */
+import { createPortal } from "react-dom";
 import { useState } from "react";
-import { Check } from "lucide-react";
+import { Check, Lock } from "lucide-react";
 import NumberFlow from "@number-flow/react";
+import { motion, useReducedMotion } from "motion/react";
 import { errorMessage } from "../errors";
 import { openInvoice } from "../telegram";
 import type { Plan } from "../types";
 import { Reveal } from "./Reveal";
-import { Card, CardContent, CardHeader } from "./ui/Card";
-import { Panel } from "./ui/Panel";
-import { VerticalCutReveal } from "./VerticalCutReveal";
 
 interface SubscriptionPaywallProps {
   plans: Plan[];
@@ -44,16 +42,7 @@ export function SubscriptionPaywall({
   const [checkingOutCode, setCheckingOutCode] = useState<string | null>(null);
   const [fallbackLink, setFallbackLink] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  if (role === "manager") {
-    return (
-      <Panel as="section" className="paywall">
-        <p className="status-text">
-          Підписку призупинено. Оформлення доступне лише власнику магазину.
-        </p>
-      </Panel>
-    );
-  }
+  const prefersReducedMotion = useReducedMotion();
 
   async function handleCheckout(planCode: string) {
     setError(null);
@@ -77,71 +66,112 @@ export function SubscriptionPaywall({
   );
   const featuredCode = currentPlanCode ?? mostExpensive?.code;
 
-  return (
-    <Panel as="section" className="paywall p-6">
-      <div className="mb-6 space-y-2 text-center">
-        <h2 className="section-title">
-          <VerticalCutReveal
-            splitBy="words"
-            staggerDuration={0.12}
-            staggerFrom="first"
-            containerClassName="justify-center"
+  const sheetContent =
+    role === "manager" ? (
+      <div className="flex flex-col items-center text-center py-6 gap-4">
+        <div className="rounded-full bg-cream/10 p-4">
+          <Lock size={32} className="text-cream/60" aria-hidden="true" />
+        </div>
+        <div>
+          <h2
+            className="font-display text-xl font-bold text-cream mb-2"
+            style={{ textWrap: "balance" } as React.CSSProperties}
+          >
+            Підписку призупинено
+          </h2>
+          <p className="text-sm text-cream/60">
+            Оформлення доступне лише власнику магазину.
+          </p>
+        </div>
+      </div>
+    ) : (
+      <>
+        <div className="mb-6 text-center">
+          <div className="flex justify-center mb-4">
+            <div className="rounded-full bg-cream/10 p-4">
+              <Lock size={28} className="text-cream/70" aria-hidden="true" />
+            </div>
+          </div>
+          <h2
+            className="font-display text-2xl font-bold text-cream mb-2"
+            style={{ textWrap: "balance" } as React.CSSProperties}
           >
             Оберіть тариф
-          </VerticalCutReveal>
-        </h2>
-        <Reveal index={0} as="p" className="text-sm text-cream/60">
-          Оплата через Telegram Stars — без банківської картки.
-        </Reveal>
-      </div>
+          </h2>
+          <p className="text-sm text-cream/60">
+            Пробний період завершився — оберіть план, щоб продовжити роботу.
+          </p>
+        </div>
 
-      {error ? <p className="error-banner">{error}</p> : null}
-      {fallbackLink ? (
-        <p className="paywall-fallback">
-          Відкрийте посилання в Telegram, щоб оплатити:{" "}
-          <a href={fallbackLink} target="_blank" rel="noreferrer">
-            {fallbackLink}
-          </a>
-        </p>
-      ) : null}
+        {error ? <p className="error-banner">{error}</p> : null}
+        {fallbackLink ? (
+          <p className="paywall-fallback">
+            Відкрийте посилання в Telegram:{" "}
+            <a href={fallbackLink} target="_blank" rel="noreferrer">
+              {fallbackLink}
+            </a>
+          </p>
+        ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        {plans.map((plan, index) => {
-          const isCurrent = plan.code === currentPlanCode;
-          const isFeatured = plan.code === featuredCode;
-          const features = planFeatures(plan.limits);
+        <div className="flex flex-col gap-3">
+          {plans.map((plan, index) => {
+            const isCurrent = plan.code === currentPlanCode;
+            const isFeatured = plan.code === featuredCode;
+            const features = planFeatures(plan.limits);
 
-          return (
-            <Reveal key={plan.code} index={index + 1}>
-              <Card
-                className={
-                  isFeatured
-                    ? "flex h-full flex-col ring-2 ring-green"
-                    : "flex h-full flex-col"
-                }
-              >
-                <CardHeader>
-                  <h3 className="font-display text-xl font-semibold text-green-deep">{plan.name}</h3>
-                  <div className="flex items-baseline gap-1">
-                    <NumberFlow
-                      value={Number(plan.price_uah)}
-                      locales="uk-UA"
-                      format={{ style: "currency", currency: "UAH", maximumFractionDigits: 0 }}
-                      className="font-mono-price text-2xl font-bold text-green-deep"
-                    />
-                    <span className="text-sm text-green-deep/50">
-                      /{plan.period === "year" ? "рік" : "міс"}
-                    </span>
+            return (
+              <Reveal key={plan.code} index={index}>
+                <div
+                  className={`rounded-2xl bg-cream p-4${isFeatured ? " ring-2 ring-green" : ""}`}
+                >
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2 mb-1">
+                        <h3 className="font-display text-base font-semibold text-green-deep leading-tight">
+                          {plan.name}
+                        </h3>
+                        {isFeatured && !isCurrent ? (
+                          <span className="rounded-full bg-green px-2 py-0.5 text-[10px] font-bold text-cream shrink-0">
+                            Рекомендовано
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="font-mono-price text-[11px] text-green-deep/45">
+                        або {plan.price_stars}&nbsp;⭐
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <NumberFlow
+                        value={Number(plan.price_uah)}
+                        locales="uk-UA"
+                        format={{ style: "currency", currency: "UAH", maximumFractionDigits: 0 }}
+                        className="font-display text-3xl font-bold text-green-deep block"
+                      />
+                      <p className="font-mono-price text-[11px] text-green-deep/50 mt-0.5">
+                        /{plan.period === "year" ? "рік" : "міс"}
+                      </p>
+                    </div>
                   </div>
-                  <p className="text-xs text-green-deep/45">{plan.price_stars} ⭐ через Telegram Stars</p>
-                </CardHeader>
 
-                <CardContent className="flex flex-1 flex-col">
+                  {features.length > 0 ? (
+                    <ul className="flex flex-col gap-1.5 mb-3">
+                      {features.map((feature) => (
+                        <li
+                          key={feature}
+                          className="flex items-center gap-2 text-sm text-green-deep/70"
+                        >
+                          <Check size={13} className="shrink-0 text-green" aria-hidden="true" />
+                          <span>{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+
                   {isCurrent ? (
                     <button
                       type="button"
                       disabled
-                      className="mb-4 w-full rounded-xl bg-green/10 py-3 text-sm font-semibold text-green-deep/50"
+                      className="w-full rounded-xl bg-green/10 py-2.5 text-sm font-semibold text-green-deep/50"
                     >
                       Поточний план
                     </button>
@@ -149,33 +179,44 @@ export function SubscriptionPaywall({
                     <button
                       type="button"
                       disabled={checkingOutCode === plan.code}
-                      onClick={() => handleCheckout(plan.code)}
+                      onClick={() => void handleCheckout(plan.code)}
                       className={
                         isFeatured
-                          ? "mb-4 w-full rounded-xl bg-green py-3 text-sm font-bold text-cream disabled:opacity-50"
-                          : "mb-4 w-full rounded-xl border border-green/25 bg-green/8 py-3 text-sm font-semibold text-green-deep disabled:opacity-50"
+                          ? "w-full rounded-xl bg-green py-2.5 text-sm font-bold text-cream transition-opacity duration-150 hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green disabled:opacity-50"
+                          : "w-full rounded-xl border border-green/30 py-2.5 text-sm font-semibold text-green-deep transition-opacity duration-150 hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green disabled:opacity-50"
                       }
                     >
-                      {checkingOutCode === plan.code ? "Оформлюємо..." : "Оформити через Stars"}
+                      {checkingOutCode === plan.code ? "Оформлюємо…" : "Оформити через Stars"}
                     </button>
                   )}
+                </div>
+              </Reveal>
+            );
+          })}
+        </div>
+      </>
+    );
 
-                  {features.length > 0 ? (
-                    <ul className="flex flex-1 flex-col gap-2">
-                      {features.map((feature) => (
-                        <li key={feature} className="flex items-center gap-2 text-sm text-green-deep/70">
-                          <Check size={14} className="shrink-0 text-green" />
-                          <span>{feature}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
-                </CardContent>
-              </Card>
-            </Reveal>
-          );
-        })}
-      </div>
-    </Panel>
+  return createPortal(
+    <div
+      className="paywall-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Оберіть тариф"
+    >
+      <motion.div
+        className="paywall-sheet"
+        initial={{ y: prefersReducedMotion ? 0 : "100%" }}
+        animate={{ y: 0 }}
+        transition={
+          prefersReducedMotion
+            ? { duration: 0 }
+            : { type: "spring", bounce: 0.08, duration: 0.45 }
+        }
+      >
+        {sheetContent}
+      </motion.div>
+    </div>,
+    document.body,
   );
 }
