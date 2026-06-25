@@ -43,16 +43,8 @@ function applyThemeParams(theme: TelegramThemeParams): void {
   }
 }
 
-/** Встановлює data-theme на <html> залежно від colorScheme Telegram.
- *  За замовчуванням (поза Telegram або light-тема) — light. */
-export function applyTheme(webApp?: TelegramWebApp): void {
-  const isDark = webApp?.colorScheme === "dark";
-  document.documentElement.setAttribute("data-theme", isDark ? "dark" : "light");
-}
-
 export function initTelegram(): void {
   const webApp = window.Telegram?.WebApp;
-  applyTheme(webApp);
   if (!webApp) return;
 
   webApp.ready();
