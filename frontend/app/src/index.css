@@ -91,83 +91,10 @@ body,
 
 body {
   margin: 0;
-  background: #F4F6F5;
-}
-
-/* ── Aurora background — CSS blobs, no WebGL ────────────────────────── */
-.aurora-root {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  overflow: hidden;
-}
-
-.aurora-blob {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(40px);
-  will-change: transform;
-  opacity: 0.65;
-}
-
-.aurora-blob--pink {
-  width: 70vw;
-  height: 70vw;
-  top: -20%;
-  left: -18%;
-  background: radial-gradient(circle, #FFB8D4 0%, #FFCCE0 45%, transparent 75%);
-  animation: aurora-1 26s ease-in-out infinite;
-}
-
-.aurora-blob--mint {
-  width: 58vw;
-  height: 58vw;
-  top: 0%;
-  right: -20%;
-  background: radial-gradient(circle, #9EE6BE 0%, #B8F0CE 45%, transparent 75%);
-  animation: aurora-2 30s ease-in-out infinite;
-}
-
-.aurora-blob--rose {
-  width: 55vw;
-  height: 55vw;
-  bottom: -18%;
-  left: 10%;
-  background: radial-gradient(circle, #FF9EC4 0%, #FFC9DD 45%, transparent 75%);
-  animation: aurora-3 23s ease-in-out infinite;
-}
-
-.aurora-blob--lavender {
-  width: 48vw;
-  height: 48vw;
-  top: 40%;
-  right: -5%;
-  background: radial-gradient(circle, #C9D4FF 0%, #DDE4FF 45%, transparent 75%);
-  animation: aurora-4 28s ease-in-out infinite;
-}
-
-@keyframes aurora-1 {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  30%       { transform: translate(12vw, 16vh) scale(1.1); }
-  65%       { transform: translate(-5vw, 8vh) scale(0.94); }
-}
-
-@keyframes aurora-2 {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  38%       { transform: translate(-13vw, 10vh) scale(1.09); }
-  72%       { transform: translate(6vw, -9vh) scale(1.04); }
-}
-
-@keyframes aurora-3 {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  42%       { transform: translate(10vw, -14vh) scale(0.92); }
-  78%       { transform: translate(-7vw, 6vh) scale(1.07); }
-}
-
-@keyframes aurora-4 {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  50%       { transform: translate(-12vw, -11vh) scale(1.11); }
+  /* Pre-load fallback (before WebGL canvas paints); matches StaticFallback in AtmosphereBackground */
+  background:
+    radial-gradient(110% 60% at 50% -5%, #FFD0E8 0%, transparent 65%),
+    #F4F6F5;
 }
 
 .aurora--static .aurora-blob {
