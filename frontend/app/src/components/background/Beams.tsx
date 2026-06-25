@@ -301,12 +301,12 @@ export interface BeamsProps {
 
 // ── BeamsScene (inner scene, runs inside Canvas) ──────────────────────────────
 function BeamsScene({
-  beamWidth = 2,
+  beamWidth = 3,
   beamHeight = 15,
-  beamNumber = 12,
-  lightColor = "#FF8FB8",
+  beamNumber = 8,
+  lightColor = "#FFD0E4",
   speed = 2,
-  noiseIntensity = 1.5,
+  noiseIntensity = 0.8,
   scale = 0.2,
   rotation = 30,
 }: BeamsProps) {
@@ -359,7 +359,7 @@ function BeamsScene({
           // diffuse: soft pink base so beams are visible on the light background.
           // Original uses #000000; on a dark bg that still produces color via specular,
           // but on #F4F6F5 black diffuse × any light = 0 (invisible). Pink base fixes this.
-          diffuse: new THREE.Color(...hexToNormalizedRGB("#FFD4E8")),
+          diffuse: new THREE.Color(...hexToNormalizedRGB("#FFEAF3")),
           time: { shared: true, mixed: true, linked: true, value: 0 },
           roughness: 0.3,
           metalness: 0.3,
@@ -384,8 +384,8 @@ function BeamsScene({
         />
         <DirLight color={lightColor} position={[0, 3, 10]} />
       </group>
-      {/* ambientLight lowered from original 1 → 0.5 so directional pink light defines the hue */}
-      <ambientLight intensity={0.5} />
+      {/* ambientLight raised to 0.8 for even fill — less contrast between bright/dark beam areas */}
+      <ambientLight intensity={0.8} />
       <color attach="background" args={["#F4F6F5"]} />
       <PerspectiveCamera makeDefault position={[0, 0, 20]} fov={30} />
     </>
