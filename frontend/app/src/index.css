@@ -201,6 +201,12 @@ body {
   border-color: rgba(248, 229, 229, 0.3);
 }
 
+/* Collapsed paywall banner — space-between so the 'Оформити' button sits on the right */
+.banner-paywall {
+  color: var(--state-low);
+  border-color: rgba(248, 229, 229, 0.3);
+}
+
 .banner-demo {
   border-style: dashed;
   color: var(--cream);

@@ -504,7 +504,7 @@ describe("Trial banner", () => {
 });
 
 describe("Paywall + read-only state", () => {
-  it("shows the read-only banner, the plans paywall, and disables write actions", async () => {
+  it("shows paywall modal, catalog is visible read-only, and write actions are disabled", async () => {
     vi.mocked(api.getMe).mockResolvedValue({
       ...shopFixture,
       status: "expired",
@@ -517,15 +517,45 @@ describe("Paywall + read-only state", () => {
     render(<App />);
     await screen.findByTestId("available-91");
 
+    // Paywall modal is shown
     expect(screen.getByRole("dialog", { name: "Оберіть тариф" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Оберіть тариф" })).toBeInTheDocument();
     expect(screen.getByText("Pro")).toBeInTheDocument();
 
+    // Catalog is rendered behind the modal (data visible)
+    expect(screen.getByText("Футболка")).toBeInTheDocument();
+
+    // All write actions disabled via writable=false
     expect(screen.getByRole("button", { name: "Додати товар" })).toBeDisabled();
     expect(screen.getByLabelText("Збільшити залишок: SKU-91")).toBeDisabled();
     expect(screen.getByLabelText("Зменшити залишок: SKU-91")).toBeDisabled();
     expect(screen.getByLabelText("Завантажити фото: SKU-91")).toBeDisabled();
     expect(screen.getByRole("button", { name: "Відклади" })).toBeDisabled();
+  });
+
+  it("collapses modal to sticky banner then re-opens via 'Оформити'", async () => {
+    vi.mocked(api.getMe).mockResolvedValue({
+      ...shopFixture,
+      status: "expired",
+      is_writable: false,
+    });
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.getPlans).mockResolvedValue([planFixture]);
+
+    render(<App />);
+    await screen.findByRole("dialog", { name: "Оберіть тариф" });
+
+    // Dismiss the modal
+    fireEvent.click(screen.getByRole("button", { name: "Переглянути склад" }));
+
+    // Modal is gone; sticky banner is shown
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByText("Підписку призупинено — дії заблоковано")).toBeInTheDocument();
+
+    // Re-open via the banner's action button
+    fireEvent.click(screen.getByRole("button", { name: "Оформити" }));
+
+    expect(screen.getByRole("dialog", { name: "Оберіть тариф" })).toBeInTheDocument();
   });
 
   it("checks out via Stars and opens the invoice link", async () => {
