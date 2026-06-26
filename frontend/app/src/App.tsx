@@ -1,20 +1,17 @@
 import { Ban, BookmarkCheck, Package, TriangleAlert } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { motion } from "motion/react";
 import * as api from "./api";
 import { AtmosphereBackground } from "./components/background/AtmosphereBackground";
+import { BottomTabBar } from "./components/BottomTabBar";
 import { DemoBanner } from "./components/DemoBanner";
 import { Header } from "./components/Header";
 import type { MetricCardData } from "./components/MetricCarousel";
-import { MetricCarousel } from "./components/MetricCarousel";
-import { ProductCard } from "./components/ProductCard";
-import { ProductFormModal } from "./components/ProductFormModal";
-import { ReservationsPanel } from "./components/ReservationsPanel";
-import { ScrollFloat } from "./components/ScrollFloat";
 import { SubscriptionPaywall } from "./components/SubscriptionPaywall";
 import { TrialBanner } from "./components/TrialBanner";
-import { Panel } from "./components/ui/Panel";
 import { errorMessage } from "./errors";
+import { DashboardScreen } from "./screens/DashboardScreen";
+import { SettingsScreen } from "./screens/SettingsScreen";
+import { SkladScreen } from "./screens/SkladScreen";
 import { initTelegram, setAccentColor } from "./telegram";
 import type {
   Plan,
@@ -24,18 +21,10 @@ import type {
   Reservation,
   ReserveInput,
   Shop,
+  TabId,
   Template,
   Variant,
 } from "./types";
-
-const cardVariants = {
-  hidden: { opacity: 0, y: 18 },
-  visible: (i: number) => ({
-    opacity: 1,
-    y: 0,
-    transition: { delay: i * 0.055, duration: 0.38, ease: [0, 0, 0.2, 1] as const },
-  }),
-} as const;
 
 export default function App() {
   const [shop, setShop] = useState<Shop | null>(null);
@@ -43,12 +32,11 @@ export default function App() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
-  const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showProductForm, setShowProductForm] = useState(false);
-  const [showReservations, setShowReservations] = useState(false);
   const [clearingDemos, setClearingDemos] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabId>("sklad");
+  const [openPaywall, setOpenPaywall] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -124,16 +112,15 @@ export default function App() {
     }
   }
 
-  async function handleCreateProduct(payload: ProductInput) {
+  async function handleCreateProduct(payload: ProductInput): Promise<void> {
     const product = await api.createProduct(payload);
     setProducts((prev) => [...prev, product]);
-    setShowProductForm(false);
   }
 
   async function handleUpdateProduct(productId: number, patch: ProductPatch) {
     try {
       const updated = await api.updateProduct(productId, patch);
-      setProducts((prev) => prev.map((product) => (product.id === productId ? updated : product)));
+      setProducts((prev) => prev.map((p) => (p.id === productId ? updated : p)));
     } catch (err) {
       setError(errorMessage(err, "Не вдалося оновити товар"));
     }
@@ -207,11 +194,8 @@ export default function App() {
     return `Варіант #${variantId}`;
   }
 
-  const filteredProducts = products.filter((product) =>
-    product.name.toLowerCase().includes(query.toLowerCase()),
-  );
   const writable = shop?.is_writable ?? false;
-  const hasDemo = products.some((product) => product.is_demo);
+  const hasDemo = products.some((p) => p.is_demo);
 
   let lowStockCount = 0;
   let outOfStockCount = 0;
@@ -241,12 +225,14 @@ export default function App() {
           <TrialBanner trialEndsAt={shop.trial_ends_at} />
         ) : null}
 
-        {/* Paywall portal — монтується тільки при !is_writable, логіку не чіпати */}
-        {shop && !shop.is_writable ? (
+        {/* Paywall: always shown when !is_writable; also shown when owner opens it from Settings */}
+        {shop && (!shop.is_writable || openPaywall) ? (
           <SubscriptionPaywall
             plans={plans}
             role={shop.role}
+            currentPlanCode={shop.is_writable ? shop.plan_code : undefined}
             onCheckout={api.checkoutStars}
+            onDismiss={openPaywall && shop.is_writable ? () => setOpenPaywall(false) : undefined}
           />
         ) : null}
 
@@ -258,82 +244,46 @@ export default function App() {
           />
         ) : null}
 
-        {shop ? <MetricCarousel cards={metricCards} /> : null}
-
-        <div className="toolbar">
-          <input
-            className="search-input"
-            type="search"
-            placeholder="Пошук товарів..."
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            aria-label="Пошук товарів"
-          />
-          <button type="button" disabled={!writable} onClick={() => setShowProductForm(true)}>
-            Додати товар
-          </button>
-          <button type="button" onClick={() => setShowReservations((prev) => !prev)}>
-            Резерви ({reservations.length})
-          </button>
-        </div>
-
-        {showReservations ? (
-          <Panel as="section" className="reservations-section p-0">
-            <ScrollFloat as="h2" className="section-title px-4 pt-4" scrollContainerRef={scrollContainerRef}>
-              Резерви
-            </ScrollFloat>
-            <div className="px-4 pb-4">
-              <ReservationsPanel
-                reservations={reservations}
-                writable={writable}
-                variantLabel={variantLabel}
-                onRelease={handleRelease}
-                onFulfill={handleFulfill}
-              />
-            </div>
-          </Panel>
-        ) : null}
-
-        <ScrollFloat as="h2" className="section-title" scrollContainerRef={scrollContainerRef}>
-          Каталог
-        </ScrollFloat>
-
-        {loading ? (
-          <p className="status-text">Завантаження…</p>
-        ) : filteredProducts.length === 0 ? (
-          <p className="status-text">Нічого не знайдено</p>
-        ) : (
-          <div className="product-grid">
-            {filteredProducts.map((product, i) => (
-              <motion.div
-                key={product.id}
-                custom={i}
-                initial="hidden"
-                animate="visible"
-                variants={cardVariants}
-              >
-                <ProductCard
-                  product={product}
-                  writable={writable}
-                  onRestock={handleRestock}
-                  onAdjust={handleAdjust}
-                  onUploadPhoto={handleUploadPhoto}
-                  onReserve={handleReserve}
-                  onUpdateProduct={handleUpdateProduct}
-                />
-              </motion.div>
-            ))}
-          </div>
-        )}
-
-        {showProductForm ? (
-          <ProductFormModal
+        {activeTab === "sklad" ? (
+          <SkladScreen
+            products={products}
             templates={templates}
-            onSubmit={handleCreateProduct}
-            onClose={() => setShowProductForm(false)}
+            reservations={reservations}
+            loading={loading}
+            writable={writable}
+            variantLabel={variantLabel}
+            onRestock={handleRestock}
+            onAdjust={handleAdjust}
+            onUploadPhoto={handleUploadPhoto}
+            onReserve={handleReserve}
+            onRelease={handleRelease}
+            onFulfill={handleFulfill}
+            onCreateProduct={handleCreateProduct}
+            onUpdateProduct={handleUpdateProduct}
+            scrollContainerRef={scrollContainerRef}
           />
-        ) : null}
+        ) : activeTab === "dashboard" ? (
+          <DashboardScreen
+            shop={shop}
+            loading={loading}
+            metricCards={metricCards}
+            reservations={reservations}
+            writable={writable}
+            variantLabel={variantLabel}
+            onRelease={handleRelease}
+            onFulfill={handleFulfill}
+            scrollContainerRef={scrollContainerRef}
+          />
+        ) : (
+          <SettingsScreen
+            shop={shop}
+            plans={plans}
+            onOpenPaywall={() => setOpenPaywall(true)}
+          />
+        )}
       </div>
+
+      <BottomTabBar active={activeTab} onChange={setActiveTab} />
     </>
   );
 }

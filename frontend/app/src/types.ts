@@ -110,3 +110,10 @@ export interface ReserveInput {
   customer_note?: string;
   expires_at?: string;
 }
+
+export interface FinanceSummary {
+  shop_id: number;
+  revenue_uah: string;
+}
+
+export type TabId = "sklad" | "dashboard" | "settings";

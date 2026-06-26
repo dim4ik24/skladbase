@@ -19,6 +19,7 @@ interface SubscriptionPaywallProps {
   role: "owner" | "manager";
   currentPlanCode?: string | null;
   onCheckout: (planCode: string) => Promise<{ invoice_link: string }>;
+  onDismiss?: () => void;
 }
 
 function planFeatures(limits: Record<string, unknown>): string[] {
@@ -39,6 +40,7 @@ export function SubscriptionPaywall({
   role,
   currentPlanCode,
   onCheckout,
+  onDismiss,
 }: SubscriptionPaywallProps) {
   const [isOpen, setIsOpen] = useState(true);
   const [checkingOutCode, setCheckingOutCode] = useState<string | null>(null);
@@ -251,7 +253,7 @@ export function SubscriptionPaywall({
           <button
             type="button"
             aria-label="Переглянути склад"
-            onClick={() => setIsOpen(false)}
+            onClick={() => (onDismiss ? onDismiss() : setIsOpen(false))}
             className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold text-text-soft transition-colors duration-150 hover:bg-bg hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green"
           >
             <X size={13} aria-hidden="true" />

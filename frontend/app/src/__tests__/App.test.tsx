@@ -29,6 +29,7 @@ vi.mock("../api", () => ({
   fulfillReservation: vi.fn(),
   checkoutStars: vi.fn(),
   clearDemos: vi.fn(),
+  getFinanceSummary: vi.fn(),
 }));
 
 import * as api from "../api";
@@ -132,6 +133,7 @@ beforeEach(() => {
   vi.mocked(api.fulfillReservation).mockReset();
   vi.mocked(api.checkoutStars).mockReset();
   vi.mocked(api.clearDemos).mockReset();
+  vi.mocked(api.getFinanceSummary).mockReset().mockResolvedValue({ shop_id: 1, revenue_uah: "0.00" });
   document.documentElement.style.removeProperty("--accent-color");
 });
 
@@ -645,5 +647,76 @@ describe("Demo banner", () => {
 
     expect(screen.getByText(/Це приклади/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Очистити приклади" })).not.toBeInTheDocument();
+  });
+});
+
+describe("Tab navigation", () => {
+  it("renders Склад screen by default with search input and catalog section", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([makeProduct()]);
+
+    render(<App />);
+    await screen.findByText("Футболка");
+
+    expect(screen.getByLabelText("Пошук товарів")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Додати товар" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Склад" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("switches to Дашборд tab and shows MetricCarousel, hides catalog search", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+
+    render(<App />);
+    await screen.findByText("Тестовий магазин");
+
+    fireEvent.click(screen.getByRole("tab", { name: "Дашборд" }));
+
+    await screen.findByText("Товари");
+    expect(screen.getByRole("tab", { name: "Дашборд" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.queryByLabelText("Пошук товарів")).not.toBeInTheDocument();
+  });
+
+  it("switches to Налаштування tab and shows subscription info", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.getPlans).mockResolvedValue([planFixture]);
+
+    render(<App />);
+    await screen.findByText("Тестовий магазин");
+
+    fireEvent.click(screen.getByRole("tab", { name: "Налаштування" }));
+
+    expect(screen.getByText("Підписка")).toBeInTheDocument();
+    expect(screen.getByText("Тарифний план")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Налаштування" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  });
+
+  it("paywall banner persists across tabs when subscription is expired", async () => {
+    vi.mocked(api.getMe).mockResolvedValue({
+      ...shopFixture,
+      status: "expired",
+      is_writable: false,
+    });
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.getPlans).mockResolvedValue([planFixture]);
+
+    render(<App />);
+    await screen.findByRole("dialog", { name: "Оберіть тариф" });
+
+    // Dismiss modal → sticky banner appears
+    fireEvent.click(screen.getByRole("button", { name: "Переглянути склад" }));
+    expect(screen.getByText("Підписку призупинено — дії заблоковано")).toBeInTheDocument();
+
+    // Banner stays on Dashboard tab
+    fireEvent.click(screen.getByRole("tab", { name: "Дашборд" }));
+    expect(screen.getByText("Підписку призупинено — дії заблоковано")).toBeInTheDocument();
+
+    // Banner stays on Налаштування tab
+    fireEvent.click(screen.getByRole("tab", { name: "Налаштування" }));
+    expect(screen.getByText("Підписку призупинено — дії заблоковано")).toBeInTheDocument();
   });
 });

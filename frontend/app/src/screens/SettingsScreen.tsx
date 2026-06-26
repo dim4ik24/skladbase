@@ -1,0 +1,98 @@
+import type { Plan, Shop } from "../types";
+
+interface SettingsScreenProps {
+  shop: Shop | null;
+  plans: Plan[];
+  onOpenPaywall: () => void;
+}
+
+const STATUS_LABELS: Record<string, { label: string; colorClass: string }> = {
+  trial: { label: "Тріал", colorClass: "text-green-deep" },
+  active: { label: "Активна", colorClass: "text-green-deep" },
+  past_due: { label: "Прострочена", colorClass: "text-[#b0460e]" },
+  canceled: { label: "Скасована", colorClass: "text-text-soft" },
+  expired: { label: "Закінчилась", colorClass: "text-[#b0460e]" },
+};
+
+const COMING_SOON = ["Назва та лого магазину", "Мова", "Підключення акаунтів"];
+
+export function SettingsScreen({ shop, plans, onOpenPaywall }: SettingsScreenProps) {
+  const currentPlan = plans.find((p) => p.code === shop?.plan_code);
+  const statusInfo = shop?.status ? STATUS_LABELS[shop.status] : null;
+
+  return (
+    <div className="flex flex-col gap-4 pb-4">
+      <h2 className="section-title">Налаштування</h2>
+
+      <div className="glass-card rounded-[20px] p-4 shadow-[var(--shadow-card)]">
+        <h3 className="text-sm font-bold text-text-soft uppercase tracking-wide mb-3">
+          Підписка
+        </h3>
+
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm text-text-soft">Тарифний план</span>
+          <span className="text-sm font-semibold text-text">
+            {currentPlan?.name ?? (shop ? "Немає" : "…")}
+          </span>
+        </div>
+
+        {statusInfo ? (
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm text-text-soft">Статус</span>
+            <span className={`text-sm font-semibold ${statusInfo.colorClass}`}>
+              {statusInfo.label}
+            </span>
+          </div>
+        ) : null}
+
+        {shop?.current_period_end ? (
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm text-text-soft">До</span>
+            <span className="text-sm font-semibold text-text">
+              {new Date(shop.current_period_end).toLocaleDateString("uk-UA")}
+            </span>
+          </div>
+        ) : null}
+
+        {shop?.role === "owner" && shop.is_writable ? (
+          <button
+            type="button"
+            onClick={onOpenPaywall}
+            className="mt-2 w-full rounded-2xl py-2.5 text-sm font-bold text-white"
+            style={{
+              background: "linear-gradient(135deg, var(--green) 0%, var(--green-deep) 100%)",
+              boxShadow: "var(--shadow-cta)",
+            }}
+          >
+            Змінити тариф
+          </button>
+        ) : null}
+
+        {!shop?.is_writable ? (
+          <p className="text-xs text-text-soft mt-2 text-center">
+            Підписку призупинено — оберіть тариф у вікні вище
+          </p>
+        ) : null}
+      </div>
+
+      <div className="glass-card rounded-[20px] overflow-hidden shadow-[var(--shadow-card)]">
+        <h3 className="text-sm font-bold text-text-soft uppercase tracking-wide px-4 pt-4 mb-1">
+          Незабаром
+        </h3>
+        {COMING_SOON.map((label, i) => (
+          <div
+            key={label}
+            className={`flex items-center justify-between px-4 py-3 ${
+              i < COMING_SOON.length - 1 ? "border-b border-[var(--line)]" : "pb-4"
+            }`}
+          >
+            <span className="text-sm text-text-soft">{label}</span>
+            <span className="rounded-full bg-pastel-mint px-2 py-0.5 text-[10px] font-bold text-green-deep">
+              Скоро
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
