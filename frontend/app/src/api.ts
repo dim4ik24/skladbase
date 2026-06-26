@@ -6,6 +6,7 @@
  */
 import { getInitData } from "./telegram";
 import type {
+  FinanceSummary,
   Plan,
   Product,
   ProductInput,
@@ -142,4 +143,8 @@ export function checkoutStars(planCode: string): Promise<{ invoice_link: string 
 
 export function clearDemos(): Promise<{ removed: number }> {
   return request<{ removed: number }>("/api/shop/clear-demos", { method: "POST" });
+}
+
+export function getFinanceSummary(): Promise<FinanceSummary> {
+  return request<FinanceSummary>("/api/finance/summary");
 }
