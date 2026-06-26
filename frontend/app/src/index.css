@@ -48,9 +48,18 @@
   --text-soft: #7A857E;
   --line:      rgba(28, 37, 32, 0.08);
 
+  /* Glass system — used everywhere backdrop-filter is applied */
+  --glass-bg:     rgba(255, 255, 255, 0.68);
+  --glass-border: rgba(255, 255, 255, 0.50);
+  --glass-blur:   blur(18px) saturate(1.4);
+  /* Modal/sheet glass is slightly more opaque for legibility */
+  --glass-bg-heavy:   rgba(255, 255, 255, 0.78);
+  --glass-blur-heavy: blur(24px) saturate(1.5);
+
   /* Shadows */
-  --shadow-card: 0 2px 12px rgba(28, 37, 32, 0.07);
+  --shadow-card: 0 2px 14px rgba(28, 37, 32, 0.07);
   --shadow-fab:  0 4px 16px rgba(43, 168, 74, 0.30);
+  --shadow-cta:  0 4px 14px rgba(52, 199, 89, 0.35);
 
   /* Brand accents */
   --green:      #34C759;
@@ -91,9 +100,10 @@ body,
 
 body {
   margin: 0;
-  /* Pre-load fallback (before WebGL canvas paints); matches StaticFallback in AtmosphereBackground */
+  /* Pre-load fallback matching Iridescence StaticFallback (pink + green blobs) */
   background:
-    radial-gradient(110% 60% at 50% -5%, #FFD0E8 0%, transparent 65%),
+    radial-gradient(ellipse 70% 50% at 25% 35%, #FFD0E8 0%, transparent 65%),
+    radial-gradient(ellipse 60% 45% at 75% 65%, #C8F0D8 0%, transparent 65%),
     #F4F6F5;
 }
 
@@ -110,6 +120,19 @@ body {
 @keyframes glow-low {
   0%, 100% { box-shadow: 0 0 0 0 rgba(255, 107, 157, 0.3); }
   50%       { box-shadow: 0 0 0 4px rgba(255, 107, 157, 0); }
+}
+
+/* ── Active press scale (motion-safe only) ───────────────────────────── */
+@media (prefers-reduced-motion: no-preference) {
+  .toolbar button:not(:disabled):active,
+  .modal-actions button:not(:disabled):active,
+  .banner-demo button:active,
+  .variant-controls button:not(:disabled):active {
+    transform: scale(0.97);
+  }
+  .variant-controls button:not(:disabled):active {
+    transform: scale(0.93);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -185,8 +208,10 @@ body {
   width: 100%;
   padding: 10px 14px;
   border-radius: 14px;
-  border: 1.5px solid var(--line);
-  background: var(--surface);
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
   color: var(--text);
   font-family: "Manrope", system-ui, sans-serif;
   font-size: 15px;
@@ -215,24 +240,14 @@ body {
   margin-bottom: 0;
 }
 
-/* Primary CTA — green fill, pink pulse */
-.toolbar button:first-of-type:not(:disabled) {
-  background: var(--green);
-  color: #fff;
-  animation: glow-pink 2.6s ease-in-out infinite;
-}
-
-.toolbar button:first-of-type:disabled {
-  background: var(--line);
-  color: var(--text-soft);
-  animation: none;
-}
-
+/* Secondary toolbar buttons — glass */
 .toolbar button {
-  border: none;
+  border: 1px solid var(--glass-border);
   border-radius: 14px;
   padding: 0 18px;
-  background: var(--surface);
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
   color: var(--text);
   font-family: "Manrope", system-ui, sans-serif;
   font-size: 14px;
@@ -240,7 +255,7 @@ body {
   cursor: pointer;
   min-height: 44px;
   box-shadow: var(--shadow-card);
-  transition: opacity 0.15s ease;
+  transition: opacity 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
   touch-action: manipulation;
 }
 
@@ -251,6 +266,30 @@ body {
 .toolbar button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* Primary CTA — green gradient, no flat fill */
+.toolbar button:first-of-type:not(:disabled) {
+  background: linear-gradient(135deg, var(--green) 0%, var(--green-deep) 100%);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: var(--shadow-cta);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.toolbar button:first-of-type:not(:disabled):hover {
+  opacity: 0.92;
+  box-shadow: 0 6px 20px rgba(52, 199, 89, 0.45);
+}
+
+.toolbar button:first-of-type:disabled {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border-color: var(--glass-border);
+  color: var(--text-soft);
   box-shadow: none;
 }
 
@@ -271,6 +310,7 @@ body {
   padding: 4px 0;
 }
 
+/* Base banner — glass */
 .banner {
   display: flex;
   align-items: center;
@@ -281,24 +321,27 @@ body {
   margin-bottom: 12px;
   font-size: 13px;
   font-weight: 500;
-  background: var(--surface);
-  border: 1.5px solid var(--line);
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
   box-shadow: var(--shadow-card);
   color: var(--text);
 }
 
+/* Colored variants use tinted rgba backgrounds so backdrop-filter still peeks through */
 .banner-trial {
   color: var(--green-deep);
   justify-content: center;
-  border-color: rgba(43, 168, 74, 0.25);
-  background: var(--state-ok);
+  background: rgba(222, 241, 208, 0.82);
+  border-color: rgba(43, 168, 74, 0.22);
 }
 
 .banner-readonly {
   color: #b0460e;
   justify-content: center;
-  border-color: rgba(255, 107, 157, 0.25);
-  background: var(--state-low);
+  background: rgba(248, 229, 229, 0.82);
+  border-color: rgba(255, 107, 157, 0.22);
 }
 
 .banner-demo {
@@ -310,19 +353,20 @@ body {
   border: none;
   border-radius: 10px;
   padding: 6px 14px;
-  background: var(--green);
+  background: linear-gradient(135deg, var(--green) 0%, var(--green-deep) 100%);
   color: #fff;
   font-weight: 700;
   cursor: pointer;
   flex-shrink: 0;
   touch-action: manipulation;
+  box-shadow: 0 2px 8px rgba(52, 199, 89, 0.30);
 }
 
-/* Collapsed paywall banner — space-between so 'Оформити' aligns right */
+/* Collapsed paywall banner */
 .banner-paywall {
   color: #b0460e;
-  border-color: rgba(255, 107, 157, 0.25);
-  background: var(--state-low);
+  background: rgba(248, 229, 229, 0.82);
+  border-color: rgba(255, 107, 157, 0.22);
 }
 
 /* ── Paywall modal overlay ───────────────────────────────────────────── */
@@ -330,20 +374,24 @@ body {
   position: fixed;
   inset: 0;
   z-index: 200;
-  background: rgba(28, 37, 32, 0.42);
+  background: rgba(28, 37, 32, 0.38);
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
 }
 
 .paywall-sheet {
-  background: var(--surface);
+  background: var(--glass-bg-heavy);
+  -webkit-backdrop-filter: var(--glass-blur-heavy);
+  backdrop-filter: var(--glass-blur-heavy);
+  border-top: 1px solid var(--glass-border);
   border-radius: 24px 24px 0 0;
   max-height: 85dvh;
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 20px 20px max(32px, env(safe-area-inset-bottom));
   color: var(--text);
+  box-shadow: 0 -4px 32px rgba(28, 37, 32, 0.12);
 }
 
 .paywall-fallback {
@@ -364,9 +412,12 @@ body {
   gap: 14px;
 }
 
-/* ── Product card ────────────────────────────────────────────────────── */
+/* ── Product card — glass ─────────────────────────────────────────────── */
 .product-card {
-  background: var(--surface);
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
   border-radius: 20px;
   padding: 14px;
   box-shadow: var(--shadow-card);
@@ -374,7 +425,7 @@ body {
 }
 
 .product-card:hover {
-  box-shadow: 0 6px 20px rgba(28, 37, 32, 0.12);
+  box-shadow: 0 6px 24px rgba(28, 37, 32, 0.11);
 }
 
 .product-photo {
@@ -500,13 +551,14 @@ body {
   height: 32px;
   border-radius: 10px;
   border: none;
-  background: var(--green);
+  background: linear-gradient(135deg, var(--green) 0%, var(--green-deep) 100%);
   color: #fff;
   font-size: 16px;
   line-height: 1;
   cursor: pointer;
-  transition: opacity 0.15s ease;
+  transition: opacity 0.15s ease, transform 0.1s ease;
   touch-action: manipulation;
+  box-shadow: 0 2px 6px rgba(52, 199, 89, 0.28);
 }
 
 .variant-controls button:not(:disabled):hover {
@@ -514,10 +566,12 @@ body {
 }
 
 .variant-controls button:disabled {
-  background: var(--line);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
   color: var(--text-soft);
   opacity: 1;
   cursor: not-allowed;
+  box-shadow: none;
 }
 
 .variant-photo {
@@ -573,12 +627,15 @@ body {
   gap: 8px;
 }
 
-/* ── Reservations ────────────────────────────────────────────────────── */
+/* ── Reservations — glass panel ──────────────────────────────────────── */
 .reservations-section {
   margin-bottom: 16px;
   padding: 14px;
   border-radius: 20px;
-  background: var(--surface);
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
   box-shadow: var(--shadow-card);
 }
 
@@ -618,7 +675,7 @@ body {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(28, 37, 32, 0.45);
+  background: rgba(28, 37, 32, 0.38);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -626,6 +683,7 @@ body {
   z-index: 100;
 }
 
+/* Modal card — heavier glass for readability over blurred content */
 .modal-card {
   border-radius: 20px;
   padding: 22px;
@@ -635,8 +693,11 @@ body {
   overflow-y: auto;
   overscroll-behavior: contain;
   color: var(--text);
-  background: var(--surface);
-  box-shadow: 0 12px 40px rgba(28, 37, 32, 0.18);
+  background: var(--glass-bg-heavy);
+  -webkit-backdrop-filter: var(--glass-blur-heavy);
+  backdrop-filter: var(--glass-blur-heavy);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 12px 40px rgba(28, 37, 32, 0.14);
 }
 
 .form-field {
@@ -701,23 +762,29 @@ body {
   margin-top: 10px;
 }
 
+/* Primary save/confirm — green gradient */
 .modal-actions button {
   border: none;
-  border-radius: 12px;
-  padding: 9px 18px;
-  background: var(--green);
+  border-radius: 16px;
+  padding: 10px 20px;
+  background: linear-gradient(135deg, var(--green) 0%, var(--green-deep) 100%);
   color: #fff;
   font-family: "Manrope", system-ui, sans-serif;
   font-weight: 700;
   cursor: pointer;
-  transition: opacity 0.15s ease;
+  box-shadow: var(--shadow-cta);
+  transition: opacity 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
   touch-action: manipulation;
 }
 
+/* Cancel / secondary — glass */
 .modal-actions button:first-child {
-  background: var(--bg);
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
   color: var(--text-soft);
-  border: 1.5px solid var(--line);
+  box-shadow: var(--shadow-card);
 }
 
 .modal-actions button:not(:disabled):hover {
@@ -727,4 +794,5 @@ body {
 .modal-actions button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+  box-shadow: none;
 }
