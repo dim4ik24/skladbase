@@ -3,7 +3,6 @@
  *
  * Guards (render static CSS gradient instead of WebGL):
  *   - prefers-reduced-motion
- *   - hardwareConcurrency ≤ 4 (low-end device)
  *   - WebGL error in child (ErrorBoundary catches, no white screen)
  *
  * `suspended` prop kept for API compat with App.tsx caller.
@@ -23,7 +22,7 @@ const WRAPPER: CSSProperties = {
   inset: 0,
   zIndex: 0,
   pointerEvents: "none",
-  opacity: 0.45,
+  opacity: 0.5,
 };
 
 const FALLBACK_STYLE: CSSProperties = {
@@ -43,7 +42,8 @@ class WebGLErrorBoundary extends Component<
   { hasError: boolean }
 > {
   state = { hasError: false };
-  static getDerivedStateFromError() {
+  static getDerivedStateFromError(error: unknown) {
+    console.error("[AtmosphereBackground] WebGL/Beams error caught by boundary:", error);
     return { hasError: true };
   }
   render() {
@@ -55,9 +55,8 @@ class WebGLErrorBoundary extends Component<
 export function AtmosphereBackground(_props: AtmosphereBackgroundProps) {
   const prefersReduced =
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const isLowEnd = (navigator.hardwareConcurrency ?? 8) <= 4;
 
-  if (prefersReduced || isLowEnd) {
+  if (prefersReduced) {
     return (
       <div style={WRAPPER} aria-hidden="true">
         <StaticFallback />
@@ -66,21 +65,19 @@ export function AtmosphereBackground(_props: AtmosphereBackgroundProps) {
   }
 
   return (
-    <>
-      <div style={WRAPPER} aria-hidden="true">
-        <WebGLErrorBoundary>
-          <Suspense fallback={<StaticFallback />}>
-            <BeamsCanvas
-              beamWidth={3}
-              beamNumber={8}
-              lightColor="#FFAFCF"
-              speed={1.5}
-              noiseIntensity={0.8}
-              rotation={30}
-            />
-          </Suspense>
-        </WebGLErrorBoundary>
-      </div>
-    </>
+    <div style={WRAPPER} aria-hidden="true">
+      <WebGLErrorBoundary>
+        <Suspense fallback={<StaticFallback />}>
+          <BeamsCanvas
+            beamWidth={3}
+            beamNumber={8}
+            lightColor="#FF8FB8"
+            speed={1.5}
+            noiseIntensity={0.8}
+            rotation={30}
+          />
+        </Suspense>
+      </WebGLErrorBoundary>
+    </div>
   );
 }
