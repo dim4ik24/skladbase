@@ -134,6 +134,7 @@ export function SubscriptionPaywall({
         {plans.map((plan, index) => {
           const isCurrent = plan.code === currentPlanCode;
           const isFeatured = plan.code === featuredCode;
+          const isFree = plan.price_stars === 0 || Number(plan.price_uah) === 0;
           const features = planFeatures(plan.limits);
 
           return (
@@ -157,9 +158,11 @@ export function SubscriptionPaywall({
                         </span>
                       ) : null}
                     </div>
-                    <p className="font-mono-price text-[11px] text-text-soft">
-                      або {plan.price_stars}&nbsp;⭐
-                    </p>
+                    {!isFree ? (
+                      <p className="font-mono-price text-[11px] text-text-soft">
+                        або {plan.price_stars}&nbsp;⭐
+                      </p>
+                    ) : null}
                   </div>
                   <div className="text-right shrink-0">
                     <NumberFlow
@@ -195,6 +198,14 @@ export function SubscriptionPaywall({
                     className="w-full rounded-xl bg-bg py-2.5 text-sm font-semibold text-text-soft"
                   >
                     Поточний план
+                  </button>
+                ) : isFree ? (
+                  <button
+                    type="button"
+                    disabled
+                    className="w-full rounded-xl bg-bg py-2.5 text-sm font-semibold text-text-soft"
+                  >
+                    Безкоштовний
                   </button>
                 ) : (
                   <button

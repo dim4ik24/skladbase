@@ -127,6 +127,12 @@ async def create_stars_checkout(
 ) -> StarsCheckoutOut:
     plan = await _get_active_plan(session, payload.plan_code)
 
+    if plan.price_stars <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Безкоштовний план не потребує оплати",
+        )
+
     bot = Bot(token=settings.BOT_TOKEN)
     try:
         invoice_link = await StarsProvider(bot).create_checkout(
