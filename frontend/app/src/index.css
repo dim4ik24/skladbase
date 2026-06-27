@@ -362,12 +362,6 @@ body {
   box-shadow: 0 2px 8px rgba(52, 199, 89, 0.30);
 }
 
-/* Collapsed paywall banner */
-.banner-paywall {
-  color: #b0460e;
-  background: rgba(248, 229, 229, 0.82);
-  border-color: rgba(255, 107, 157, 0.22);
-}
 
 /* ── Paywall modal overlay ───────────────────────────────────────────── */
 .paywall-overlay {
@@ -544,6 +538,7 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-shrink: 0;
 }
 
 .variant-controls button {
@@ -572,6 +567,12 @@ body {
   opacity: 1;
   cursor: not-allowed;
   box-shadow: none;
+}
+
+.variant-controls button:last-child {
+  width: auto;
+  padding-inline: 10px;
+  font-size: 13px;
 }
 
 .variant-photo {

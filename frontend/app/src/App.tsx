@@ -361,24 +361,13 @@ export default function App() {
       ) : null}
 
       {showPaywall && shop ? (
-        <div className="modal-overlay" onClick={() => setShowPaywall(false)}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-            <button
-              type="button"
-              className="paywall-modal-close"
-              onClick={() => setShowPaywall(false)}
-              aria-label="Закрити"
-            >
-              ✕
-            </button>
-            <SubscriptionPaywall
-              plans={plans}
-              role={shop.role}
-              currentPlanCode={effectivePlanCode(shop)}
-              onCheckout={api.checkoutStars}
-            />
-          </div>
-        </div>
+        <SubscriptionPaywall
+          plans={plans}
+          role={shop.role}
+          currentPlanCode={effectivePlanCode(shop)}
+          onCheckout={api.checkoutStars}
+          onDismiss={() => setShowPaywall(false)}
+        />
       ) : null}
     </>
   );

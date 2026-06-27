@@ -1,9 +1,3 @@
-/**
- * SubscriptionPaywall — напівблокувальна модалка підписки (light fintech).
- * Монтується тільки коли !shop.is_writable. Першим показом — розгорнута
- * (portal overlay), але закривається кнопкою «Переглянути склад».
- * У згорнутому стані — стійкий банер з кнопкою «Оформити».
- */
 import { createPortal } from "react-dom";
 import { useState } from "react";
 import { Check, Lock, X } from "lucide-react";
@@ -42,7 +36,6 @@ export function SubscriptionPaywall({
   onCheckout,
   onDismiss,
 }: SubscriptionPaywallProps) {
-  const [isOpen, setIsOpen] = useState(true);
   const [checkingOutCode, setCheckingOutCode] = useState<string | null>(null);
   const [fallbackLink, setFallbackLink] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -69,24 +62,6 @@ export function SubscriptionPaywall({
     undefined,
   );
   const featuredCode = currentPlanCode ?? mostExpensive?.code;
-
-  // ── Collapsed banner ────────────────────────────────────────────────
-  if (!isOpen) {
-    return (
-      <div className="banner banner-paywall" role="status">
-        <span>Підписку призупинено — дії заблоковано</span>
-        {role === "owner" ? (
-          <button
-            type="button"
-            onClick={() => setIsOpen(true)}
-            className="rounded-xl bg-green px-3 py-1.5 text-xs font-bold text-white transition-opacity duration-150 hover:opacity-85"
-          >
-            Оформити
-          </button>
-        ) : null}
-      </div>
-    );
-  }
 
   // ── Manager content (no plans, no payment) ──────────────────────────
   const managerContent = (
@@ -235,13 +210,14 @@ export function SubscriptionPaywall({
     </>
   );
 
-  // ── Expanded modal (portal) ─────────────────────────────────────────
+  // ── Modal (portal) ─────────────────────────────────────────────────
   return createPortal(
     <div
       className="paywall-overlay"
       role="dialog"
       aria-modal="true"
       aria-label="Оберіть тариф"
+      onClick={onDismiss}
     >
       <motion.div
         className="paywall-sheet"
@@ -252,16 +228,17 @@ export function SubscriptionPaywall({
             ? { duration: 0 }
             : { type: "spring", bounce: 0.08, duration: 0.45 }
         }
+        onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-end mb-3">
           <button
             type="button"
-            aria-label="Переглянути склад"
-            onClick={() => (onDismiss ? onDismiss() : setIsOpen(false))}
+            aria-label="Закрити"
+            onClick={onDismiss}
             className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold text-text-soft transition-colors duration-150 hover:bg-bg hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green"
           >
             <X size={13} aria-hidden="true" />
-            Переглянути склад
+            Закрити
           </button>
         </div>
 

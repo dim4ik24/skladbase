@@ -66,7 +66,7 @@ export function SettingsScreen({ shop, onOpenPaywall }: SettingsScreenProps) {
           </div>
         ) : null}
 
-        {shop?.role === "owner" && shop.is_writable ? (
+        {shop?.role === "owner" ? (
           <button
             type="button"
             onClick={onOpenPaywall}
@@ -78,12 +78,6 @@ export function SettingsScreen({ shop, onOpenPaywall }: SettingsScreenProps) {
           >
             Змінити тариф
           </button>
-        ) : null}
-
-        {!shop?.is_writable ? (
-          <p className="text-xs text-text-soft mt-2 text-center">
-            Підписку призупинено — оберіть тариф у вікні вище
-          </p>
         ) : null}
       </div>
 
