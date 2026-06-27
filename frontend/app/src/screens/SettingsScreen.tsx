@@ -1,26 +1,9 @@
+import { currentPlanLabel } from "../lib/planStatus";
 import type { Shop } from "../types";
 
 interface SettingsScreenProps {
   shop: Shop | null;
   onOpenPaywall: () => void;
-}
-
-function currentPlanLabel(shop: Shop): string {
-  if (
-    shop.plan_code != null &&
-    shop.plan_code !== "free" &&
-    (shop.status === "active" || shop.status === "canceled" || shop.status === "past_due")
-  ) {
-    return shop.plan_code.charAt(0).toUpperCase() + shop.plan_code.slice(1);
-  }
-  if (
-    shop.status === "trial" &&
-    shop.trial_ends_at != null &&
-    new Date(shop.trial_ends_at) > new Date()
-  ) {
-    return "Пробний період";
-  }
-  return "Безкоштовний";
 }
 
 const STATUS_LABELS: Record<string, { label: string; colorClass: string }> = {

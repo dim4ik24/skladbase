@@ -14,6 +14,7 @@ import { errorMessage } from "./errors";
 import { DashboardScreen } from "./screens/DashboardScreen";
 import { SettingsScreen } from "./screens/SettingsScreen";
 import { SkladScreen } from "./screens/SkladScreen";
+import { effectivePlanCode } from "./lib/planStatus";
 import { initTelegram, setAccentColor } from "./telegram";
 import type {
   Plan,
@@ -373,7 +374,7 @@ export default function App() {
             <SubscriptionPaywall
               plans={plans}
               role={shop.role}
-              currentPlanCode={shop.plan_code ?? undefined}
+              currentPlanCode={effectivePlanCode(shop)}
               onCheckout={api.checkoutStars}
             />
           </div>
