@@ -5,6 +5,9 @@ SkladBase — публічний каталог магазину (Стадія 4
 тут — JSON під ним). Read-only і нічого службового назовні: ані
 on_hand/reserved/low_stock_threshold, ані SKU — лише те, що бачить покупець
 (назва товару, ціна, axis_values, in_stock). Не світити рівні складу.
+
+Галерея товару (F2): показуємо лише якщо план магазину дозволяє фото
+(photos: true). На free — порожній список (фото і так не могли завантажитись).
 """
 from __future__ import annotations
 
@@ -19,7 +22,7 @@ from sqlalchemy.orm import selectinload
 from app.db import get_session
 from app.models import Product, Shop
 from app.security.rate_limit import InMemoryRateLimiter, rate_limited
-from app.services.catalog import frozen_product_ids
+from app.services.catalog import current_plan_limits, frozen_product_ids
 
 router = APIRouter(prefix="/api/public", tags=["public"])
 
@@ -36,9 +39,15 @@ class PublicVariantOut(BaseModel):
     in_stock: bool
 
 
+class PublicPhotoOut(BaseModel):
+    url: str
+    position: int
+
+
 class PublicProductOut(BaseModel):
     name: str
     variants: list[PublicVariantOut]
+    photos: list[PublicPhotoOut] = []
 
 
 class PublicShopOut(BaseModel):
@@ -64,13 +73,16 @@ async def get_public_catalog(
     products = (
         await session.scalars(
             select(Product)
-            .options(selectinload(Product.variants))
+            .options(selectinload(Product.variants), selectinload(Product.photos))
             .where(Product.shop_id == shop.id, Product.archived.is_(False))
             .order_by(Product.id)
         )
     ).all()
 
     frozen = await frozen_product_ids(shop.id, session)
+    limits = await current_plan_limits(shop.id, session)
+    photos_enabled = bool(limits.get("photos"))
+
     visible_products = [p for p in products if p.id not in frozen]
 
     return PublicShopOut(
@@ -88,6 +100,10 @@ async def get_public_catalog(
                     )
                     for variant in product.variants
                 ],
+                photos=sorted(
+                    [PublicPhotoOut(url=ph.url, position=ph.position) for ph in product.photos],
+                    key=lambda ph: ph.position,
+                ) if photos_enabled else [],
             )
             for product in visible_products
         ],

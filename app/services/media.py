@@ -66,12 +66,24 @@ def _compress_to_webp(data: bytes) -> bytes:
     return buffer.getvalue()
 
 
-def _build_key(shop_id: int, variant_id: int) -> str:
-    return f"shops/{shop_id}/{variant_id}/{uuid.uuid4()}.webp"
+def _build_key(key_prefix: str) -> str:
+    return f"{key_prefix}/{uuid.uuid4()}.webp"
 
 
 def _public_url(key: str) -> str:
     return f"{settings.R2_PUBLIC_URL.rstrip('/')}/{key}"
+
+
+def _r2_client():
+    """aioboto3 S3-клієнт для R2 (context manager)."""
+    session = aioboto3.Session()
+    return session.client(
+        "s3",
+        endpoint_url=f"https://{settings.R2_ACCOUNT_ID}.r2.cloudflarestorage.com",
+        aws_access_key_id=settings.R2_ACCESS_KEY,
+        aws_secret_access_key=settings.R2_SECRET_KEY,
+        region_name="auto",
+    )
 
 
 def max_upload_bytes() -> int:
@@ -102,22 +114,17 @@ async def read_capped(file: UploadFile, max_bytes: int) -> bytes:
     return b"".join(chunks)
 
 
-async def upload_variant_photo(
-    *, shop_id: int, variant_id: int, content_type: str, data: bytes
-) -> str:
-    """Валідує, стискає у WebP і вантажить у R2. Повертає публічний URL."""
+async def upload_photo(*, key_prefix: str, content_type: str, data: bytes) -> str:
+    """Валідує, стискає у WebP і вантажить у R2. Повертає публічний URL.
+
+    `key_prefix` визначає шлях в R2: для варіантів — `shops/{shop_id}/{variant_id}`,
+    для галереї товару — `shops/{shop_id}/products/{product_id}`.
+    """
     _validate(content_type, data)
     compressed = _compress_to_webp(data)
-    key = _build_key(shop_id, variant_id)
+    key = _build_key(key_prefix)
 
-    session = aioboto3.Session()
-    async with session.client(
-        "s3",
-        endpoint_url=f"https://{settings.R2_ACCOUNT_ID}.r2.cloudflarestorage.com",
-        aws_access_key_id=settings.R2_ACCESS_KEY,
-        aws_secret_access_key=settings.R2_SECRET_KEY,
-        region_name="auto",
-    ) as s3:
+    async with _r2_client() as s3:
         await s3.put_object(
             Bucket=settings.R2_BUCKET,
             Key=key,
@@ -126,3 +133,31 @@ async def upload_variant_photo(
         )
 
     return _public_url(key)
+
+
+async def upload_variant_photo(
+    *, shop_id: int, variant_id: int, content_type: str, data: bytes
+) -> str:
+    """Валідує, стискає у WebP і вантажить у R2. Повертає публічний URL."""
+    return await upload_photo(
+        key_prefix=f"shops/{shop_id}/{variant_id}",
+        content_type=content_type,
+        data=data,
+    )
+
+
+async def delete_photo(url: str) -> None:
+    """Best-effort видалення об'єкта з R2.
+
+    Витягує R2-ключ з публічного URL, викликає delete_object. Всі помилки
+    ігноруються — R2-orphan прибирається best-effort, не критичний шлях.
+    """
+    base = settings.R2_PUBLIC_URL.rstrip("/") + "/"
+    if not url.startswith(base):
+        return
+    key = url[len(base):]
+    try:
+        async with _r2_client() as s3:
+            await s3.delete_object(Bucket=settings.R2_BUCKET, Key=key)
+    except Exception:
+        pass

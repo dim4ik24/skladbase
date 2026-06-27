@@ -278,5 +278,5 @@ async def create_product_with_variants(
         ) from exc
 
     await session.commit()
-    await session.refresh(product, attribute_names=["variants"])
+    await session.refresh(product, attribute_names=["variants", "photos"])
     return product

@@ -243,6 +243,9 @@ class Product(Base):
     variants: Mapped[list["Variant"]] = relationship(
         back_populates="product", cascade="all, delete-orphan"
     )
+    photos: Mapped[list["ProductPhoto"]] = relationship(
+        back_populates="product", cascade="all, delete-orphan"
+    )
 
 
 class Variant(Base):
@@ -283,6 +286,28 @@ class Variant(Base):
     @available.expression  # type: ignore[no-redef]
     def available(cls) -> int:
         return cls.on_hand - cls.reserved
+
+
+# --------------------------------------------------------------------------- #
+#  Галерея фото товару (F2)                                                   #
+# --------------------------------------------------------------------------- #
+class ProductPhoto(Base):
+    """Одне фото в галереї товару. До 10 на товар (enforce в API-шарі).
+
+    Tenant-ізоляція через product.shop_id — окремий shop_id не зберігаємо
+    (JOIN через product достатній і не дублює дані).
+    """
+    __tablename__ = "product_photos"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    product_id: Mapped[int] = mapped_column(
+        ForeignKey("products.id", ondelete="CASCADE"), index=True
+    )
+    url: Mapped[str] = mapped_column(String(500))
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    product: Mapped["Product"] = relationship(back_populates="photos")
 
 
 # --------------------------------------------------------------------------- #

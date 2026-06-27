@@ -11,14 +11,14 @@ from decimal import Decimal
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.db import get_session
 from app.deps import require_member, require_owner, require_writable
-from app.models import Membership, Product, ProductTemplate, TemplateCode, Variant
+from app.models import Membership, Product, ProductPhoto, ProductTemplate, TemplateCode, Variant
 from app.services import catalog as catalog_service
 from app.services import media as media_service
 from app.services import templates as templates_service
@@ -86,6 +86,14 @@ class ProductPatch(BaseModel):
     archived: bool | None = None
 
 
+class PhotoOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    url: str
+    position: int
+
+
 class ProductOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -98,6 +106,7 @@ class ProductOut(BaseModel):
     archived: bool
     variants: list[VariantOut]
     is_frozen: bool = False
+    photos: list[PhotoOut] = []
 
 
 # --------------------------------------------------------------------------- #
@@ -204,7 +213,7 @@ async def list_products(
     products = (
         await session.scalars(
             select(Product)
-            .options(selectinload(Product.variants))
+            .options(selectinload(Product.variants), selectinload(Product.photos))
             .where(Product.shop_id == membership.shop_id, Product.archived.is_(False))
             .order_by(Product.id)
         )
@@ -216,6 +225,10 @@ async def list_products(
     for p in products:
         out = ProductOut.model_validate(p)
         out.is_frozen = p.id in frozen
+        out.photos = sorted(
+            [PhotoOut.model_validate(ph) for ph in p.photos],
+            key=lambda ph: ph.position,
+        )
         result.append(out)
     return result
 
@@ -249,7 +262,7 @@ async def patch_product(
         setattr(product, field_name, value)
 
     await session.commit()
-    await session.refresh(product, attribute_names=["variants"])
+    await session.refresh(product, attribute_names=["variants", "photos"])
     return product
 
 
@@ -320,3 +333,94 @@ async def upload_variant_photo(
     await session.commit()
     await session.refresh(variant)
     return variant
+
+
+# --------------------------------------------------------------------------- #
+#  Галерея фото товару (F2)
+# --------------------------------------------------------------------------- #
+@router.post(
+    "/products/{product_id}/photos",
+    response_model=PhotoOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_product_photo(
+    product_id: int,
+    request: Request,
+    file: UploadFile = File(...),
+    membership: Membership = Depends(require_writable),
+    session: AsyncSession = Depends(get_session),
+) -> ProductPhoto:
+    product = await _get_owned_product(session, membership.shop_id, product_id)
+
+    try:
+        await catalog_service.enforce_product_writable(product.id, membership.shop_id, session)
+        await catalog_service.enforce_photos_allowed(membership.shop_id, session)
+    except catalog_service.CatalogError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+    photo_count = await session.scalar(
+        select(func.count(ProductPhoto.id)).where(ProductPhoto.product_id == product_id)
+    )
+    if (photo_count or 0) >= 10:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Максимум 10 фото на товар"
+        )
+
+    max_bytes = media_service.max_upload_bytes()
+    content_length = request.headers.get("content-length")
+    if content_length is not None:
+        try:
+            declared_size = int(content_length)
+        except ValueError:
+            declared_size = None
+        if declared_size is not None and declared_size > max_bytes:
+            raise HTTPException(
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                detail=f"Файл занадто великий: максимум {settings.MAX_PHOTO_UPLOAD_MB} МБ.",
+            )
+
+    try:
+        data = await media_service.read_capped(file, max_bytes)
+        url = await media_service.upload_photo(
+            key_prefix=f"shops/{membership.shop_id}/products/{product_id}",
+            content_type=file.content_type or "",
+            data=data,
+        )
+    except media_service.MediaError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+    max_pos = await session.scalar(
+        select(func.max(ProductPhoto.position)).where(ProductPhoto.product_id == product_id)
+    )
+    next_position = (max_pos + 1) if max_pos is not None else 0
+
+    photo = ProductPhoto(product_id=product_id, url=url, position=next_position)
+    session.add(photo)
+    await session.commit()
+    await session.refresh(photo)
+    return photo
+
+
+@router.delete(
+    "/products/{product_id}/photos/{photo_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_product_photo(
+    product_id: int,
+    photo_id: int,
+    membership: Membership = Depends(require_member),
+    session: AsyncSession = Depends(get_session),
+) -> None:
+    product = await _get_owned_product(session, membership.shop_id, product_id)
+
+    photo = await session.scalar(
+        select(ProductPhoto).where(
+            ProductPhoto.id == photo_id, ProductPhoto.product_id == product.id
+        )
+    )
+    if photo is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Фото не знайдено")
+
+    await media_service.delete_photo(photo.url)
+    await session.delete(photo)
+    await session.commit()
