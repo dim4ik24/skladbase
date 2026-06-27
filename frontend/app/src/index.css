@@ -432,8 +432,8 @@ body {
 /* ── Catalog grid ────────────────────────────────────────────────────── */
 .product-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
   position: relative; /* required for GSAP Flip absolute:true */
 }
 
@@ -570,6 +570,7 @@ body {
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
 .variant-controls button {
