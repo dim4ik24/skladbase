@@ -1,13 +1,17 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import type { FormEvent } from "react";
 import { errorMessage } from "../errors";
 import type { ProductInput, Template, TemplateField, VariantInput } from "../types";
 import { Panel } from "./ui/Panel";
+import { TemplateBuilderModal } from "./TemplateBuilderModal";
 
 interface ProductFormModalProps {
   templates: Template[];
   onSubmit: (payload: ProductInput) => Promise<void>;
   onClose: () => void;
+  isOwner?: boolean;
+  onTemplateAdded?: (template: Template) => void;
 }
 
 interface VariantRowState {
@@ -29,7 +33,13 @@ function emptyRow(axes: TemplateField[]): VariantRowState {
   return { axisValues: defaultAxisValues(axes), price: "", onHand: "0", sku: "" };
 }
 
-export function ProductFormModal({ templates, onSubmit, onClose }: ProductFormModalProps) {
+export function ProductFormModal({
+  templates,
+  onSubmit,
+  onClose,
+  isOwner,
+  onTemplateAdded,
+}: ProductFormModalProps) {
   const [templateId, setTemplateId] = useState<string>("");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -38,16 +48,27 @@ export function ProductFormModal({ templates, onSubmit, onClose }: ProductFormMo
   const [rows, setRows] = useState<VariantRowState[]>([emptyRow([])]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [localTemplates, setLocalTemplates] = useState<Template[]>(templates);
+  const [showBuilder, setShowBuilder] = useState(false);
 
-  const selectedTemplate = templates.find((t) => String(t.id) === templateId) ?? null;
+  const selectedTemplate = localTemplates.find((t) => String(t.id) === templateId) ?? null;
   const axes = selectedTemplate?.field_schema.variant_axes ?? [];
   const attributeFields = selectedTemplate?.field_schema.attributes ?? [];
 
   function handleTemplateChange(value: string) {
     setTemplateId(value);
-    const template = templates.find((t) => String(t.id) === value) ?? null;
+    const template = localTemplates.find((t) => String(t.id) === value) ?? null;
     setRows([emptyRow(template?.field_schema.variant_axes ?? [])]);
     setAttributeValues({});
+  }
+
+  function handleBuilderSave(template: Template) {
+    setLocalTemplates((prev) => [...prev, template]);
+    setTemplateId(String(template.id));
+    setRows([emptyRow(template.field_schema.variant_axes)]);
+    setAttributeValues({});
+    setShowBuilder(false);
+    onTemplateAdded?.(template);
   }
 
   function updateRow(index: number, patch: Partial<VariantRowState>) {
@@ -128,13 +149,23 @@ export function ProductFormModal({ templates, onSubmit, onClose }: ProductFormMo
               onChange={(event) => handleTemplateChange(event.target.value)}
             >
               <option value="">Без шаблону</option>
-              {templates.map((template) => (
+              {localTemplates.map((template) => (
                 <option key={template.id} value={template.id}>
                   {template.name}
                 </option>
               ))}
             </select>
           </label>
+
+          {isOwner ? (
+            <button
+              type="button"
+              className="link-button"
+              onClick={() => setShowBuilder(true)}
+            >
+              + Створити свій тип
+            </button>
+          ) : null}
 
           <label className="form-field">
             <span>Назва</span>
@@ -268,6 +299,16 @@ export function ProductFormModal({ templates, onSubmit, onClose }: ProductFormMo
           </div>
         </form>
       </Panel>
+
+      {showBuilder
+        ? createPortal(
+            <TemplateBuilderModal
+              onSave={handleBuilderSave}
+              onClose={() => setShowBuilder(false)}
+            />,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

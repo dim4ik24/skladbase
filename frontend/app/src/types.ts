@@ -70,6 +70,7 @@ export interface Template {
   code: string;
   name: string;
   field_schema: TemplateFieldSchema;
+  shop_id?: number | null;
 }
 
 export interface VariantInput {

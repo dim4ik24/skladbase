@@ -48,6 +48,8 @@ interface SkladScreenProps {
   onFrozenAction: () => void;
   onAddAtLimit: () => void;
   scrollContainerRef: RefObject<HTMLDivElement | null>;
+  isOwner?: boolean;
+  onTemplateAdded?: (template: Template) => void;
 }
 
 export function SkladScreen({
@@ -71,6 +73,8 @@ export function SkladScreen({
   onFrozenAction,
   onAddAtLimit,
   scrollContainerRef,
+  isOwner,
+  onTemplateAdded,
 }: SkladScreenProps) {
   const [query, setQuery] = useState("");
   const [sortField, setSortField] = useState<SortField>("date");
@@ -267,6 +271,8 @@ export function SkladScreen({
           templates={templates}
           onSubmit={handleSubmitCreate}
           onClose={() => setShowProductForm(false)}
+          isOwner={isOwner}
+          onTemplateAdded={onTemplateAdded}
         />
       ) : null}
     </>

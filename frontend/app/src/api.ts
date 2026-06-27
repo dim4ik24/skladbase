@@ -141,6 +141,13 @@ export function checkoutStars(planCode: string): Promise<{ invoice_link: string 
   });
 }
 
+export function createTemplate(name: string, field_schema: Record<string, unknown>): Promise<Template> {
+  return request<Template>("/api/templates", {
+    method: "POST",
+    body: JSON.stringify({ name, field_schema }),
+  });
+}
+
 export function clearDemos(): Promise<{ removed: number }> {
   return request<{ removed: number }>("/api/shop/clear-demos", { method: "POST" });
 }

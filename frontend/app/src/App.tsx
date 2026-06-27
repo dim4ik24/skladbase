@@ -330,6 +330,8 @@ export default function App() {
               })
             }
             scrollContainerRef={scrollContainerRef}
+            isOwner={shop?.role === "owner"}
+            onTemplateAdded={(t) => setTemplates((prev) => [...prev, t])}
           />
         ) : activeTab === "dashboard" ? (
           <DashboardScreen

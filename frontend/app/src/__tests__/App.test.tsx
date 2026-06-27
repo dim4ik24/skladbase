@@ -17,6 +17,7 @@ vi.mock("../api", () => ({
   getMe: vi.fn(),
   getProducts: vi.fn(),
   getTemplates: vi.fn(),
+  createTemplate: vi.fn(),
   getReservations: vi.fn(),
   getPlans: vi.fn(),
   restock: vi.fn(),
@@ -126,6 +127,7 @@ beforeEach(() => {
   vi.mocked(api.getMe).mockReset();
   vi.mocked(api.getProducts).mockReset();
   vi.mocked(api.getTemplates).mockReset().mockResolvedValue([]);
+  vi.mocked(api.createTemplate).mockReset();
   vi.mocked(api.getReservations).mockReset().mockResolvedValue([]);
   vi.mocked(api.getPlans).mockReset().mockResolvedValue([]);
   vi.mocked(api.restock).mockReset();
