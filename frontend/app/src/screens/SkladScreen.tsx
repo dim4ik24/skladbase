@@ -3,7 +3,7 @@ import { Flip } from "gsap/Flip";
 import { useLayoutEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { ProductCard } from "../components/ProductCard";
-import { ProductFormModal } from "../components/ProductFormModal";
+import { ProductModal } from "../components/ProductModal";
 import { ReservationsPanel } from "../components/ReservationsPanel";
 import { ScrollFloat } from "../components/ScrollFloat";
 import { Panel } from "../components/ui/Panel";
@@ -43,7 +43,7 @@ interface SkladScreenProps {
   onReserve: (variantId: number, payload: ReserveInput) => Promise<void>;
   onRelease: (id: number) => Promise<void>;
   onFulfill: (id: number) => Promise<void>;
-  onCreateProduct: (payload: ProductInput) => Promise<void>;
+  onCreateProduct: (payload: ProductInput) => Promise<Product>;
   onUpdateProduct: (productId: number, patch: ProductPatch) => Promise<void>;
   onFrozenAction: () => void;
   onAddAtLimit: () => void;
@@ -85,8 +85,10 @@ export function SkladScreen({
   const [query, setQuery] = useState("");
   const [sortField, setSortField] = useState<SortField>("date");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-  const [showProductForm, setShowProductForm] = useState(false);
   const [showReservations, setShowReservations] = useState(false);
+
+  // null = modal closed; "create" = create mode; Product = edit mode
+  const [modalProduct, setModalProduct] = useState<Product | "create" | null>(null);
 
   const wrapperRef = useRef<HTMLDivElement>(null);
   const flipStateRef = useRef<ReturnType<typeof Flip.getState> | null>(null);
@@ -156,7 +158,6 @@ export function SkladScreen({
 
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
-    // scope обмежений wrapperRef — НЕ gsap.utils.toArray по всьому document
     const items = wrapperRef.current.querySelectorAll<Element>("[data-flip]");
 
     Flip.from(state, {
@@ -173,11 +174,6 @@ export function SkladScreen({
       },
     });
   }, [query, sortField, sortDir]);
-
-  async function handleSubmitCreate(payload: ProductInput) {
-    await onCreateProduct(payload);
-    setShowProductForm(false);
-  }
 
   return (
     <>
@@ -199,7 +195,7 @@ export function SkladScreen({
           aria-disabled={atLimit}
           onClick={() => {
             if (atLimit) { onAddAtLimit(); return; }
-            setShowProductForm(true);
+            setModalProduct("create");
           }}
         >
           Додати товар
@@ -265,23 +261,25 @@ export function SkladScreen({
                 onAdjust={onAdjust}
                 onUploadPhoto={onUploadPhoto}
                 onReserve={onReserve}
-                onUpdateProduct={onUpdateProduct}
-                photosAllowed={photosAllowed}
-                onUploadProductPhoto={onUploadProductPhoto}
-                onDeleteProductPhoto={onDeleteProductPhoto}
+                onEdit={(p) => setModalProduct(p)}
               />
             </div>
           ))}
         </div>
       )}
 
-      {showProductForm ? (
-        <ProductFormModal
+      {modalProduct !== null ? (
+        <ProductModal
+          product={modalProduct === "create" ? null : modalProduct}
           templates={templates}
-          onSubmit={handleSubmitCreate}
-          onClose={() => setShowProductForm(false)}
+          photosAllowed={photosAllowed}
           isOwner={isOwner}
           onTemplateAdded={onTemplateAdded}
+          onCreateProduct={onCreateProduct}
+          onUpdateProduct={onUpdateProduct}
+          onUploadProductPhoto={onUploadProductPhoto}
+          onDeleteProductPhoto={onDeleteProductPhoto}
+          onClose={() => setModalProduct(null)}
         />
       ) : null}
     </>

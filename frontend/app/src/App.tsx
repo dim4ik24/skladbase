@@ -124,16 +124,16 @@ export default function App() {
     }
   }
 
-  async function handleCreateProduct(payload: ProductInput): Promise<void> {
+  async function handleCreateProduct(payload: ProductInput): Promise<Product> {
     try {
       const product = await api.createProduct(payload);
       setProducts((prev) => [...prev, product]);
+      return product;
     } catch (err) {
       if (err instanceof ApiError && err.status === 402) {
         setUpgradePrompt({ message: err.detail });
-      } else {
-        throw err;
       }
+      throw err;
     }
   }
 

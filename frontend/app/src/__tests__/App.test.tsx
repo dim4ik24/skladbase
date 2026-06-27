@@ -308,7 +308,7 @@ describe("Add product form", () => {
     fireEvent.change(screen.getByLabelText("Назва"), { target: { value: "Свічка" } });
     fireEvent.change(screen.getByLabelText("Ціна"), { target: { value: "120" } });
 
-    fireEvent.click(screen.getByRole("button", { name: "Зберегти" }));
+    fireEvent.click(screen.getByRole("button", { name: "Створити" }));
 
     await waitFor(() => {
       expect(api.createProduct).toHaveBeenCalledWith({
@@ -352,7 +352,7 @@ describe("Add product form", () => {
     fireEvent.change(secondRow.getByLabelText("Колір"), { target: { value: "Білий" } });
     fireEvent.change(secondRow.getByLabelText("Ціна"), { target: { value: "320" } });
 
-    fireEvent.click(screen.getByRole("button", { name: "Зберегти" }));
+    fireEvent.click(screen.getByRole("button", { name: "Створити" }));
 
     await waitFor(() => {
       expect(api.createProduct).toHaveBeenCalledWith({

@@ -1141,6 +1141,14 @@ body {
   position: relative;
 }
 
+/* ── ProductModal: phase 2 success notice ────────────────────────────── */
+.product-modal-success {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--green-deep);
+  margin: 0 0 14px;
+}
+
 /* ── Product photo gallery (F2) ─────────────────────────────────────── */
 .photo-gallery-section {
   margin-top: 8px;
