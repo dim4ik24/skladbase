@@ -7,8 +7,8 @@ interface BottomTabBarProps {
 }
 
 const TABS: { id: TabId; label: string; Icon: typeof Package }[] = [
-  { id: "sklad", label: "Склад", Icon: Package },
   { id: "dashboard", label: "Дашборд", Icon: LayoutGrid },
+  { id: "sklad", label: "Склад", Icon: Package },
   { id: "settings", label: "Налаштування", Icon: Settings },
 ];
 

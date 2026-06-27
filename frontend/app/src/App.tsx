@@ -38,7 +38,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [clearingDemos, setClearingDemos] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabId>("sklad");
+  const [activeTab, setActiveTab] = useState<TabId>("dashboard");
   const [showPaywall, setShowPaywall] = useState(false);
   const [upgradePrompt, setUpgradePrompt] = useState<{ message: string } | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);

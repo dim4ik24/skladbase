@@ -142,6 +142,12 @@ beforeEach(() => {
   document.documentElement.style.removeProperty("--accent-color");
 });
 
+// Default tab is Dashboard; navigate to Sklad when tests need catalog content.
+async function goToSklad() {
+  await screen.findByText("Тестовий магазин");
+  fireEvent.click(screen.getByRole("tab", { name: "Склад" }));
+}
+
 describe("App catalog screen", () => {
   it("renders products from the API: photo placeholder, name, price, stock", async () => {
     vi.mocked(api.getMe).mockResolvedValue(shopFixture);
@@ -153,6 +159,7 @@ describe("App catalog screen", () => {
     ]);
 
     render(<App />);
+    await goToSklad();
 
     expect(await screen.findByText("Футболка")).toBeInTheDocument();
     expect(screen.getByText("450.00 ₴")).toBeInTheDocument();
@@ -170,6 +177,7 @@ describe("App catalog screen", () => {
     ]);
 
     render(<App />);
+    await goToSklad();
 
     const image = await screen.findByRole("img", { name: "Футболка" });
     expect(image).toHaveAttribute("src", "https://cdn.example.test/photo.webp");
@@ -204,6 +212,7 @@ describe("App catalog screen", () => {
     ]);
 
     render(<App />);
+    await goToSklad();
 
     expect(await screen.findByText("мало")).toBeInTheDocument();
     expect(screen.getByText("нема")).toBeInTheDocument();
@@ -217,6 +226,7 @@ describe("App catalog screen", () => {
     ]);
 
     render(<App />);
+    await goToSklad();
     await screen.findByText("Футболка");
     expect(screen.getByText("Свічка")).toBeInTheDocument();
 
@@ -233,6 +243,7 @@ describe("App catalog screen", () => {
     vi.mocked(api.restock).mockResolvedValue({ ...variant, on_hand: 6, available: 6 });
 
     render(<App />);
+    await goToSklad();
     await screen.findByTestId("available-41");
 
     fireEvent.click(screen.getByLabelText("Збільшити залишок: SKU-41"));
@@ -250,6 +261,7 @@ describe("App catalog screen", () => {
     vi.mocked(api.adjust).mockResolvedValue({ ...variant, on_hand: 4, available: 4 });
 
     render(<App />);
+    await goToSklad();
     await screen.findByTestId("available-42");
 
     fireEvent.click(screen.getByLabelText("Зменшити залишок: SKU-42"));
@@ -266,6 +278,7 @@ describe("App catalog screen", () => {
     vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ variants: [variant] })]);
 
     render(<App />);
+    await goToSklad();
     await screen.findByTestId("available-43");
 
     expect(screen.getByLabelText("Зменшити залишок: SKU-43")).toBeDisabled();
@@ -281,7 +294,7 @@ describe("Add product form", () => {
     vi.mocked(api.createProduct).mockResolvedValue(created);
 
     render(<App />);
-    await screen.findByText("Тестовий магазин");
+    await goToSklad();
 
     fireEvent.click(screen.getByRole("button", { name: "Додати товар" }));
 
@@ -310,7 +323,7 @@ describe("Add product form", () => {
     vi.mocked(api.createProduct).mockResolvedValue(makeProduct({ id: 5, name: "Футболка" }));
 
     render(<App />);
-    await screen.findByText("Тестовий магазин");
+    await goToSklad();
 
     fireEvent.click(screen.getByRole("button", { name: "Додати товар" }));
     fireEvent.change(screen.getByLabelText("Шаблон"), { target: { value: "7" } });
@@ -360,6 +373,7 @@ describe("Variant photo upload", () => {
     });
 
     render(<App />);
+    await goToSklad();
     await screen.findByTestId("available-51");
 
     const file = new File(["data"], "photo.png", { type: "image/png" });
@@ -384,6 +398,7 @@ describe("Variant photo upload", () => {
     );
 
     render(<App />);
+    await goToSklad();
     await screen.findByTestId("available-52");
 
     const file = new File(["data"], "photo.png", { type: "image/png" });
@@ -407,6 +422,7 @@ describe("Reservations", () => {
     vi.mocked(api.reserve).mockResolvedValue(reservation);
 
     render(<App />);
+    await goToSklad();
     await screen.findByTestId("available-61");
 
     fireEvent.click(screen.getByRole("button", { name: "Відклади" }));
@@ -443,6 +459,7 @@ describe("Reservations", () => {
     });
 
     render(<App />);
+    await goToSklad();
     await screen.findByTestId("available-71");
 
     fireEvent.click(screen.getByRole("button", { name: "Резерви (1)" }));
@@ -469,6 +486,7 @@ describe("Reservations", () => {
     });
 
     render(<App />);
+    await goToSklad();
     await screen.findByTestId("available-81");
 
     fireEvent.click(screen.getByRole("button", { name: "Резерви (1)" }));
@@ -521,7 +539,7 @@ describe("Free plan limits and upgrade prompt", () => {
     vi.mocked(api.getProducts).mockResolvedValue([]);
 
     render(<App />);
-    await screen.findByText("Тестовий магазин");
+    await goToSklad();
 
     expect(screen.getByText("3/5 активних")).toBeInTheDocument();
   });
@@ -545,7 +563,7 @@ describe("Free plan limits and upgrade prompt", () => {
     vi.mocked(api.getProducts).mockResolvedValue([]);
 
     render(<App />);
-    await screen.findByText("Тестовий магазин");
+    await goToSklad();
 
     fireEvent.click(screen.getByRole("button", { name: "Додати товар" }));
 
@@ -563,6 +581,7 @@ describe("Free plan limits and upgrade prompt", () => {
     );
 
     render(<App />);
+    await goToSklad();
     await screen.findByTestId("available-101");
 
     fireEvent.click(screen.getByLabelText("Збільшити залишок: SKU-101"));
@@ -581,6 +600,7 @@ describe("Free plan limits and upgrade prompt", () => {
     );
 
     render(<App />);
+    await goToSklad();
     await screen.findByTestId("available-102");
 
     fireEvent.click(screen.getByLabelText("Збільшити залишок: SKU-102"));
@@ -604,6 +624,7 @@ describe("Free plan limits and upgrade prompt", () => {
     );
 
     render(<App />);
+    await goToSklad();
     await screen.findByTestId("available-103");
 
     fireEvent.click(screen.getByLabelText("Збільшити залишок: SKU-103"));
@@ -626,6 +647,7 @@ describe("Frozen products", () => {
     ]);
 
     render(<App />);
+    await goToSklad();
     await screen.findByText("Заморожений товар");
 
     expect(screen.getByText("Заморожено")).toBeInTheDocument();
@@ -639,6 +661,7 @@ describe("Frozen products", () => {
     ]);
 
     render(<App />);
+    await goToSklad();
     await screen.findByTestId("available-111");
 
     fireEvent.click(screen.getByLabelText("Збільшити залишок: SKU-111"));
@@ -666,6 +689,7 @@ describe("Demo banner", () => {
     vi.mocked(api.clearDemos).mockResolvedValue({ removed: 1 });
 
     render(<App />);
+    await goToSklad();
     await screen.findByText("Демо товар");
 
     expect(screen.getByText(/Це приклади/)).toBeInTheDocument();
@@ -689,6 +713,7 @@ describe("Demo banner", () => {
     ]);
 
     render(<App />);
+    await goToSklad();
     await screen.findByText("Демо товар");
 
     expect(screen.getByText(/Це приклади/)).toBeInTheDocument();
@@ -697,30 +722,30 @@ describe("Demo banner", () => {
 });
 
 describe("Tab navigation", () => {
-  it("renders Склад screen by default with search input and catalog section", async () => {
-    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
-    vi.mocked(api.getProducts).mockResolvedValue([makeProduct()]);
-
-    render(<App />);
-    await screen.findByText("Футболка");
-
-    expect(screen.getByLabelText("Пошук товарів")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Додати товар" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Склад" })).toHaveAttribute("aria-selected", "true");
-  });
-
-  it("switches to Дашборд tab and shows MetricCarousel, hides catalog search", async () => {
+  it("renders Дашборд screen by default with MetricCarousel", async () => {
     vi.mocked(api.getMe).mockResolvedValue(shopFixture);
     vi.mocked(api.getProducts).mockResolvedValue([]);
 
     render(<App />);
-    await screen.findByText("Тестовий магазин");
-
-    fireEvent.click(screen.getByRole("tab", { name: "Дашборд" }));
 
     await screen.findByText("Товари");
     expect(screen.getByRole("tab", { name: "Дашборд" })).toHaveAttribute("aria-selected", "true");
     expect(screen.queryByLabelText("Пошук товарів")).not.toBeInTheDocument();
+  });
+
+  it("switches to Склад tab and shows search input and catalog section", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([makeProduct()]);
+
+    render(<App />);
+    await screen.findByText("Тестовий магазин");
+
+    fireEvent.click(screen.getByRole("tab", { name: "Склад" }));
+
+    await screen.findByText("Футболка");
+    expect(screen.getByLabelText("Пошук товарів")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Додати товар" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Склад" })).toHaveAttribute("aria-selected", "true");
   });
 
   it("switches to Налаштування tab and shows subscription info", async () => {
