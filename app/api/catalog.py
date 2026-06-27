@@ -17,10 +17,11 @@ from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.db import get_session
-from app.deps import require_member, require_writable
+from app.deps import require_member, require_owner, require_writable
 from app.models import Membership, Product, ProductTemplate, TemplateCode, Variant
 from app.services import catalog as catalog_service
 from app.services import media as media_service
+from app.services import templates as templates_service
 
 router = APIRouter(prefix="/api", tags=["catalog"])
 
@@ -35,6 +36,17 @@ class TemplateOut(BaseModel):
     code: TemplateCode
     name: str
     field_schema: dict
+    shop_id: int | None = None
+
+
+class TemplateIn(BaseModel):
+    name: str
+    field_schema: dict
+
+
+class TemplatePatch(BaseModel):
+    name: str | None = None
+    field_schema: dict | None = None
 
 
 class VariantIn(BaseModel):
@@ -96,14 +108,59 @@ async def list_templates(
     membership: Membership = Depends(require_member),
     session: AsyncSession = Depends(get_session),
 ) -> list[ProductTemplate]:
+    """Базові (shop_id NULL) + кастомні поточного магазину."""
     templates = (
         await session.scalars(
             select(ProductTemplate)
-            .where(ProductTemplate.shop_id.is_(None))
+            .where(
+                (ProductTemplate.shop_id.is_(None))
+                | (ProductTemplate.shop_id == membership.shop_id)
+            )
             .order_by(ProductTemplate.id)
         )
     ).all()
     return list(templates)
+
+
+@router.post("/templates", response_model=TemplateOut, status_code=status.HTTP_201_CREATED)
+async def create_template(
+    payload: TemplateIn,
+    membership: Membership = Depends(require_owner),
+    session: AsyncSession = Depends(get_session),
+) -> ProductTemplate:
+    try:
+        return await templates_service.create_custom_template(
+            session, membership, payload.name, payload.field_schema
+        )
+    except templates_service.TemplateError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+
+@router.patch("/templates/{template_id}", response_model=TemplateOut)
+async def patch_template(
+    template_id: int,
+    payload: TemplatePatch,
+    membership: Membership = Depends(require_owner),
+    session: AsyncSession = Depends(get_session),
+) -> ProductTemplate:
+    try:
+        return await templates_service.patch_custom_template(
+            session, membership, template_id, payload.name, payload.field_schema
+        )
+    except templates_service.TemplateError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+
+@router.delete("/templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_template(
+    template_id: int,
+    membership: Membership = Depends(require_owner),
+    session: AsyncSession = Depends(get_session),
+) -> None:
+    try:
+        await templates_service.delete_custom_template(session, membership, template_id)
+    except templates_service.TemplateError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
 # --------------------------------------------------------------------------- #
