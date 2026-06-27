@@ -6,7 +6,8 @@ import { ReserveForm } from "./ReserveForm";
 
 interface VariantRowProps {
   variant: Variant;
-  writable: boolean;
+  isFrozen?: boolean;
+  onFrozenAction?: () => void;
   onRestock: (variantId: number, qty: number) => void;
   onAdjust: (variantId: number, newOnHand: number) => void;
   onUploadPhoto: (variantId: number, file: File) => Promise<void>;
@@ -15,7 +16,8 @@ interface VariantRowProps {
 
 export function VariantRow({
   variant,
-  writable,
+  isFrozen = false,
+  onFrozenAction,
   onRestock,
   onAdjust,
   onUploadPhoto,
@@ -57,13 +59,23 @@ export function VariantRow({
             📦
           </div>
         )}
-        <label className="variant-photo-upload">
+        <label
+          className="variant-photo-upload"
+          onClick={
+            isFrozen
+              ? (e) => {
+                  e.preventDefault();
+                  onFrozenAction?.();
+                }
+              : undefined
+          }
+        >
           {uploading ? "..." : "📷"}
           <input
             type="file"
             accept="image/*"
             hidden
-            disabled={uploading || !writable}
+            disabled={uploading}
             onChange={handleFileChange}
             aria-label={`Завантажити фото: ${variant.sku ?? variant.id}`}
           />
@@ -92,23 +104,34 @@ export function VariantRow({
           <button
             type="button"
             aria-label={`Зменшити залишок: ${variant.sku ?? variant.id}`}
-            disabled={variant.on_hand <= 0 || !writable}
-            onClick={() => onAdjust(variant.id, variant.on_hand - 1)}
+            aria-disabled={isFrozen}
+            disabled={variant.on_hand <= 0}
+            onClick={() => {
+              if (isFrozen) { onFrozenAction?.(); return; }
+              onAdjust(variant.id, variant.on_hand - 1);
+            }}
           >
             −
           </button>
           <button
             type="button"
             aria-label={`Збільшити залишок: ${variant.sku ?? variant.id}`}
-            disabled={!writable}
-            onClick={() => onRestock(variant.id, 1)}
+            aria-disabled={isFrozen}
+            onClick={() => {
+              if (isFrozen) { onFrozenAction?.(); return; }
+              onRestock(variant.id, 1);
+            }}
           >
             +
           </button>
           <button
             type="button"
-            disabled={variant.available <= 0 || !writable}
-            onClick={() => setShowReserveForm((prev) => !prev)}
+            aria-disabled={isFrozen}
+            disabled={variant.available <= 0}
+            onClick={() => {
+              if (isFrozen) { onFrozenAction?.(); return; }
+              setShowReserveForm((prev) => !prev);
+            }}
           >
             Відклади
           </button>

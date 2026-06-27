@@ -19,6 +19,7 @@ from sqlalchemy.orm import selectinload
 from app.db import get_session
 from app.models import Product, Shop
 from app.security.rate_limit import InMemoryRateLimiter, rate_limited
+from app.services.catalog import frozen_product_ids
 
 router = APIRouter(prefix="/api/public", tags=["public"])
 
@@ -69,6 +70,9 @@ async def get_public_catalog(
         )
     ).all()
 
+    frozen = await frozen_product_ids(shop.id, session)
+    visible_products = [p for p in products if p.id not in frozen]
+
     return PublicShopOut(
         name=shop.name,
         logo_url=shop.logo_url,
@@ -85,6 +89,6 @@ async def get_public_catalog(
                     for variant in product.variants
                 ],
             )
-            for product in products
+            for product in visible_products
         ],
     )

@@ -2,7 +2,6 @@ import type { Reservation } from "../types";
 
 interface ReservationsPanelProps {
   reservations: Reservation[];
-  writable: boolean;
   variantLabel: (variantId: number) => string;
   onRelease: (reservationId: number) => void;
   onFulfill: (reservationId: number) => void;
@@ -10,7 +9,6 @@ interface ReservationsPanelProps {
 
 export function ReservationsPanel({
   reservations,
-  writable,
   variantLabel,
   onRelease,
   onFulfill,
@@ -36,10 +34,10 @@ export function ReservationsPanel({
             ) : null}
           </div>
           <div className="modal-actions">
-            <button type="button" disabled={!writable} onClick={() => onRelease(reservation.id)}>
+            <button type="button" onClick={() => onRelease(reservation.id)}>
               Зняти
             </button>
-            <button type="button" disabled={!writable} onClick={() => onFulfill(reservation.id)}>
+            <button type="button" onClick={() => onFulfill(reservation.id)}>
               Продано
             </button>
           </div>

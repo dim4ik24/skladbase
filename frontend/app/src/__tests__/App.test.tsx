@@ -47,6 +47,10 @@ const shopFixture: Shop = {
   trial_ends_at: null,
   current_period_end: "2026-12-01T00:00:00Z",
   plan_code: "pro",
+  limits: { max_products: null, photos: true, integrations: true },
+  products_count: 0,
+  active_count: 0,
+  max_products: null,
 };
 
 const planFixture: Plan = {
@@ -94,6 +98,7 @@ function makeProduct(overrides: Partial<Product> = {}): Product {
     template_id: null,
     attributes: {},
     is_demo: false,
+    is_frozen: false,
     archived: false,
     variants: [makeVariant()],
     ...overrides,
@@ -370,7 +375,7 @@ describe("Variant photo upload", () => {
     });
   });
 
-  it("shows a clear message when photo upload returns 402 (plan limit)", async () => {
+  it("shows UpgradePrompt when photo upload returns 402 (plan limit)", async () => {
     vi.mocked(api.getMe).mockResolvedValue(shopFixture);
     const variant = makeVariant({ id: 52, sku: "SKU-52", photo_url: null });
     vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ variants: [variant] })]);
@@ -387,6 +392,7 @@ describe("Variant photo upload", () => {
     });
 
     expect(await screen.findByText("Фото недоступні на поточному плані")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Обрати тариф" })).toBeInTheDocument();
   });
 });
 
@@ -505,102 +511,142 @@ describe("Trial banner", () => {
   });
 });
 
-describe("Paywall + read-only state", () => {
-  it("shows paywall modal, catalog is visible read-only, and write actions are disabled", async () => {
+describe("Free plan limits and upgrade prompt", () => {
+  it("shows slot counter when max_products is set", async () => {
     vi.mocked(api.getMe).mockResolvedValue({
       ...shopFixture,
-      status: "expired",
-      is_writable: false,
+      max_products: 5,
+      active_count: 3,
     });
-    const variant = makeVariant({ id: 91, sku: "SKU-91", on_hand: 5, available: 5 });
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+
+    render(<App />);
+    await screen.findByText("Тестовий магазин");
+
+    expect(screen.getByText("3/5 активних")).toBeInTheDocument();
+  });
+
+  it("does not show slot counter when max_products is null (unlimited)", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+
+    render(<App />);
+    await screen.findByText("Тестовий магазин");
+
+    expect(screen.queryByText(/активних/)).not.toBeInTheDocument();
+  });
+
+  it("clicking 'Додати товар' at limit shows UpgradePrompt instead of the form", async () => {
+    vi.mocked(api.getMe).mockResolvedValue({
+      ...shopFixture,
+      max_products: 3,
+      active_count: 3,
+    });
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+
+    render(<App />);
+    await screen.findByText("Тестовий магазин");
+
+    fireEvent.click(screen.getByRole("button", { name: "Додати товар" }));
+
+    expect(await screen.findByText(/Ліміт плану/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Обрати тариф" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Назва")).not.toBeInTheDocument();
+  });
+
+  it("restock 402 shows UpgradePrompt with the server error message", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    const variant = makeVariant({ id: 101, sku: "SKU-101" });
+    vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ variants: [variant] })]);
+    vi.mocked(api.restock).mockRejectedValue(
+      new ApiError(402, "Ліміт товарів вичерпано"),
+    );
+
+    render(<App />);
+    await screen.findByTestId("available-101");
+
+    fireEvent.click(screen.getByLabelText("Збільшити залишок: SKU-101"));
+
+    expect(await screen.findByText("Ліміт товарів вичерпано")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Обрати тариф" })).toBeInTheDocument();
+  });
+
+  it("'Обрати тариф' in UpgradePrompt opens the paywall modal", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    const variant = makeVariant({ id: 102, sku: "SKU-102" });
     vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ variants: [variant] })]);
     vi.mocked(api.getPlans).mockResolvedValue([planFixture]);
+    vi.mocked(api.restock).mockRejectedValue(
+      new ApiError(402, "Ліміт товарів вичерпано"),
+    );
 
     render(<App />);
-    await screen.findByTestId("available-91");
+    await screen.findByTestId("available-102");
 
-    // Paywall modal is shown
-    expect(screen.getByRole("dialog", { name: "Оберіть тариф" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Оберіть тариф" })).toBeInTheDocument();
-    expect(screen.getByText("Pro")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Збільшити залишок: SKU-102"));
+    await screen.findByRole("button", { name: "Обрати тариф" });
 
-    // Catalog is rendered behind the modal (data visible)
-    expect(screen.getByText("Футболка")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Обрати тариф" }));
 
-    // All write actions disabled via writable=false
-    expect(screen.getByRole("button", { name: "Додати товар" })).toBeDisabled();
-    expect(screen.getByLabelText("Збільшити залишок: SKU-91")).toBeDisabled();
-    expect(screen.getByLabelText("Зменшити залишок: SKU-91")).toBeDisabled();
-    expect(screen.getByLabelText("Завантажити фото: SKU-91")).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Відклади" })).toBeDisabled();
+    expect(await screen.findByText("Pro")).toBeInTheDocument();
   });
 
-  it("collapses modal to sticky banner then re-opens via 'Оформити'", async () => {
-    vi.mocked(api.getMe).mockResolvedValue({
-      ...shopFixture,
-      status: "expired",
-      is_writable: false,
-    });
-    vi.mocked(api.getProducts).mockResolvedValue([]);
-    vi.mocked(api.getPlans).mockResolvedValue([planFixture]);
-
-    render(<App />);
-    await screen.findByRole("dialog", { name: "Оберіть тариф" });
-
-    // Dismiss the modal
-    fireEvent.click(screen.getByRole("button", { name: "Переглянути склад" }));
-
-    // Modal is gone; sticky banner is shown
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(screen.getByText("Підписку призупинено — дії заблоковано")).toBeInTheDocument();
-
-    // Re-open via the banner's action button
-    fireEvent.click(screen.getByRole("button", { name: "Оформити" }));
-
-    expect(screen.getByRole("dialog", { name: "Оберіть тариф" })).toBeInTheDocument();
-  });
-
-  it("checks out via Stars and opens the invoice link", async () => {
-    vi.mocked(api.getMe).mockResolvedValue({
-      ...shopFixture,
-      status: "expired",
-      is_writable: false,
-    });
-    vi.mocked(api.getProducts).mockResolvedValue([]);
-    vi.mocked(api.getPlans).mockResolvedValue([planFixture]);
-    vi.mocked(api.checkoutStars).mockResolvedValue({
-      invoice_link: "https://t.me/invoice/abc",
-    });
-
-    render(<App />);
-    await screen.findByText("Pro");
-
-    fireEvent.click(screen.getByRole("button", { name: "Оформити через Stars" }));
-
-    await waitFor(() => {
-      expect(api.checkoutStars).toHaveBeenCalledWith("pro");
-    });
-    expect(
-      await screen.findByText("https://t.me/invoice/abc"),
-    ).toBeInTheDocument();
-  });
-
-  it("hides billing UI for managers", async () => {
+  it("hides billing UI for managers in the paywall modal", async () => {
     vi.mocked(api.getMe).mockResolvedValue({
       ...shopFixture,
       role: "manager",
-      status: "expired",
-      is_writable: false,
     });
-    vi.mocked(api.getProducts).mockResolvedValue([]);
+    const variant = makeVariant({ id: 103, sku: "SKU-103" });
+    vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ variants: [variant] })]);
     vi.mocked(api.getPlans).mockResolvedValue([planFixture]);
+    vi.mocked(api.restock).mockRejectedValue(
+      new ApiError(402, "Ліміт товарів вичерпано"),
+    );
 
     render(<App />);
+    await screen.findByTestId("available-103");
+
+    fireEvent.click(screen.getByLabelText("Збільшити залишок: SKU-103"));
+    await screen.findByRole("button", { name: "Обрати тариф" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Обрати тариф" }));
 
     expect(await screen.findByText("Підписку призупинено")).toBeInTheDocument();
     expect(screen.getByText("Оформлення доступне лише власнику магазину.")).toBeInTheDocument();
     expect(screen.queryByText("Pro")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Оформити через Stars" })).not.toBeInTheDocument();
+  });
+});
+
+describe("Frozen products", () => {
+  it("renders frozen badge for a frozen product", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([
+      makeProduct({ id: 1, name: "Заморожений товар", is_frozen: true }),
+    ]);
+
+    render(<App />);
+    await screen.findByText("Заморожений товар");
+
+    expect(screen.getByText("Заморожено")).toBeInTheDocument();
+  });
+
+  it("clicking + on a frozen variant shows UpgradePrompt instead of calling restock", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    const variant = makeVariant({ id: 111, sku: "SKU-111" });
+    vi.mocked(api.getProducts).mockResolvedValue([
+      makeProduct({ is_frozen: true, variants: [variant] }),
+    ]);
+
+    render(<App />);
+    await screen.findByTestId("available-111");
+
+    fireEvent.click(screen.getByLabelText("Збільшити залишок: SKU-111"));
+
+    expect(
+      await screen.findByText("Цей товар заморожено. Оформіть тариф, щоб редагувати."),
+    ).toBeInTheDocument();
+    expect(api.restock).not.toHaveBeenCalled();
   });
 });
 
@@ -693,30 +739,5 @@ describe("Tab navigation", () => {
       "aria-selected",
       "true",
     );
-  });
-
-  it("paywall banner persists across tabs when subscription is expired", async () => {
-    vi.mocked(api.getMe).mockResolvedValue({
-      ...shopFixture,
-      status: "expired",
-      is_writable: false,
-    });
-    vi.mocked(api.getProducts).mockResolvedValue([]);
-    vi.mocked(api.getPlans).mockResolvedValue([planFixture]);
-
-    render(<App />);
-    await screen.findByRole("dialog", { name: "Оберіть тариф" });
-
-    // Dismiss modal → sticky banner appears
-    fireEvent.click(screen.getByRole("button", { name: "Переглянути склад" }));
-    expect(screen.getByText("Підписку призупинено — дії заблоковано")).toBeInTheDocument();
-
-    // Banner stays on Dashboard tab
-    fireEvent.click(screen.getByRole("tab", { name: "Дашборд" }));
-    expect(screen.getByText("Підписку призупинено — дії заблоковано")).toBeInTheDocument();
-
-    // Banner stays on Налаштування tab
-    fireEvent.click(screen.getByRole("tab", { name: "Налаштування" }));
-    expect(screen.getByText("Підписку призупинено — дії заблоковано")).toBeInTheDocument();
   });
 });

@@ -1,6 +1,7 @@
 import { Ban, BookmarkCheck, Package, TriangleAlert } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import * as api from "./api";
+import { ApiError } from "./api";
 import { AtmosphereBackground } from "./components/background/AtmosphereBackground";
 import { BottomTabBar } from "./components/BottomTabBar";
 import { DemoBanner } from "./components/DemoBanner";
@@ -8,6 +9,7 @@ import { Header } from "./components/Header";
 import type { MetricCardData } from "./components/MetricCarousel";
 import { SubscriptionPaywall } from "./components/SubscriptionPaywall";
 import { TrialBanner } from "./components/TrialBanner";
+import { UpgradePrompt } from "./components/UpgradePrompt";
 import { errorMessage } from "./errors";
 import { DashboardScreen } from "./screens/DashboardScreen";
 import { SettingsScreen } from "./screens/SettingsScreen";
@@ -36,7 +38,8 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [clearingDemos, setClearingDemos] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>("sklad");
-  const [openPaywall, setOpenPaywall] = useState(false);
+  const [showPaywall, setShowPaywall] = useState(false);
+  const [upgradePrompt, setUpgradePrompt] = useState<{ message: string } | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -100,7 +103,11 @@ export default function App() {
     try {
       applyVariantUpdate(await api.restock(variantId, qty));
     } catch (err) {
-      setError(errorMessage(err, "Не вдалося поповнити залишок"));
+      if (err instanceof ApiError && err.status === 402) {
+        setUpgradePrompt({ message: err.detail });
+      } else {
+        setError(errorMessage(err, "Не вдалося поповнити залишок"));
+      }
     }
   }
 
@@ -108,13 +115,25 @@ export default function App() {
     try {
       applyVariantUpdate(await api.adjust(variantId, newOnHand));
     } catch (err) {
-      setError(errorMessage(err, "Не вдалося оновити залишок"));
+      if (err instanceof ApiError && err.status === 402) {
+        setUpgradePrompt({ message: err.detail });
+      } else {
+        setError(errorMessage(err, "Не вдалося оновити залишок"));
+      }
     }
   }
 
   async function handleCreateProduct(payload: ProductInput): Promise<void> {
-    const product = await api.createProduct(payload);
-    setProducts((prev) => [...prev, product]);
+    try {
+      const product = await api.createProduct(payload);
+      setProducts((prev) => [...prev, product]);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 402) {
+        setUpgradePrompt({ message: err.detail });
+      } else {
+        throw err;
+      }
+    }
   }
 
   async function handleUpdateProduct(productId: number, patch: ProductPatch) {
@@ -127,18 +146,34 @@ export default function App() {
   }
 
   async function handleUploadPhoto(variantId: number, file: File) {
-    applyVariantUpdate(await api.uploadVariantPhoto(variantId, file));
+    try {
+      applyVariantUpdate(await api.uploadVariantPhoto(variantId, file));
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 402) {
+        setUpgradePrompt({ message: err.detail });
+      } else {
+        throw err;
+      }
+    }
   }
 
   async function handleReserve(variantId: number, payload: ReserveInput) {
-    const reservation = await api.reserve(variantId, payload);
-    const variant = products
-      .flatMap((product) => product.variants)
-      .find((v) => v.id === variantId);
-    const reserved = (variant?.reserved ?? 0) + reservation.qty;
-    const onHand = variant?.on_hand ?? 0;
-    patchVariant(variantId, { reserved, available: onHand - reserved });
-    setReservations((prev) => [reservation, ...prev]);
+    try {
+      const reservation = await api.reserve(variantId, payload);
+      const variant = products
+        .flatMap((product) => product.variants)
+        .find((v) => v.id === variantId);
+      const reserved = (variant?.reserved ?? 0) + reservation.qty;
+      const onHand = variant?.on_hand ?? 0;
+      patchVariant(variantId, { reserved, available: onHand - reserved });
+      setReservations((prev) => [reservation, ...prev]);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 402) {
+        setUpgradePrompt({ message: err.detail });
+      } else {
+        throw err;
+      }
+    }
   }
 
   function applyReservationClosed(reservation: Reservation, kind: "release" | "fulfill") {
@@ -194,8 +229,15 @@ export default function App() {
     return `Варіант #${variantId}`;
   }
 
+  function handleFrozenAction() {
+    setUpgradePrompt({ message: "Цей товар заморожено. Оформіть тариф, щоб редагувати." });
+  }
+
   const writable = shop?.is_writable ?? false;
   const hasDemo = products.some((p) => p.is_demo);
+  const maxProducts = shop?.max_products ?? null;
+  const activeCount = shop?.active_count ?? 0;
+  const atLimit = maxProducts !== null && activeCount >= maxProducts;
 
   let lowStockCount = 0;
   let outOfStockCount = 0;
@@ -207,15 +249,43 @@ export default function App() {
   }
 
   const metricCards: MetricCardData[] = [
-    { id: "products", title: "Товари", value: products.length, iconBg: "bg-pastel-mint", iconColor: "text-green-deep", icon: Package },
-    { id: "reservations", title: "Резерви", value: reservations.length, iconBg: "bg-pastel-lavender", iconColor: "text-green-deep", icon: BookmarkCheck },
-    { id: "low", title: "Мало", value: lowStockCount, iconBg: "bg-pastel-rose", iconColor: "text-pink", icon: TriangleAlert },
-    { id: "out", title: "Нема", value: outOfStockCount, iconBg: "bg-pastel-peach", iconColor: "text-text-soft", icon: Ban },
+    {
+      id: "products",
+      title: "Товари",
+      value: products.length,
+      iconBg: "bg-pastel-mint",
+      iconColor: "text-green-deep",
+      icon: Package,
+    },
+    {
+      id: "reservations",
+      title: "Резерви",
+      value: reservations.length,
+      iconBg: "bg-pastel-lavender",
+      iconColor: "text-green-deep",
+      icon: BookmarkCheck,
+    },
+    {
+      id: "low",
+      title: "Мало",
+      value: lowStockCount,
+      iconBg: "bg-pastel-rose",
+      iconColor: "text-pink",
+      icon: TriangleAlert,
+    },
+    {
+      id: "out",
+      title: "Нема",
+      value: outOfStockCount,
+      iconBg: "bg-pastel-peach",
+      iconColor: "text-text-soft",
+      icon: Ban,
+    },
   ];
 
   return (
     <>
-      <AtmosphereBackground suspended={Boolean(shop && !shop.is_writable)} />
+      <AtmosphereBackground />
       <div className="app" ref={scrollContainerRef}>
         <Header shop={shop} scrollContainerRef={scrollContainerRef} />
 
@@ -223,17 +293,6 @@ export default function App() {
 
         {shop?.status === "trial" && shop.trial_ends_at ? (
           <TrialBanner trialEndsAt={shop.trial_ends_at} />
-        ) : null}
-
-        {/* Paywall: always shown when !is_writable; also shown when owner opens it from Settings */}
-        {shop && (!shop.is_writable || openPaywall) ? (
-          <SubscriptionPaywall
-            plans={plans}
-            role={shop.role}
-            currentPlanCode={shop.is_writable ? shop.plan_code : undefined}
-            onCheckout={api.checkoutStars}
-            onDismiss={openPaywall && shop.is_writable ? () => setOpenPaywall(false) : undefined}
-          />
         ) : null}
 
         {hasDemo ? (
@@ -251,6 +310,9 @@ export default function App() {
             reservations={reservations}
             loading={loading}
             writable={writable}
+            atLimit={atLimit}
+            maxProducts={maxProducts}
+            activeCount={activeCount}
             variantLabel={variantLabel}
             onRestock={handleRestock}
             onAdjust={handleAdjust}
@@ -260,6 +322,12 @@ export default function App() {
             onFulfill={handleFulfill}
             onCreateProduct={handleCreateProduct}
             onUpdateProduct={handleUpdateProduct}
+            onFrozenAction={handleFrozenAction}
+            onAddAtLimit={() =>
+              setUpgradePrompt({
+                message: `Ліміт плану: ${maxProducts} товарів. Оформіть тариф для розширення.`,
+              })
+            }
             scrollContainerRef={scrollContainerRef}
           />
         ) : activeTab === "dashboard" ? (
@@ -268,7 +336,6 @@ export default function App() {
             loading={loading}
             metricCards={metricCards}
             reservations={reservations}
-            writable={writable}
             variantLabel={variantLabel}
             onRelease={handleRelease}
             onFulfill={handleFulfill}
@@ -278,12 +345,41 @@ export default function App() {
           <SettingsScreen
             shop={shop}
             plans={plans}
-            onOpenPaywall={() => setOpenPaywall(true)}
+            onOpenPaywall={() => setShowPaywall(true)}
           />
         )}
       </div>
 
       <BottomTabBar active={activeTab} onChange={setActiveTab} />
+
+      {upgradePrompt ? (
+        <UpgradePrompt
+          message={upgradePrompt.message}
+          onOpenPaywall={() => setShowPaywall(true)}
+          onClose={() => setUpgradePrompt(null)}
+        />
+      ) : null}
+
+      {showPaywall && shop ? (
+        <div className="modal-overlay" onClick={() => setShowPaywall(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              className="paywall-modal-close"
+              onClick={() => setShowPaywall(false)}
+              aria-label="Закрити"
+            >
+              ✕
+            </button>
+            <SubscriptionPaywall
+              plans={plans}
+              role={shop.role}
+              currentPlanCode={shop.plan_code ?? undefined}
+              onCheckout={api.checkoutStars}
+            />
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }

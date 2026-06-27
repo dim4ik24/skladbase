@@ -1,5 +1,5 @@
-import { useState } from "react";
 import { AlignLeft, Pencil, Tag } from "lucide-react";
+import { useState } from "react";
 import type { Product, ProductPatch, ReserveInput } from "../types";
 import { InlineEditCard } from "./ui/InlineEditCard";
 import { VariantRow } from "./VariantRow";
@@ -7,6 +7,8 @@ import { VariantRow } from "./VariantRow";
 interface ProductCardProps {
   product: Product;
   writable: boolean;
+  isFrozen?: boolean;
+  onFrozenAction?: () => void;
   onRestock: (variantId: number, qty: number) => void;
   onAdjust: (variantId: number, newOnHand: number) => void;
   onUploadPhoto: (variantId: number, file: File) => Promise<void>;
@@ -17,6 +19,8 @@ interface ProductCardProps {
 export function ProductCard({
   product,
   writable,
+  isFrozen = false,
+  onFrozenAction,
   onRestock,
   onAdjust,
   onUploadPhoto,
@@ -32,7 +36,7 @@ export function ProductCard({
   }
 
   return (
-    <article className="product-card">
+    <article className={`product-card${isFrozen ? " product-card--frozen" : ""}`}>
       <div className="product-photo">
         {photoUrl ? (
           <img src={photoUrl} alt={product.name} />
@@ -43,20 +47,30 @@ export function ProductCard({
         )}
       </div>
 
+      {isFrozen ? (
+        <span className="frozen-badge">
+          <span aria-hidden="true">🔒</span>
+          {" "}Заморожено
+        </span>
+      ) : null}
+
       <div className="flex items-center justify-between gap-2">
         <h3 className="product-name">{product.name}</h3>
         <button
           type="button"
           disabled={!writable}
           aria-label={`Редагувати товар: ${product.name}`}
-          onClick={() => setEditing((prev) => !prev)}
+          onClick={() => {
+            if (isFrozen) { onFrozenAction?.(); return; }
+            setEditing((prev) => !prev);
+          }}
           className="shrink-0 rounded-lg p-1 text-green-deep/40 transition-colors hover:bg-green/[0.08] hover:text-green-deep disabled:cursor-not-allowed disabled:opacity-30"
         >
           <Pencil size={15} />
         </button>
       </div>
 
-      {editing ? (
+      {editing && !isFrozen ? (
         <InlineEditCard
           title="Товар"
           fields={[
@@ -78,7 +92,8 @@ export function ProductCard({
           <VariantRow
             key={variant.id}
             variant={variant}
-            writable={writable}
+            isFrozen={isFrozen}
+            onFrozenAction={onFrozenAction}
             onRestock={onRestock}
             onAdjust={onAdjust}
             onUploadPhoto={onUploadPhoto}

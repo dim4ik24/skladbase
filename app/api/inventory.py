@@ -22,6 +22,7 @@ from app.api.catalog import VariantOut
 from app.db import get_session
 from app.deps import require_member, require_writable
 from app.models import Membership, Reservation, ReservationSource, ReservationStatus, Variant
+from app.services import catalog as catalog_service
 from app.services import inventory
 from app.services.inventory import InventoryError
 
@@ -65,6 +66,22 @@ class ReservationOut(BaseModel):
 # --------------------------------------------------------------------------- #
 #  Варіанти: поповнення / корекція / ручний резерв
 # --------------------------------------------------------------------------- #
+async def _enforce_variant_product_writable(
+    variant_id: int, shop_id: int, session: AsyncSession
+) -> None:
+    """Завантажує варіант без lock, дістає product_id, перевіряє enforce_product_writable.
+    Inventory-сервіс потім ще раз локує той самий варіант через SELECT FOR UPDATE."""
+    variant = await session.scalar(
+        select(Variant).where(Variant.id == variant_id, Variant.shop_id == shop_id)
+    )
+    if variant is None:
+        raise HTTPException(status_code=404, detail="Варіант не знайдено")
+    try:
+        await catalog_service.enforce_product_writable(variant.product_id, shop_id, session)
+    except catalog_service.CatalogError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+
 @router.post("/variants/{variant_id}/restock", response_model=VariantOut)
 async def restock_variant(
     variant_id: int,
@@ -72,6 +89,7 @@ async def restock_variant(
     membership: Membership = Depends(require_writable),
     session: AsyncSession = Depends(get_session),
 ) -> Variant:
+    await _enforce_variant_product_writable(variant_id, membership.shop_id, session)
     try:
         return await inventory.restock(
             session, shop_id=membership.shop_id, variant_id=variant_id, qty=payload.qty
@@ -87,6 +105,7 @@ async def adjust_variant(
     membership: Membership = Depends(require_writable),
     session: AsyncSession = Depends(get_session),
 ) -> Variant:
+    await _enforce_variant_product_writable(variant_id, membership.shop_id, session)
     try:
         return await inventory.adjust(
             session,
@@ -108,6 +127,7 @@ async def reserve_variant(
 ) -> Reservation:
     """Ручний резерв «відклади товар» — менеджер тримає одиницю для клієнта
     поза замовленням із сайту (`ReservationSource.manual`)."""
+    await _enforce_variant_product_writable(variant_id, membership.shop_id, session)
     try:
         return await inventory.reserve(
             session,

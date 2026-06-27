@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
 from app.deps import require_member
-from app.models import Membership, Plan, Shop, Subscription
+from app.models import Membership, Plan, Product, Shop, Subscription
+from app.services.catalog import current_plan_limits
 
 router = APIRouter(prefix="/api", tags=["me"])
 
@@ -27,6 +28,22 @@ async def get_me(
         plan = await session.get(Plan, subscription.plan_id)
         plan_code = plan.code if plan is not None else None
 
+    limits = await current_plan_limits(shop.id, session)
+    max_products = limits.get("max_products")
+
+    products_count: int = (
+        await session.scalar(
+            select(func.count(Product.id)).where(
+                Product.shop_id == shop.id, Product.archived.is_(False)
+            )
+        )
+    ) or 0
+
+    if max_products is None:
+        active_count = products_count
+    else:
+        active_count = min(products_count, max_products)
+
     return {
         "shop_id": shop.id,
         "shop_name": shop.name,
@@ -40,4 +57,9 @@ async def get_me(
         "trial_ends_at": subscription.trial_ends_at if subscription else None,
         "current_period_end": subscription.current_period_end if subscription else None,
         "plan_code": plan_code,
+        # Free-plan slot info (FREE_PLAN_SPEC).
+        "limits": limits,
+        "products_count": products_count,
+        "active_count": active_count,
+        "max_products": max_products,
     }

@@ -30,6 +30,9 @@ interface SkladScreenProps {
   reservations: Reservation[];
   loading: boolean;
   writable: boolean;
+  atLimit: boolean;
+  maxProducts: number | null;
+  activeCount: number;
   variantLabel: (variantId: number) => string;
   onRestock: (variantId: number, qty: number) => Promise<void>;
   onAdjust: (variantId: number, newOnHand: number) => Promise<void>;
@@ -39,6 +42,8 @@ interface SkladScreenProps {
   onFulfill: (id: number) => Promise<void>;
   onCreateProduct: (payload: ProductInput) => Promise<void>;
   onUpdateProduct: (productId: number, patch: ProductPatch) => Promise<void>;
+  onFrozenAction: () => void;
+  onAddAtLimit: () => void;
   scrollContainerRef: RefObject<HTMLDivElement | null>;
 }
 
@@ -48,6 +53,9 @@ export function SkladScreen({
   reservations,
   loading,
   writable,
+  atLimit,
+  maxProducts,
+  activeCount,
   variantLabel,
   onRestock,
   onAdjust,
@@ -57,6 +65,8 @@ export function SkladScreen({
   onFulfill,
   onCreateProduct,
   onUpdateProduct,
+  onFrozenAction,
+  onAddAtLimit,
   scrollContainerRef,
 }: SkladScreenProps) {
   const [query, setQuery] = useState("");
@@ -74,6 +84,10 @@ export function SkladScreen({
 
   return (
     <>
+      {maxProducts !== null ? (
+        <p className="slot-counter">{activeCount}/{maxProducts} активних</p>
+      ) : null}
+
       <div className="toolbar">
         <input
           className="search-input"
@@ -83,7 +97,14 @@ export function SkladScreen({
           onChange={(e) => setQuery(e.target.value)}
           aria-label="Пошук товарів"
         />
-        <button type="button" disabled={!writable} onClick={() => setShowProductForm(true)}>
+        <button
+          type="button"
+          aria-disabled={atLimit}
+          onClick={() => {
+            if (atLimit) { onAddAtLimit(); return; }
+            setShowProductForm(true);
+          }}
+        >
           Додати товар
         </button>
         <button type="button" onClick={() => setShowReservations((prev) => !prev)}>
@@ -103,7 +124,6 @@ export function SkladScreen({
           <div className="px-4 pb-4">
             <ReservationsPanel
               reservations={reservations}
-              writable={writable}
               variantLabel={variantLabel}
               onRelease={onRelease}
               onFulfill={onFulfill}
@@ -133,6 +153,8 @@ export function SkladScreen({
               <ProductCard
                 product={product}
                 writable={writable}
+                isFrozen={product.is_frozen}
+                onFrozenAction={onFrozenAction}
                 onRestock={onRestock}
                 onAdjust={onAdjust}
                 onUploadPhoto={onUploadPhoto}
