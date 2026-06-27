@@ -1,6 +1,7 @@
 import { AlignLeft, Pencil, Tag } from "lucide-react";
 import { useState } from "react";
 import type { Product, ProductPatch, ReserveInput } from "../types";
+import { ProductPhotoGallery } from "./ProductPhotoGallery";
 import { InlineEditCard } from "./ui/InlineEditCard";
 import { VariantRow } from "./VariantRow";
 
@@ -14,6 +15,9 @@ interface ProductCardProps {
   onUploadPhoto: (variantId: number, file: File) => Promise<void>;
   onReserve: (variantId: number, payload: ReserveInput) => Promise<void>;
   onUpdateProduct: (productId: number, patch: ProductPatch) => Promise<void>;
+  photosAllowed: boolean;
+  onUploadProductPhoto: (productId: number, file: File) => Promise<void>;
+  onDeleteProductPhoto: (productId: number, photoId: number) => Promise<void>;
 }
 
 export function ProductCard({
@@ -26,9 +30,18 @@ export function ProductCard({
   onUploadPhoto,
   onReserve,
   onUpdateProduct,
+  photosAllowed,
+  onUploadProductPhoto,
+  onDeleteProductPhoto,
 }: ProductCardProps) {
   const [editing, setEditing] = useState(false);
-  const photoUrl = product.variants.find((variant) => variant.photo_url)?.photo_url ?? null;
+
+  const sortedPhotos = [...product.photos].sort((a, b) => a.position - b.position);
+  const coverUrl =
+    sortedPhotos[0]?.url ??
+    product.variants.find((v) => v.photo_url)?.photo_url ??
+    null;
+  const stripPhotos = sortedPhotos.slice(1);
 
   function handleSaveField(key: string, value: string) {
     if (key === "name") void onUpdateProduct(product.id, { name: value });
@@ -38,8 +51,8 @@ export function ProductCard({
   return (
     <article className={`product-card${isFrozen ? " product-card--frozen" : ""}`}>
       <div className="product-photo">
-        {photoUrl ? (
-          <img src={photoUrl} alt={product.name} />
+        {coverUrl ? (
+          <img src={coverUrl} alt={product.name} />
         ) : (
           <div className="product-photo-placeholder" aria-hidden="true">
             📦
@@ -70,6 +83,14 @@ export function ProductCard({
         </button>
       </div>
 
+      {stripPhotos.length > 0 ? (
+        <div className="photo-strip" aria-label="Додаткові фото товару">
+          {stripPhotos.map((ph) => (
+            <img key={ph.id} src={ph.url} alt="" className="photo-strip-thumb" />
+          ))}
+        </div>
+      ) : null}
+
       {editing && !isFrozen ? (
         <InlineEditCard
           title="Товар"
@@ -84,6 +105,15 @@ export function ProductCard({
             },
           ]}
           onSave={handleSaveField}
+        />
+      ) : null}
+
+      {editing && !isFrozen ? (
+        <ProductPhotoGallery
+          product={product}
+          photosAllowed={photosAllowed}
+          onUpload={(file) => onUploadProductPhoto(product.id, file)}
+          onDelete={(photoId) => onDeleteProductPhoto(product.id, photoId)}
         />
       ) : null}
 

@@ -7,6 +7,7 @@
 import { getInitData } from "./telegram";
 import type {
   FinanceSummary,
+  Photo,
   Plan,
   Product,
   ProductInput,
@@ -145,6 +146,21 @@ export function createTemplate(name: string, field_schema: Record<string, unknow
   return request<Template>("/api/templates", {
     method: "POST",
     body: JSON.stringify({ name, field_schema }),
+  });
+}
+
+export function uploadProductPhoto(productId: number, file: File): Promise<Photo> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return request<Photo>(`/api/products/${productId}/photos`, {
+    method: "POST",
+    body: formData,
+  });
+}
+
+export function deleteProductPhoto(productId: number, photoId: number): Promise<void> {
+  return request<void>(`/api/products/${productId}/photos/${photoId}`, {
+    method: "DELETE",
   });
 }
 

@@ -39,6 +39,12 @@ export interface Variant {
   photo_url: string | null;
 }
 
+export interface Photo {
+  id: number;
+  url: string;
+  position: number;
+}
+
 export interface Product {
   id: number;
   name: string;
@@ -49,6 +55,7 @@ export interface Product {
   is_frozen: boolean;
   archived: boolean;
   variants: Variant[];
+  photos: Photo[];
   created_at?: string;
 }
 

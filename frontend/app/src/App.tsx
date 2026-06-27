@@ -158,6 +158,35 @@ export default function App() {
     }
   }
 
+  async function handleUploadProductPhoto(productId: number, file: File): Promise<void> {
+    try {
+      const photo = await api.uploadProductPhoto(productId, file);
+      setProducts((prev) =>
+        prev.map((p) =>
+          p.id === productId
+            ? { ...p, photos: [...p.photos, photo].sort((a, b) => a.position - b.position) }
+            : p,
+        ),
+      );
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 402) {
+        setUpgradePrompt({ message: err.detail });
+      }
+      throw err;
+    }
+  }
+
+  async function handleDeleteProductPhoto(productId: number, photoId: number): Promise<void> {
+    await api.deleteProductPhoto(productId, photoId);
+    setProducts((prev) =>
+      prev.map((p) =>
+        p.id === productId
+          ? { ...p, photos: p.photos.filter((ph) => ph.id !== photoId) }
+          : p,
+      ),
+    );
+  }
+
   async function handleReserve(variantId: number, payload: ReserveInput) {
     try {
       const reservation = await api.reserve(variantId, payload);
@@ -235,6 +264,7 @@ export default function App() {
   }
 
   const writable = shop?.is_writable ?? false;
+  const photosAllowed = shop?.limits["photos"] === true;
   const hasDemo = products.some((p) => p.is_demo);
   const maxProducts = shop?.max_products ?? null;
   const activeCount = shop?.active_count ?? 0;
@@ -332,6 +362,9 @@ export default function App() {
             scrollContainerRef={scrollContainerRef}
             isOwner={shop?.role === "owner"}
             onTemplateAdded={(t) => setTemplates((prev) => [...prev, t])}
+            photosAllowed={photosAllowed}
+            onUploadProductPhoto={handleUploadProductPhoto}
+            onDeleteProductPhoto={handleDeleteProductPhoto}
           />
         ) : activeTab === "dashboard" ? (
           <DashboardScreen

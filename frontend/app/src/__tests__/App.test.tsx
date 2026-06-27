@@ -25,6 +25,8 @@ vi.mock("../api", () => ({
   createProduct: vi.fn(),
   updateProduct: vi.fn(),
   uploadVariantPhoto: vi.fn(),
+  uploadProductPhoto: vi.fn(),
+  deleteProductPhoto: vi.fn(),
   reserve: vi.fn(),
   releaseReservation: vi.fn(),
   fulfillReservation: vi.fn(),
@@ -102,6 +104,7 @@ function makeProduct(overrides: Partial<Product> = {}): Product {
     is_frozen: false,
     archived: false,
     variants: [makeVariant()],
+    photos: [],
     ...overrides,
   };
 }
@@ -135,6 +138,8 @@ beforeEach(() => {
   vi.mocked(api.createProduct).mockReset();
   vi.mocked(api.updateProduct).mockReset();
   vi.mocked(api.uploadVariantPhoto).mockReset();
+  vi.mocked(api.uploadProductPhoto).mockReset();
+  vi.mocked(api.deleteProductPhoto).mockReset();
   vi.mocked(api.reserve).mockReset();
   vi.mocked(api.releaseReservation).mockReset();
   vi.mocked(api.fulfillReservation).mockReset();

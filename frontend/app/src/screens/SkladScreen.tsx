@@ -50,6 +50,9 @@ interface SkladScreenProps {
   scrollContainerRef: RefObject<HTMLDivElement | null>;
   isOwner?: boolean;
   onTemplateAdded?: (template: Template) => void;
+  photosAllowed: boolean;
+  onUploadProductPhoto: (productId: number, file: File) => Promise<void>;
+  onDeleteProductPhoto: (productId: number, photoId: number) => Promise<void>;
 }
 
 export function SkladScreen({
@@ -75,6 +78,9 @@ export function SkladScreen({
   scrollContainerRef,
   isOwner,
   onTemplateAdded,
+  photosAllowed,
+  onUploadProductPhoto,
+  onDeleteProductPhoto,
 }: SkladScreenProps) {
   const [query, setQuery] = useState("");
   const [sortField, setSortField] = useState<SortField>("date");
@@ -260,6 +266,9 @@ export function SkladScreen({
                 onUploadPhoto={onUploadPhoto}
                 onReserve={onReserve}
                 onUpdateProduct={onUpdateProduct}
+                photosAllowed={photosAllowed}
+                onUploadProductPhoto={onUploadProductPhoto}
+                onDeleteProductPhoto={onDeleteProductPhoto}
               />
             </div>
           ))}
