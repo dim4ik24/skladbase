@@ -12,6 +12,10 @@ export interface Shop {
   trial_ends_at: string | null;
   current_period_end: string | null;
   plan_code: string | null;
+  limits: Record<string, unknown>;
+  products_count: number;
+  active_count: number;
+  max_products: number | null;
 }
 
 export interface Plan {
@@ -42,6 +46,7 @@ export interface Product {
   template_id: number | null;
   attributes: Record<string, unknown>;
   is_demo: boolean;
+  is_frozen: boolean;
   archived: boolean;
   variants: Variant[];
 }

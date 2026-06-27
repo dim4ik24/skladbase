@@ -85,6 +85,7 @@ class ProductOut(BaseModel):
     is_demo: bool
     archived: bool
     variants: list[VariantOut]
+    is_frozen: bool = False
 
 
 # --------------------------------------------------------------------------- #
@@ -142,7 +143,7 @@ async def create_product(
 async def list_products(
     membership: Membership = Depends(require_member),
     session: AsyncSession = Depends(get_session),
-) -> list[Product]:
+) -> list[ProductOut]:
     products = (
         await session.scalars(
             select(Product)
@@ -151,7 +152,15 @@ async def list_products(
             .order_by(Product.id)
         )
     ).all()
-    return list(products)
+
+    frozen = await catalog_service.frozen_product_ids(membership.shop_id, session)
+
+    result: list[ProductOut] = []
+    for p in products:
+        out = ProductOut.model_validate(p)
+        out.is_frozen = p.id in frozen
+        result.append(out)
+    return result
 
 
 async def _get_owned_product(session: AsyncSession, shop_id: int, product_id: int) -> Product:
@@ -173,6 +182,11 @@ async def patch_product(
     session: AsyncSession = Depends(get_session),
 ) -> Product:
     product = await _get_owned_product(session, membership.shop_id, product_id)
+
+    try:
+        await catalog_service.enforce_product_writable(product.id, membership.shop_id, session)
+    except catalog_service.CatalogError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
     for field_name, value in payload.model_dump(exclude_unset=True).items():
         setattr(product, field_name, value)
@@ -211,7 +225,8 @@ async def upload_variant_photo(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Варіант не знайдено")
 
     try:
-        await catalog_service.enforce_photo_upload_allowed(session, membership.shop_id)
+        await catalog_service.enforce_product_writable(variant.product_id, membership.shop_id, session)
+        await catalog_service.enforce_photos_allowed(membership.shop_id, session)
     except catalog_service.CatalogError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 

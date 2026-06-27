@@ -24,6 +24,8 @@ from app.models import (
     Subscription,
     SubStatus,
     Variant,
+    ensure_aware_utc,
+    utcnow,
 )
 
 
@@ -76,45 +78,110 @@ async def _count_active_products(session: AsyncSession, shop_id: int) -> int:
     return count or 0
 
 
-async def _enforce_product_limit(session: AsyncSession, shop_id: int) -> None:
+# --------------------------------------------------------------------------- #
+#  Plan limits (FREE_PLAN_SPEC)                                               #
+# --------------------------------------------------------------------------- #
+
+_FREE_LIMITS_FALLBACK: dict = {"max_products": 20, "photos": False, "integrations": False}
+
+
+async def _free_plan_limits(session: AsyncSession) -> dict:
+    free = await session.scalar(select(Plan).where(Plan.code == "free"))
+    return dict(free.limits) if free is not None else _FREE_LIMITS_FALLBACK
+
+
+async def current_plan_limits(shop_id: int, session: AsyncSession) -> dict:
+    """Ліміти діючого плану магазину.
+
+    Active trial  → необмежено (повний доступ для конверсії).
+    Active/canceled/past_due з plan_id → ліміти цього плану.
+    Решта (expired trial, expired sub, no sub) → ліміти free-плану.
+    """
     subscription = await session.scalar(
         select(Subscription).where(Subscription.shop_id == shop_id)
     )
-    if subscription is None or subscription.status == SubStatus.trial:
-        return  # тріал -> повний доступ, свідомо для конверсії (CLAUDE.md)
 
-    if subscription.plan_id is None:
-        return
+    if subscription is not None:
+        if subscription.status == SubStatus.trial:
+            if (
+                subscription.trial_ends_at
+                and ensure_aware_utc(subscription.trial_ends_at) > utcnow()
+            ):
+                # Активний тріал — повний доступ.
+                return {"max_products": None, "photos": True, "integrations": True}
+            # Тріал завершився → free.
+        elif subscription.status in (SubStatus.active, SubStatus.canceled, SubStatus.past_due):
+            if subscription.plan_id:
+                plan = await session.get(Plan, subscription.plan_id)
+                if plan is not None:
+                    return dict(plan.limits)
 
-    plan = await session.get(Plan, subscription.plan_id)
-    if plan is None:
-        return
+    return await _free_plan_limits(session)
 
-    max_products = plan.limits.get("max_products")
+
+async def frozen_product_ids(shop_id: int, session: AsyncSession) -> set[int]:
+    """Id заморожених товарів магазину (похідне, без поля в БД).
+
+    Заморожені = всі non-archived, що НЕ входять у топ-N за (created_at DESC, id DESC).
+    N = max_products з поточного плану; None → безліміт → порожній set.
+    Стабільний tiebreaker (id) гарантує однаковий набір при рівних created_at.
+    """
+    limits = await current_plan_limits(shop_id, session)
+    max_products = limits.get("max_products")
     if max_products is None:
-        return  # необмежено (pro)
+        return set()
+
+    all_ids: list[int] = list(
+        await session.scalars(
+            select(Product.id)
+            .where(Product.shop_id == shop_id, Product.archived.is_(False))
+            .order_by(Product.created_at.desc(), Product.id.desc())
+        )
+    )
+
+    if len(all_ids) <= max_products:
+        return set()
+
+    return set(all_ids[max_products:])
+
+
+async def enforce_can_create_product(shop_id: int, session: AsyncSession) -> None:
+    """402 якщо кількість активних товарів ≥ max_products плану."""
+    limits = await current_plan_limits(shop_id, session)
+    max_products = limits.get("max_products")
+    if max_products is None:
+        return
 
     current = await _count_active_products(session, shop_id)
     if current >= max_products:
         raise CatalogError(
             HTTPStatus.PAYMENT_REQUIRED,
-            f"Ліміт товарів плану досягнуто ({max_products})",
+            f"Ліміт плану: {max_products} товарів. Оформіть тариф для розширення.",
         )
 
 
-async def enforce_photo_upload_allowed(session: AsyncSession, shop_id: int) -> None:
-    """Фото — платна фіча (ROADMAP, ризик "Вартість зберігання фото"). Тріал ->
-    повний доступ, як і ліміт товарів (свідомо, для конверсії — CLAUDE.md).
-    Free-план (`limits.photos` не True) -> 402."""
-    subscription = await session.scalar(
-        select(Subscription).where(Subscription.shop_id == shop_id)
-    )
-    if subscription is None or subscription.status == SubStatus.trial:
-        return
+async def enforce_product_writable(product_id: int, shop_id: int, session: AsyncSession) -> None:
+    """402 якщо товар заморожений (не входить у топ-N активних free-плану)."""
+    frozen = await frozen_product_ids(shop_id, session)
+    if product_id in frozen:
+        raise CatalogError(
+            HTTPStatus.PAYMENT_REQUIRED,
+            "Цей товар заморожено. Оформіть тариф, щоб редагувати.",
+        )
 
-    plan = await session.get(Plan, subscription.plan_id) if subscription.plan_id else None
-    if plan is None or plan.limits.get("photos") is not True:
-        raise CatalogError(HTTPStatus.PAYMENT_REQUIRED, "Фото недоступні на поточному плані")
+
+async def enforce_photos_allowed(shop_id: int, session: AsyncSession) -> None:
+    """402 якщо поточний план не дозволяє фото (free: photos=False)."""
+    limits = await current_plan_limits(shop_id, session)
+    if not limits.get("photos"):
+        raise CatalogError(
+            HTTPStatus.PAYMENT_REQUIRED,
+            "Фото доступні на тарифі Basic+. Оформіть тариф.",
+        )
+
+
+# Збережено для сумісності з api/catalog.py до рефакторингу імпортів.
+enforce_photo_upload_allowed = enforce_photos_allowed
 
 
 def _validate_axis_values(template: ProductTemplate | None, variant: VariantInput) -> None:
@@ -173,7 +240,7 @@ async def create_product_with_variants(
     for variant_input in payload.variants:
         _validate_axis_values(template, variant_input)
 
-    await _enforce_product_limit(session, shop_id)
+    await enforce_can_create_product(shop_id, session)
 
     product = Product(
         shop_id=shop_id,

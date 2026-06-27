@@ -401,14 +401,22 @@ class Subscription(Base):
 
     @property
     def is_writable(self) -> bool:
-        """Чи може магазин редагувати дані (не read-only)."""
-        if self.status in (SubStatus.active, SubStatus.canceled, SubStatus.past_due):
+        """Чи може магазин редагувати дані (не read-only).
+
+        Free-стан (expired trial / expired sub / no paid plan) → True: магазин
+        залишається робочим, обмеження накладають enforce-функції каталогу, а не
+        цей прапор. Стіна прибрана (FREE_PLAN_SPEC §8).
+        """
+        if self.status in (SubStatus.active, SubStatus.canceled, SubStatus.past_due, SubStatus.expired):
             return True
         if (
             self.status == SubStatus.trial
             and self.trial_ends_at
             and ensure_aware_utc(self.trial_ends_at) > utcnow()
         ):
+            return True
+        # Expired trial (trial_ends_at у минулому) — теж free, теж writable.
+        if self.status == SubStatus.trial:
             return True
         return False
 

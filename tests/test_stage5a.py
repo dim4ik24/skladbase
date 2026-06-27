@@ -235,7 +235,9 @@ async def test_promo_extends_period_and_rejects_second_redeem(client: AsyncClien
 
 
 @pytest.mark.asyncio
-async def test_expired_subscription_blocks_writes_but_not_reads(client: AsyncClient) -> None:
+async def test_expired_subscription_is_free_plan_writes_allowed(client: AsyncClient) -> None:
+    """FREE_PLAN_SPEC §8: expired → free-план, магазин writable (не стіна).
+    Мутації дозволені до слот-ліміту; заморожених немає, бо ≤ 20 товарів."""
     init_data, shop_id = await _bootstrap(client, 5004)
 
     async with db.async_session() as session:
@@ -246,7 +248,7 @@ async def test_expired_subscription_blocks_writes_but_not_reads(client: AsyncCli
 
     payload = {"name": "Товар", "variants": [{"axis_values": {}, "price": "10"}]}
     r_create = await client.post("/api/products", json=payload, headers={HEADER: init_data})
-    assert r_create.status_code == 402
+    assert r_create.status_code == 201  # expired = free, writable
 
     r_list = await client.get("/api/products", headers={HEADER: init_data})
     assert r_list.status_code == 200
@@ -260,10 +262,10 @@ async def test_expired_subscription_blocks_writes_but_not_reads(client: AsyncCli
     r_patch = await client.patch(
         f"/api/products/{product_id}", json={"name": "Х"}, headers={HEADER: init_data}
     )
-    assert r_patch.status_code == 402
+    assert r_patch.status_code == 200  # не заморожений (≤ 20 товарів)
 
     r_delete = await client.delete(f"/api/products/{product_id}", headers={HEADER: init_data})
-    assert r_delete.status_code == 402
+    assert r_delete.status_code == 204  # delete завжди дозволено
 
 
 @pytest.mark.asyncio

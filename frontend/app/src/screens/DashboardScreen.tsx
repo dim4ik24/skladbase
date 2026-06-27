@@ -13,7 +13,6 @@ interface DashboardScreenProps {
   loading: boolean;
   metricCards: MetricCardData[];
   reservations: Reservation[];
-  writable: boolean;
   variantLabel: (variantId: number) => string;
   onRelease: (id: number) => Promise<void>;
   onFulfill: (id: number) => Promise<void>;
@@ -25,7 +24,6 @@ export function DashboardScreen({
   loading,
   metricCards,
   reservations,
-  writable,
   variantLabel,
   onRelease,
   onFulfill,
@@ -83,7 +81,6 @@ export function DashboardScreen({
           ) : (
             <ReservationsPanel
               reservations={reservations}
-              writable={writable}
               variantLabel={variantLabel}
               onRelease={onRelease}
               onFulfill={onFulfill}

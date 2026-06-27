@@ -257,9 +257,11 @@ async def test_cross_shop_variant_and_reservation_return_404(client: AsyncClient
 
 
 @pytest.mark.asyncio
-async def test_expired_subscription_blocks_mutations_but_not_reservations_get(
+async def test_expired_subscription_is_free_plan_mutations_allowed_within_limit(
     client: AsyncClient,
 ) -> None:
+    """FREE_PLAN_SPEC §8: expired → free-план, writable.
+    Магазин з ≤ 20 товарів → нічого не заморожено → мутації дозволені."""
     init_data, shop_id = await _bootstrap(client, 9010)
     variant_id = await _add_variant(shop_id, on_hand=10)
     await _expire_subscription(shop_id)
@@ -267,17 +269,17 @@ async def test_expired_subscription_blocks_mutations_but_not_reservations_get(
     r_restock = await client.post(
         f"/api/variants/{variant_id}/restock", json={"qty": 1}, headers={HEADER: init_data}
     )
-    assert r_restock.status_code == 402
+    assert r_restock.status_code == 200  # expired = free, не заморожений (≤ 20 товарів)
 
     r_adjust = await client.post(
         f"/api/variants/{variant_id}/adjust", json={"new_on_hand": 1}, headers={HEADER: init_data}
     )
-    assert r_adjust.status_code == 402
+    assert r_adjust.status_code == 200
 
     r_reserve = await client.post(
         f"/api/variants/{variant_id}/reserve", json={"qty": 1}, headers={HEADER: init_data}
     )
-    assert r_reserve.status_code == 402
+    assert r_reserve.status_code == 200
 
     r_list = await client.get("/api/reservations", headers={HEADER: init_data})
     assert r_list.status_code == 200
