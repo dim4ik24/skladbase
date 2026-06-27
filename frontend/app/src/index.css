@@ -399,11 +399,42 @@ body {
   color: var(--green-deep);
 }
 
+/* ── Sort bar ────────────────────────────────────────────────────────── */
+.sort-bar {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.sort-btn {
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  padding: 5px 12px;
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  color: var(--text-soft);
+  font-family: "Manrope", system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+  touch-action: manipulation;
+  white-space: nowrap;
+}
+
+.sort-btn--active {
+  color: var(--green);
+  border-color: var(--green);
+}
+
 /* ── Catalog grid ────────────────────────────────────────────────────── */
 .product-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 14px;
+  position: relative; /* required for GSAP Flip absolute:true */
 }
 
 /* ── Product card — glass ─────────────────────────────────────────────── */

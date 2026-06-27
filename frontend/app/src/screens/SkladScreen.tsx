@@ -1,5 +1,6 @@
-import { motion } from "motion/react";
-import { useState } from "react";
+import gsap from "gsap";
+import { Flip } from "gsap/Flip";
+import { useLayoutEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { ProductCard } from "../components/ProductCard";
 import { ProductFormModal } from "../components/ProductFormModal";
@@ -15,14 +16,16 @@ import type {
   Template,
 } from "../types";
 
-const CARD_VARIANTS = {
-  hidden: { opacity: 0, y: 18 },
-  visible: (i: number) => ({
-    opacity: 1,
-    y: 0,
-    transition: { delay: i * 0.055, duration: 0.38, ease: [0, 0, 0.2, 1] as const },
-  }),
-} as const;
+gsap.registerPlugin(Flip);
+
+type SortField = "name" | "price" | "stock" | "date";
+
+const SORT_LABELS: Record<SortField, string> = {
+  name: "Назва",
+  price: "Ціна",
+  stock: "Залишок",
+  date: "Дата",
+};
 
 interface SkladScreenProps {
   products: Product[];
@@ -70,12 +73,96 @@ export function SkladScreen({
   scrollContainerRef,
 }: SkladScreenProps) {
   const [query, setQuery] = useState("");
+  const [sortField, setSortField] = useState<SortField>("date");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [showProductForm, setShowProductForm] = useState(false);
   const [showReservations, setShowReservations] = useState(false);
 
-  const filteredProducts = products.filter((p) =>
-    p.name.toLowerCase().includes(query.toLowerCase()),
-  );
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const flipStateRef = useRef<ReturnType<typeof Flip.getState> | null>(null);
+
+  function captureFlip() {
+    if (!wrapperRef.current) return;
+    const items = wrapperRef.current.querySelectorAll<Element>("[data-flip]");
+    if (items.length > 0) {
+      flipStateRef.current = Flip.getState(items);
+    }
+  }
+
+  const filteredProducts = products.filter((p) => {
+    const q = query.toLowerCase();
+    return (
+      p.name.toLowerCase().includes(q) ||
+      p.variants.some((v) => v.sku?.toLowerCase().includes(q))
+    );
+  });
+
+  const sortedProducts = [...filteredProducts].sort((a, b) => {
+    const dir = sortDir === "asc" ? 1 : -1;
+    switch (sortField) {
+      case "name":
+        return a.name.localeCompare(b.name, "uk") * dir;
+      case "price": {
+        const aMin = a.variants.length > 0
+          ? Math.min(...a.variants.map((v) => parseFloat(v.price)))
+          : 0;
+        const bMin = b.variants.length > 0
+          ? Math.min(...b.variants.map((v) => parseFloat(v.price)))
+          : 0;
+        return (aMin - bMin) * dir;
+      }
+      case "stock": {
+        const aSum = a.variants.reduce((s, v) => s + v.available, 0);
+        const bSum = b.variants.reduce((s, v) => s + v.available, 0);
+        return (aSum - bSum) * dir;
+      }
+      case "date": {
+        const aDate = a.created_at ?? "";
+        const bDate = b.created_at ?? "";
+        return aDate.localeCompare(bDate) * dir;
+      }
+    }
+  });
+
+  function handleSearchChange(e: React.ChangeEvent<HTMLInputElement>) {
+    captureFlip();
+    setQuery(e.target.value);
+  }
+
+  function handleSortClick(field: SortField) {
+    captureFlip();
+    if (field === sortField) {
+      setSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortDir(field === "date" ? "desc" : "asc");
+    }
+  }
+
+  useLayoutEffect(() => {
+    if (!flipStateRef.current || !wrapperRef.current) return;
+    const state = flipStateRef.current;
+    flipStateRef.current = null;
+
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    // scope обмежений wrapperRef — НЕ gsap.utils.toArray по всьому document
+    const items = wrapperRef.current.querySelectorAll<Element>("[data-flip]");
+
+    Flip.from(state, {
+      targets: items,
+      duration: 0.4,
+      ease: "power1.inOut",
+      stagger: 0.03,
+      absolute: true,
+      onEnter: (els: Element[]) => {
+        gsap.fromTo(els, { opacity: 0, scale: 0.85 }, { opacity: 1, scale: 1, duration: 0.3 });
+      },
+      onLeave: (els: Element[]) => {
+        gsap.to(els, { opacity: 0, scale: 0.85, duration: 0.2 });
+      },
+    });
+  }, [query, sortField, sortDir]);
 
   async function handleSubmitCreate(payload: ProductInput) {
     await onCreateProduct(payload);
@@ -94,7 +181,7 @@ export function SkladScreen({
           type="search"
           placeholder="Пошук товарів..."
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={handleSearchChange}
           aria-label="Пошук товарів"
         />
         <button
@@ -110,6 +197,21 @@ export function SkladScreen({
         <button type="button" onClick={() => setShowReservations((prev) => !prev)}>
           Резерви ({reservations.length})
         </button>
+      </div>
+
+      <div className="sort-bar" role="group" aria-label="Сортування">
+        {(Object.keys(SORT_LABELS) as SortField[]).map((field) => (
+          <button
+            key={field}
+            type="button"
+            className={`sort-btn${sortField === field ? " sort-btn--active" : ""}`}
+            onClick={() => handleSortClick(field)}
+            aria-pressed={sortField === field}
+          >
+            {SORT_LABELS[field]}
+            {sortField === field ? (sortDir === "asc" ? " ↑" : " ↓") : null}
+          </button>
+        ))}
       </div>
 
       {showReservations ? (
@@ -138,18 +240,12 @@ export function SkladScreen({
 
       {loading ? (
         <p className="status-text">Завантаження…</p>
-      ) : filteredProducts.length === 0 ? (
+      ) : sortedProducts.length === 0 ? (
         <p className="status-text">Нічого не знайдено</p>
       ) : (
-        <div className="product-grid">
-          {filteredProducts.map((product, i) => (
-            <motion.div
-              key={product.id}
-              custom={i}
-              initial="hidden"
-              animate="visible"
-              variants={CARD_VARIANTS}
-            >
+        <div className="product-grid" ref={wrapperRef}>
+          {sortedProducts.map((product) => (
+            <div key={product.id} data-flip={product.id}>
               <ProductCard
                 product={product}
                 writable={writable}
@@ -161,7 +257,7 @@ export function SkladScreen({
                 onReserve={onReserve}
                 onUpdateProduct={onUpdateProduct}
               />
-            </motion.div>
+            </div>
           ))}
         </div>
       )}

@@ -49,6 +49,7 @@ export interface Product {
   is_frozen: boolean;
   archived: boolean;
   variants: Variant[];
+  created_at?: string;
 }
 
 export interface TemplateField {
