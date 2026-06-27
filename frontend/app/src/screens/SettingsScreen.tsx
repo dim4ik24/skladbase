@@ -1,9 +1,26 @@
-import type { Plan, Shop } from "../types";
+import type { Shop } from "../types";
 
 interface SettingsScreenProps {
   shop: Shop | null;
-  plans: Plan[];
   onOpenPaywall: () => void;
+}
+
+function currentPlanLabel(shop: Shop): string {
+  if (
+    shop.plan_code != null &&
+    shop.plan_code !== "free" &&
+    (shop.status === "active" || shop.status === "canceled" || shop.status === "past_due")
+  ) {
+    return shop.plan_code.charAt(0).toUpperCase() + shop.plan_code.slice(1);
+  }
+  if (
+    shop.status === "trial" &&
+    shop.trial_ends_at != null &&
+    new Date(shop.trial_ends_at) > new Date()
+  ) {
+    return "Пробний період";
+  }
+  return "Безкоштовний";
 }
 
 const STATUS_LABELS: Record<string, { label: string; colorClass: string }> = {
@@ -16,9 +33,11 @@ const STATUS_LABELS: Record<string, { label: string; colorClass: string }> = {
 
 const COMING_SOON = ["Назва та лого магазину", "Мова", "Підключення акаунтів"];
 
-export function SettingsScreen({ shop, plans, onOpenPaywall }: SettingsScreenProps) {
-  const currentPlan = plans.find((p) => p.code === shop?.plan_code);
+export function SettingsScreen({ shop, onOpenPaywall }: SettingsScreenProps) {
   const statusInfo = shop?.status ? STATUS_LABELS[shop.status] : null;
+  const planLabel = shop ? currentPlanLabel(shop) : "…";
+  const chipLabel =
+    planLabel === "Безкоштовний" ? "Free" : planLabel === "Пробний період" ? "Пробний" : "Активний";
 
   return (
     <div className="flex flex-col gap-4 pb-4">
@@ -29,11 +48,21 @@ export function SettingsScreen({ shop, plans, onOpenPaywall }: SettingsScreenPro
           Підписка
         </h3>
 
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-sm text-text-soft">Тарифний план</span>
-          <span className="text-sm font-semibold text-text">
-            {currentPlan?.name ?? (shop ? "Немає" : "…")}
-          </span>
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div className="min-w-0">
+            <p className="text-xs text-text-soft mb-0.5">Зараз активний</p>
+            <p className="text-base font-bold text-text">{planLabel}</p>
+            {shop?.max_products != null ? (
+              <p className="text-xs text-text-soft mt-0.5">
+                Ліміт: {shop.max_products} активних товарів
+              </p>
+            ) : null}
+          </div>
+          {shop ? (
+            <span className="shrink-0 mt-0.5 rounded-full bg-[var(--state-ok)] px-2.5 py-0.5 text-[10px] font-bold text-green-deep">
+              {chipLabel}
+            </span>
+          ) : null}
         </div>
 
         {statusInfo ? (

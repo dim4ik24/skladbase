@@ -154,7 +154,11 @@ export function SubscriptionPaywall({
                       <h3 className="font-sans text-base font-bold text-text leading-tight">
                         {plan.name}
                       </h3>
-                      {isFeatured && !isCurrent ? (
+                      {isCurrent ? (
+                        <span className="rounded-full bg-[var(--state-ok)] px-2 py-0.5 text-[10px] font-bold text-green-deep shrink-0">
+                          Поточний
+                        </span>
+                      ) : isFeatured ? (
                         <span className="rounded-full bg-green px-2 py-0.5 text-[10px] font-bold text-white shrink-0">
                           Рекомендовано
                         </span>

@@ -734,7 +734,8 @@ describe("Tab navigation", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Налаштування" }));
 
     expect(screen.getByText("Підписка")).toBeInTheDocument();
-    expect(screen.getByText("Тарифний план")).toBeInTheDocument();
+    expect(screen.getByText("Зараз активний")).toBeInTheDocument();
+    expect(screen.getByText("Pro")).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Налаштування" })).toHaveAttribute(
       "aria-selected",
       "true",

@@ -344,7 +344,6 @@ export default function App() {
         ) : (
           <SettingsScreen
             shop={shop}
-            plans={plans}
             onOpenPaywall={() => setShowPaywall(true)}
           />
         )}
