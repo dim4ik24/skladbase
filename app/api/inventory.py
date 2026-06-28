@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.catalog import VariantOut
 from app.db import get_session
-from app.deps import require_member, require_writable
+from app.deps import require_permission, require_permission_writable
 from app.models import Membership, Reservation, ReservationSource, ReservationStatus, Variant
 from app.services import catalog as catalog_service
 from app.services import inventory
@@ -86,7 +86,7 @@ async def _enforce_variant_product_writable(
 async def restock_variant(
     variant_id: int,
     payload: RestockIn,
-    membership: Membership = Depends(require_writable),
+    membership: Membership = require_permission_writable("can_manage_stock"),
     session: AsyncSession = Depends(get_session),
 ) -> Variant:
     await _enforce_variant_product_writable(variant_id, membership.shop_id, session)
@@ -102,7 +102,7 @@ async def restock_variant(
 async def adjust_variant(
     variant_id: int,
     payload: AdjustIn,
-    membership: Membership = Depends(require_writable),
+    membership: Membership = require_permission_writable("can_manage_stock"),
     session: AsyncSession = Depends(get_session),
 ) -> Variant:
     await _enforce_variant_product_writable(variant_id, membership.shop_id, session)
@@ -122,7 +122,7 @@ async def adjust_variant(
 async def reserve_variant(
     variant_id: int,
     payload: ReserveIn,
-    membership: Membership = Depends(require_writable),
+    membership: Membership = require_permission_writable("can_manage_reservations"),
     session: AsyncSession = Depends(get_session),
 ) -> Reservation:
     """Ручний резерв «відклади товар» — менеджер тримає одиницю для клієнта
@@ -148,7 +148,7 @@ async def reserve_variant(
 @router.post("/reservations/{reservation_id}/release", response_model=ReservationOut)
 async def release_reservation(
     reservation_id: int,
-    membership: Membership = Depends(require_writable),
+    membership: Membership = require_permission_writable("can_manage_reservations"),
     session: AsyncSession = Depends(get_session),
 ) -> Reservation:
     try:
@@ -162,7 +162,7 @@ async def release_reservation(
 @router.post("/reservations/{reservation_id}/fulfill", response_model=ReservationOut)
 async def fulfill_reservation(
     reservation_id: int,
-    membership: Membership = Depends(require_writable),
+    membership: Membership = require_permission_writable("can_manage_reservations"),
     session: AsyncSession = Depends(get_session),
 ) -> Reservation:
     """Ручний продаж раніше відкладеного резерву (списує on_hand)."""
@@ -176,7 +176,7 @@ async def fulfill_reservation(
 
 @router.get("/reservations", response_model=list[ReservationOut])
 async def list_active_reservations(
-    membership: Membership = Depends(require_member),
+    membership: Membership = require_permission("can_view_inventory"),
     session: AsyncSession = Depends(get_session),
 ) -> list[Reservation]:
     reservations = (

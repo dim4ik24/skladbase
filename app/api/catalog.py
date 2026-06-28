@@ -17,7 +17,7 @@ from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.db import get_session
-from app.deps import require_member, require_owner, require_writable
+from app.deps import require_permission, require_permission_writable
 from app.models import Membership, Product, ProductPhoto, ProductTemplate, TemplateCode, Variant
 from app.services import catalog as catalog_service
 from app.services import media as media_service
@@ -114,7 +114,7 @@ class ProductOut(BaseModel):
 # --------------------------------------------------------------------------- #
 @router.get("/templates", response_model=list[TemplateOut])
 async def list_templates(
-    membership: Membership = Depends(require_member),
+    membership: Membership = require_permission("can_view_inventory"),
     session: AsyncSession = Depends(get_session),
 ) -> list[ProductTemplate]:
     """Базові (shop_id NULL) + кастомні поточного магазину."""
@@ -134,7 +134,7 @@ async def list_templates(
 @router.post("/templates", response_model=TemplateOut, status_code=status.HTTP_201_CREATED)
 async def create_template(
     payload: TemplateIn,
-    membership: Membership = Depends(require_owner),
+    membership: Membership = require_permission("can_edit_products"),
     session: AsyncSession = Depends(get_session),
 ) -> ProductTemplate:
     try:
@@ -149,7 +149,7 @@ async def create_template(
 async def patch_template(
     template_id: int,
     payload: TemplatePatch,
-    membership: Membership = Depends(require_owner),
+    membership: Membership = require_permission("can_edit_products"),
     session: AsyncSession = Depends(get_session),
 ) -> ProductTemplate:
     try:
@@ -163,7 +163,7 @@ async def patch_template(
 @router.delete("/templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_template(
     template_id: int,
-    membership: Membership = Depends(require_owner),
+    membership: Membership = require_permission("can_edit_products"),
     session: AsyncSession = Depends(get_session),
 ) -> None:
     try:
@@ -178,7 +178,7 @@ async def delete_template(
 @router.post("/products", response_model=ProductOut, status_code=status.HTTP_201_CREATED)
 async def create_product(
     payload: ProductIn,
-    membership: Membership = Depends(require_writable),
+    membership: Membership = require_permission_writable("can_edit_products"),
     session: AsyncSession = Depends(get_session),
 ) -> Product:
     service_payload = catalog_service.ProductInput(
@@ -207,7 +207,7 @@ async def create_product(
 
 @router.get("/products", response_model=list[ProductOut])
 async def list_products(
-    membership: Membership = Depends(require_member),
+    membership: Membership = require_permission("can_view_inventory"),
     session: AsyncSession = Depends(get_session),
 ) -> list[ProductOut]:
     products = (
@@ -248,7 +248,7 @@ async def _get_owned_product(session: AsyncSession, shop_id: int, product_id: in
 async def patch_product(
     product_id: int,
     payload: ProductPatch,
-    membership: Membership = Depends(require_writable),
+    membership: Membership = require_permission_writable("can_edit_products"),
     session: AsyncSession = Depends(get_session),
 ) -> Product:
     product = await _get_owned_product(session, membership.shop_id, product_id)
@@ -269,7 +269,7 @@ async def patch_product(
 @router.delete("/products/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_product(
     product_id: int,
-    membership: Membership = Depends(require_writable),
+    membership: Membership = require_permission_writable("can_edit_products"),
     session: AsyncSession = Depends(get_session),
 ) -> None:
     product = await _get_owned_product(session, membership.shop_id, product_id)
@@ -285,7 +285,7 @@ async def upload_variant_photo(
     variant_id: int,
     request: Request,
     file: UploadFile = File(...),
-    membership: Membership = Depends(require_writable),
+    membership: Membership = require_permission_writable("can_edit_products"),
     session: AsyncSession = Depends(get_session),
 ) -> Variant:
     variant = await session.scalar(
@@ -347,7 +347,7 @@ async def upload_product_photo(
     product_id: int,
     request: Request,
     file: UploadFile = File(...),
-    membership: Membership = Depends(require_writable),
+    membership: Membership = require_permission_writable("can_edit_products"),
     session: AsyncSession = Depends(get_session),
 ) -> ProductPhoto:
     product = await _get_owned_product(session, membership.shop_id, product_id)
@@ -408,7 +408,7 @@ async def upload_product_photo(
 async def delete_product_photo(
     product_id: int,
     photo_id: int,
-    membership: Membership = Depends(require_member),
+    membership: Membership = require_permission("can_edit_products"),
     session: AsyncSession = Depends(get_session),
 ) -> None:
     product = await _get_owned_product(session, membership.shop_id, product_id)

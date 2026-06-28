@@ -56,7 +56,10 @@ async def test_valid_init_data_resolves_correct_shop(client: AsyncClient) -> Non
 
 
 @pytest.mark.asyncio
-async def test_manager_forbidden_owner_allowed_on_finance(client: AsyncClient) -> None:
+async def test_finance_access_by_role(client: AsyncClient) -> None:
+    """Stage 1b: GET /finance/summary uses require_permission(can_view_finance).
+    Manager with default can_view_finance=True → 200 (same as owner).
+    Granular 403 (can_view_finance=False) is in test_permissions_gates.py."""
     owner_init_data = make_init_data(301, first_name="Власник")
     r_owner = await client.get("/api/me", headers={HEADER: owner_init_data})
     shop_id = r_owner.json()["shop_id"]
@@ -74,8 +77,9 @@ async def test_manager_forbidden_owner_allowed_on_finance(client: AsyncClient) -
 
     manager_init_data = make_init_data(manager_tg_id, first_name="Менеджер")
 
+    # Manager with default can_view_finance=True → 200 (not 403 since Stage 1b)
     r_manager = await client.get("/api/finance/summary", headers={HEADER: manager_init_data})
-    assert r_manager.status_code == 403
+    assert r_manager.status_code == 200
 
     r_owner_finance = await client.get("/api/finance/summary", headers={HEADER: owner_init_data})
     assert r_owner_finance.status_code == 200

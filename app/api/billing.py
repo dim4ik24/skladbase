@@ -23,7 +23,7 @@ from app.billing.providers import NowPaymentsProvider, StarsProvider, WayForPayP
 from app.billing.refs import build_ref
 from app.config import settings
 from app.db import get_session
-from app.deps import require_member, require_owner
+from app.deps import require_permission
 from app.models import Membership, Plan, Shop, SubPeriod, SubProvider, Subscription, SubStatus
 from app.services.subscriptions import SubscriptionError, SubscriptionService
 
@@ -122,7 +122,7 @@ async def list_plans(session: AsyncSession = Depends(get_session)) -> list[Plan]
 @router.post("/checkout/stars", response_model=StarsCheckoutOut)
 async def create_stars_checkout(
     payload: StarsCheckoutIn,
-    membership: Membership = Depends(require_member),
+    membership: Membership = require_permission("can_manage_billing"),
     session: AsyncSession = Depends(get_session),
 ) -> StarsCheckoutOut:
     plan = await _get_active_plan(session, payload.plan_code)
@@ -153,7 +153,7 @@ async def create_stars_checkout(
 @router.post("/checkout/card", response_model=CardCheckoutOut)
 async def create_card_checkout(
     payload: CardCheckoutIn,
-    membership: Membership = Depends(require_member),
+    membership: Membership = require_permission("can_manage_billing"),
     session: AsyncSession = Depends(get_session),
 ) -> CardCheckoutOut:
     plan = await _get_active_plan(session, payload.plan_code)
@@ -177,7 +177,7 @@ async def create_card_checkout(
 @router.post("/checkout/crypto", response_model=CryptoCheckoutOut)
 async def create_crypto_checkout(
     payload: CryptoCheckoutIn,
-    membership: Membership = Depends(require_member),
+    membership: Membership = require_permission("can_manage_billing"),
     session: AsyncSession = Depends(get_session),
 ) -> CryptoCheckoutOut:
     plan = await _get_active_plan(session, payload.plan_code)
@@ -201,7 +201,7 @@ async def create_crypto_checkout(
 @router.post("/promo", response_model=SubscriptionOut)
 async def redeem_promo(
     payload: PromoIn,
-    membership: Membership = Depends(require_member),
+    membership: Membership = require_permission("can_manage_billing"),
     session: AsyncSession = Depends(get_session),
 ) -> Subscription:
     shop = await session.get(Shop, membership.shop_id)
@@ -224,7 +224,7 @@ async def redeem_promo(
 # --------------------------------------------------------------------------- #
 @router.post("/cancel", response_model=SubscriptionOut)
 async def cancel_subscription(
-    membership: Membership = Depends(require_owner),
+    membership: Membership = require_permission("can_manage_billing"),
     session: AsyncSession = Depends(get_session),
 ) -> Subscription:
     subscription = await _get_subscription(session, membership.shop_id)

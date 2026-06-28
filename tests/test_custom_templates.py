@@ -298,9 +298,10 @@ async def test_validate_duplicate_key_422(client: AsyncClient) -> None:
 
 
 # --------------------------------------------------------------------------- #
-#  Тест 13: manager не може створити → 403
+#  Тест 13: manager з дефолтним can_edit_products=True → може створити → 201
+#  (Stage 1b: POST /templates тепер require_permission, не require_owner)
 # --------------------------------------------------------------------------- #
-async def test_manager_cannot_create_template_403(client: AsyncClient) -> None:
+async def test_manager_with_default_perms_can_create_template(client: AsyncClient) -> None:
     me = await _bootstrap(client, tg_id=13001)
     await _make_manager(shop_id=me["shop_id"], tg_id=13002)
 
@@ -309,7 +310,8 @@ async def test_manager_cannot_create_template_403(client: AsyncClient) -> None:
         json={"name": "Менеджерський", "field_schema": _BASIC_SCHEMA},
         headers=_hdr(13002),
     )
-    assert r.status_code == 403, r.text
+    assert r.status_code == 201, r.text
+    assert r.json()["shop_id"] == me["shop_id"]
 
 
 # --------------------------------------------------------------------------- #
