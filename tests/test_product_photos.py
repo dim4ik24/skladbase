@@ -227,9 +227,9 @@ async def test_upload_photo_frozen_product_blocked(client: AsyncClient) -> None:
 
     # Додаємо 2 товари — другий (старіший за created_at) стає frozen
     product_id1 = await _add_product(shop_id)
-    product_id2 = await _add_product(shop_id)
+    await _add_product(shop_id)
 
-    # product_id1 — більший id (пізніший) — в топ-1; product_id2 — frozen
+    # product_id1 — більший id (пізніший) — в топ-1; другий — frozen
     # frozen_product_ids вибирає топ-N по (created_at DESC, id DESC)
     # тому product_id1 (більший id, пізніший) → in top → NOT frozen
     # product_id2 (менший id, раніший) → frozen
@@ -252,7 +252,7 @@ async def test_upload_photo_frozen_product_blocked(client: AsyncClient) -> None:
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_upload_photo_cross_shop_returns_404(client: AsyncClient) -> None:
-    init_a, shop_a = await _bootstrap(client, tg_id=4005, name="Shop A")
+    _init_a, shop_a = await _bootstrap(client, tg_id=4005, name="Shop A")
     init_b, _shop_b = await _bootstrap(client, tg_id=4006, name="Shop B")
 
     product_a = await _add_product(shop_a)
@@ -325,7 +325,7 @@ async def test_delete_photo_frozen_product_allowed(client: AsyncClient) -> None:
         await session.commit()
 
     product_id1 = await _add_product(shop_id)
-    product_id2 = await _add_product(shop_id)
+    await _add_product(shop_id)
     # product_id1 → frozen (менший id → раніший → не в топ-1)
     frozen_product_id = product_id1
 
@@ -365,7 +365,7 @@ async def test_delete_photo_free_plan_allowed(client: AsyncClient) -> None:
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_public_catalog_returns_photos(client: AsyncClient) -> None:
-    init_data, shop_id = await _bootstrap(client, tg_id=4010)
+    _init_data, shop_id = await _bootstrap(client, tg_id=4010)
     product_id = await _add_product(shop_id)
 
     # Засіяти фото напряму

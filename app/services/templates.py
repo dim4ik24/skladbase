@@ -12,7 +12,7 @@ from http import HTTPStatus
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Membership, MemberRole, Product, ProductTemplate, TemplateCode
+from app.models import Membership, Product, ProductTemplate, TemplateCode
 
 
 class TemplateError(Exception):

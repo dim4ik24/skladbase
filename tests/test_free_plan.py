@@ -28,8 +28,8 @@ from app.models import (
     Plan,
     Product,
     Shop,
-    SubStatus,
     Subscription,
+    SubStatus,
     Variant,
     utcnow,
 )
@@ -450,7 +450,7 @@ async def test_public_catalog_excludes_frozen(client: AsyncClient) -> None:
     await _expire_trial(shop_id)
     await _clear_demos(shop_id)
 
-    ids = await _seed_n_products(shop_id, 25)
+    await _seed_n_products(shop_id, 25)
     # ids[0..4] = frozen (5 найстаріших), ids[5..24] = active (20 найновіших)
 
     async with db_module.async_session() as s:

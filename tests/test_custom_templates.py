@@ -18,13 +18,10 @@ F1 — Кастомні шаблони: acceptance tests.
 """
 from __future__ import annotations
 
-import pytest
 from httpx import AsyncClient
-from sqlalchemy import select
 
 from app import db as db_module
-from app.models import MemberRole, Membership, Product, ProductTemplate, TemplateCode, Variant
-from app.seed import seed_plans
+from app.models import MemberRole, Membership
 from tests.conftest import make_init_data
 
 # --------------------------------------------------------------------------- #

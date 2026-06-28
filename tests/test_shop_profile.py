@@ -21,7 +21,7 @@ from PIL import Image
 
 from app import db as db_module
 from app.config import settings
-from app.models import Membership, MemberRole, Shop
+from app.models import MemberRole, Membership, Shop
 from tests.conftest import make_init_data
 
 HEADER = "X-Telegram-Init-Data"
@@ -166,7 +166,7 @@ async def test_upload_shop_logo_saves_url(client: AsyncClient) -> None:
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_upload_shop_logo_manager_returns_403(client: AsyncClient) -> None:
-    owner_init, shop_id = await _bootstrap(client, tg_id=5004, name="Власник")
+    _owner_init, shop_id = await _bootstrap(client, tg_id=5004, name="Власник")
     manager_tg_id = 5005
     await _make_manager(shop_id, manager_tg_id)
     manager_init = make_init_data(manager_tg_id, first_name="Менеджер")
