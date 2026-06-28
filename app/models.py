@@ -186,11 +186,16 @@ class Membership(Base):
     role: Mapped[MemberRole] = mapped_column(SAEnum(MemberRole), default=MemberRole.manager)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
-    shop: Mapped["Shop"] = relationship(back_populates="members")
+    # Granular permissions (Stage 1). All default to True so existing members lose no access.
+    # owner always has all permissions via require_permission owner-override (role check, not column).
+    can_view_inventory: Mapped[bool] = mapped_column(Boolean, default=True)
+    can_edit_products: Mapped[bool] = mapped_column(Boolean, default=True)
+    can_manage_reservations: Mapped[bool] = mapped_column(Boolean, default=True)
+    can_manage_stock: Mapped[bool] = mapped_column(Boolean, default=True)
+    can_view_finance: Mapped[bool] = mapped_column(Boolean, default=True)
+    can_manage_billing: Mapped[bool] = mapped_column(Boolean, default=True)
 
-    @property
-    def can_view_finance(self) -> bool:
-        return self.role == MemberRole.owner
+    shop: Mapped["Shop"] = relationship(back_populates="members")
 
 
 # --------------------------------------------------------------------------- #

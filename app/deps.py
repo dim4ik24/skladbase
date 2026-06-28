@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hmac
 from datetime import timedelta
+from typing import Any
 
 from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy import select
@@ -30,6 +31,8 @@ __all__ = [
     "require_api_key",
     "require_member",
     "require_owner",
+    "require_permission",
+    "require_permission_writable",
     "require_writable",
     "resolve_membership",
 ]
@@ -102,6 +105,54 @@ async def require_writable(
             detail="підписка не активна — режим лише читання",
         )
     return membership
+
+
+def _check_permission(membership: Membership, perm: str) -> None:
+    """Pure sync check — exposed for direct testing without HTTP overhead.
+
+    owner role always passes (column value irrelevant — owner override).
+    """
+    if membership.role == MemberRole.owner:
+        return
+    if not getattr(membership, perm, False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"permission denied: {perm}",
+        )
+
+
+async def _check_writable(shop_id: int, session: AsyncSession) -> None:
+    """Pure async writable check — exposed for direct testing."""
+    subscription = await session.scalar(
+        select(Subscription).where(Subscription.shop_id == shop_id)
+    )
+    if subscription is None or not subscription.is_writable:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="підписка не активна — режим лише читання",
+        )
+
+
+def require_permission(perm: str) -> Any:
+    """Dependency factory: resolves membership then checks granular permission (403)."""
+    async def _dep(
+        membership: Membership = Depends(resolve_membership),
+    ) -> Membership:
+        _check_permission(membership, perm)
+        return membership
+    return Depends(_dep)
+
+
+def require_permission_writable(perm: str) -> Any:
+    """Dependency factory: permission check (403) AND writable check (402), independent gates."""
+    async def _dep(
+        membership: Membership = Depends(resolve_membership),
+        session: AsyncSession = Depends(get_session),
+    ) -> Membership:
+        _check_permission(membership, perm)          # 403 fires first
+        await _check_writable(membership.shop_id, session)  # 402 independent
+        return membership
+    return Depends(_dep)
 
 
 async def require_api_key(
