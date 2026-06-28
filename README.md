@@ -137,3 +137,4 @@ docker compose up
   очищенням прикладів, розмежування ролей `owner`/`manager`.
 
 test autodeploy 2026-06-28
+autodeploy test 2 2026-06-28
