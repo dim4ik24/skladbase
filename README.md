@@ -135,3 +135,5 @@ docker compose up
   брендування магазину з Telegram theme params, read-only стан після
   закінчення тріалу (дані видно, запис заблоковано), демо-банер з
   очищенням прикладів, розмежування ролей `owner`/`manager`.
+
+test autodeploy 2026-06-28
