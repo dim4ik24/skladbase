@@ -271,6 +271,7 @@ export function SkladScreen({
       {modalProduct !== null ? (
         <ProductModal
           product={modalProduct === "create" ? null : modalProduct}
+          products={products}
           templates={templates}
           photosAllowed={photosAllowed}
           isOwner={isOwner}

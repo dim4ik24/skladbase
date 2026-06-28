@@ -10,6 +10,7 @@ import { TemplateBuilderModal } from "./TemplateBuilderModal";
 
 interface ProductModalProps {
   product: Product | null;
+  products: Product[];
   templates: Template[];
   photosAllowed: boolean;
   isOwner?: boolean;
@@ -412,6 +413,7 @@ function EditForm({
 
 export function ProductModal({
   product,
+  products,
   templates,
   photosAllowed,
   isOwner,
@@ -424,11 +426,14 @@ export function ProductModal({
 }: ProductModalProps) {
   const [createdProduct, setCreatedProduct] = useState<Product | null>(null);
 
-  // Phase 2 of create mode: product was just created
   const isPhase2 = createdProduct !== null;
 
-  // The product for the gallery in phase 2 or edit mode
-  const galleryProduct = createdProduct ?? product;
+  // Always read the live version from App.products so gallery updates instantly after upload/delete.
+  const targetId = createdProduct?.id ?? product?.id ?? null;
+  const liveProduct =
+    targetId !== null
+      ? (products.find((p) => p.id === targetId) ?? createdProduct ?? product)
+      : null;
 
   return (
     <div className="modal-overlay" role="presentation" onClick={isPhase2 ? undefined : onClose}>
@@ -439,25 +444,25 @@ export function ProductModal({
         aria-label={product ? "Редагувати товар" : "Додати товар"}
         onClick={(e) => e.stopPropagation()}
       >
-        {product !== null ? (
+        {product !== null && liveProduct !== null ? (
           // Edit mode — product exists, show pre-filled form + gallery
           <EditForm
-            product={product}
+            product={liveProduct}
             photosAllowed={photosAllowed}
             onUpdateProduct={onUpdateProduct}
             onUploadProductPhoto={onUploadProductPhoto}
             onDeleteProductPhoto={onDeleteProductPhoto}
             onClose={onClose}
           />
-        ) : isPhase2 && galleryProduct !== null ? (
+        ) : isPhase2 && liveProduct !== null ? (
           // Create mode Phase 2 — product created, upload photos
           <>
             <p className="product-modal-success">✓ Товар створено!</p>
             <ProductPhotoGallery
-              product={galleryProduct}
+              product={liveProduct}
               photosAllowed={photosAllowed}
-              onUpload={(file) => onUploadProductPhoto(galleryProduct.id, file)}
-              onDelete={(photoId) => onDeleteProductPhoto(galleryProduct.id, photoId)}
+              onUpload={(file) => onUploadProductPhoto(liveProduct.id, file)}
+              onDelete={(photoId) => onDeleteProductPhoto(liveProduct.id, photoId)}
             />
             <div className="modal-actions">
               <button type="button" onClick={onClose}>
