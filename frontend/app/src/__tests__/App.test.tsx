@@ -27,6 +27,9 @@ vi.mock("../api", () => ({
   uploadVariantPhoto: vi.fn(),
   uploadProductPhoto: vi.fn(),
   deleteProductPhoto: vi.fn(),
+  updateShopProfile: vi.fn(),
+  uploadShopLogo: vi.fn(),
+  deleteShopLogo: vi.fn(),
   reserve: vi.fn(),
   releaseReservation: vi.fn(),
   fulfillReservation: vi.fn(),
@@ -140,6 +143,9 @@ beforeEach(() => {
   vi.mocked(api.uploadVariantPhoto).mockReset();
   vi.mocked(api.uploadProductPhoto).mockReset();
   vi.mocked(api.deleteProductPhoto).mockReset();
+  vi.mocked(api.updateShopProfile).mockReset();
+  vi.mocked(api.uploadShopLogo).mockReset();
+  vi.mocked(api.deleteShopLogo).mockReset();
   vi.mocked(api.reserve).mockReset();
   vi.mocked(api.releaseReservation).mockReset();
   vi.mocked(api.fulfillReservation).mockReset();

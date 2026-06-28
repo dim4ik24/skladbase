@@ -187,6 +187,22 @@ export default function App() {
     );
   }
 
+  async function handleUpdateShopName(name: string): Promise<{ shop_name: string; logo_url: string | null }> {
+    const result = await api.updateShopProfile(name);
+    setShop((prev) => prev ? { ...prev, shop_name: result.shop_name, logo_url: result.logo_url } : prev);
+    return result;
+  }
+
+  async function handleUploadShopLogo(file: File): Promise<void> {
+    const result = await api.uploadShopLogo(file);
+    setShop((prev) => prev ? { ...prev, logo_url: result.logo_url } : prev);
+  }
+
+  async function handleDeleteShopLogo(): Promise<void> {
+    await api.deleteShopLogo();
+    setShop((prev) => prev ? { ...prev, logo_url: null } : prev);
+  }
+
   async function handleReserve(variantId: number, payload: ReserveInput) {
     try {
       const reservation = await api.reserve(variantId, payload);
@@ -381,6 +397,9 @@ export default function App() {
           <SettingsScreen
             shop={shop}
             onOpenPaywall={() => setShowPaywall(true)}
+            onUpdateShopName={handleUpdateShopName}
+            onUploadShopLogo={handleUploadShopLogo}
+            onDeleteShopLogo={handleDeleteShopLogo}
           />
         )}
       </div>

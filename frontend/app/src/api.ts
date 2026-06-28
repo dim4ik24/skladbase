@@ -168,6 +168,20 @@ export function clearDemos(): Promise<{ removed: number }> {
   return request<{ removed: number }>("/api/shop/clear-demos", { method: "POST" });
 }
 
+export function updateShopProfile(name: string): Promise<{ shop_name: string; logo_url: string | null }> {
+  return request("/api/shop", { method: "PATCH", body: JSON.stringify({ name }) });
+}
+
+export function uploadShopLogo(file: File): Promise<{ logo_url: string }> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return request("/api/shop/logo", { method: "POST", body: formData });
+}
+
+export function deleteShopLogo(): Promise<void> {
+  return request<void>("/api/shop/logo", { method: "DELETE" });
+}
+
 export function getFinanceSummary(): Promise<FinanceSummary> {
   return request<FinanceSummary>("/api/finance/summary");
 }

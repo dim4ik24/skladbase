@@ -1,9 +1,14 @@
+import { useRef, useState } from "react";
 import { currentPlanLabel } from "../lib/planStatus";
+import { errorMessage } from "../errors";
 import type { Shop } from "../types";
 
 interface SettingsScreenProps {
   shop: Shop | null;
   onOpenPaywall: () => void;
+  onUpdateShopName: (name: string) => Promise<{ shop_name: string; logo_url: string | null }>;
+  onUploadShopLogo: (file: File) => Promise<void>;
+  onDeleteShopLogo: () => Promise<void>;
 }
 
 const STATUS_LABELS: Record<string, { label: string; colorClass: string }> = {
@@ -14,9 +19,151 @@ const STATUS_LABELS: Record<string, { label: string; colorClass: string }> = {
   expired: { label: "Закінчилась", colorClass: "text-[#b0460e]" },
 };
 
-const COMING_SOON = ["Назва та лого магазину", "Мова", "Підключення акаунтів"];
+const COMING_SOON = ["Мова", "Підключення акаунтів"];
 
-export function SettingsScreen({ shop, onOpenPaywall }: SettingsScreenProps) {
+function ShopProfileSection({
+  shop,
+  onUpdateShopName,
+  onUploadShopLogo,
+  onDeleteShopLogo,
+}: {
+  shop: Shop;
+  onUpdateShopName: (name: string) => Promise<{ shop_name: string; logo_url: string | null }>;
+  onUploadShopLogo: (file: File) => Promise<void>;
+  onDeleteShopLogo: () => Promise<void>;
+}) {
+  const [name, setName] = useState(shop.shop_name);
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleSaveName() {
+    if (!name.trim()) {
+      setError("Назва не може бути порожньою");
+      return;
+    }
+    setError(null);
+    setSaving(true);
+    try {
+      const result = await onUpdateShopName(name.trim());
+      // Sync input with server-confirmed value
+      setName(result.shop_name);
+    } catch (err) {
+      setError(errorMessage(err, "Не вдалося зберегти назву"));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setError(null);
+    setUploading(true);
+    try {
+      await onUploadShopLogo(file);
+    } catch (err) {
+      setError(errorMessage(err, "Не вдалося завантажити лого"));
+    } finally {
+      setUploading(false);
+      // Reset so same file can be re-selected after error
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  async function handleDeleteLogo() {
+    setError(null);
+    try {
+      await onDeleteShopLogo();
+    } catch (err) {
+      setError(errorMessage(err, "Не вдалося прибрати лого"));
+    }
+  }
+
+  return (
+    <div className="glass-card rounded-[20px] p-4 shadow-[var(--shadow-card)]">
+      <h3 className="text-sm font-bold text-text-soft uppercase tracking-wide mb-4">
+        Профіль магазину
+      </h3>
+
+      {/* Logo */}
+      <div className="flex items-center gap-4 mb-4">
+        <div className="shrink-0 w-16 h-16 rounded-full overflow-hidden bg-[var(--glass-bg)] border border-[var(--line)] flex items-center justify-center">
+          {shop.logo_url ? (
+            <img src={shop.logo_url} alt="Лого магазину" className="w-full h-full object-cover" />
+          ) : (
+            <span className="text-2xl font-bold text-green-deep select-none">
+              {shop.shop_name.charAt(0).toUpperCase()}
+            </span>
+          )}
+        </div>
+        <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            disabled={uploading}
+            onClick={() => fileInputRef.current?.click()}
+            className="rounded-xl px-3 py-1.5 text-xs font-semibold text-green-deep border border-[var(--green)] disabled:opacity-50"
+          >
+            {uploading ? "Завантаження…" : "Завантажити лого"}
+          </button>
+          {shop.logo_url ? (
+            <button
+              type="button"
+              onClick={() => void handleDeleteLogo()}
+              className="rounded-xl px-3 py-1.5 text-xs font-semibold text-text-soft border border-[var(--line)]"
+            >
+              Прибрати
+            </button>
+          ) : null}
+        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => void handleLogoChange(e)}
+        />
+      </div>
+
+      {/* Name */}
+      <label className="block mb-1 text-xs font-semibold text-text-soft">Назва магазину</label>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={name}
+          maxLength={120}
+          onChange={(e) => setName(e.target.value)}
+          className="flex-1 rounded-xl px-3 py-2 text-sm bg-[var(--glass-bg)] border border-[var(--line)] text-text outline-none focus:border-[var(--green)]"
+        />
+        <button
+          type="button"
+          disabled={saving || name.trim() === shop.shop_name}
+          onClick={() => void handleSaveName()}
+          className="shrink-0 rounded-xl px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+          style={{
+            background: "linear-gradient(135deg, var(--green) 0%, var(--green-deep) 100%)",
+            boxShadow: "var(--shadow-cta)",
+          }}
+        >
+          {saving ? "…" : "Зберегти"}
+        </button>
+      </div>
+
+      {error ? (
+        <p className="mt-2 text-xs text-[#b0460e]">{error}</p>
+      ) : null}
+    </div>
+  );
+}
+
+export function SettingsScreen({
+  shop,
+  onOpenPaywall,
+  onUpdateShopName,
+  onUploadShopLogo,
+  onDeleteShopLogo,
+}: SettingsScreenProps) {
   const statusInfo = shop?.status ? STATUS_LABELS[shop.status] : null;
   const planLabel = shop ? currentPlanLabel(shop) : "…";
   const chipLabel =
@@ -80,6 +227,15 @@ export function SettingsScreen({ shop, onOpenPaywall }: SettingsScreenProps) {
           </button>
         ) : null}
       </div>
+
+      {shop?.role === "owner" ? (
+        <ShopProfileSection
+          shop={shop}
+          onUpdateShopName={onUpdateShopName}
+          onUploadShopLogo={onUploadShopLogo}
+          onDeleteShopLogo={onDeleteShopLogo}
+        />
+      ) : null}
 
       <div className="glass-card rounded-[20px] overflow-hidden shadow-[var(--shadow-card)]">
         <h3 className="text-sm font-bold text-text-soft uppercase tracking-wide px-4 pt-4 mb-1">
