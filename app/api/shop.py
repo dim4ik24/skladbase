@@ -3,10 +3,9 @@ SkladBase — налаштування магазину (Стадія 4b: веб
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
-from starlette.responses import Response
 
 from app.db import get_session
 from app.deps import require_owner
