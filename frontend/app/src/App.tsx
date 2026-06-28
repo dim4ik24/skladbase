@@ -14,7 +14,7 @@ import { errorMessage } from "./errors";
 import { DashboardScreen } from "./screens/DashboardScreen";
 import { SettingsScreen } from "./screens/SettingsScreen";
 import { SkladScreen } from "./screens/SkladScreen";
-import { effectivePlanCode } from "./lib/planStatus";
+import { effectivePlanCode, isLiveTrial } from "./lib/planStatus";
 import { initTelegram, setAccentColor } from "./telegram";
 import type {
   Plan,
@@ -322,8 +322,8 @@ export default function App() {
 
         {error ? <p className="error-banner">{error}</p> : null}
 
-        {shop?.status === "trial" && shop.trial_ends_at ? (
-          <TrialBanner trialEndsAt={shop.trial_ends_at} />
+        {shop && isLiveTrial(shop) ? (
+          <TrialBanner shop={shop} />
         ) : null}
 
         {hasDemo ? (

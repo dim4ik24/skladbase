@@ -1,5 +1,21 @@
 import type { Shop } from "../types";
 
+/** Single source of truth: trial is live only if status=trial AND ends in the future. */
+export function isLiveTrial(shop: Shop): boolean {
+  return (
+    shop.status === "trial" &&
+    shop.trial_ends_at != null &&
+    new Date(shop.trial_ends_at) > new Date()
+  );
+}
+
+/** Days remaining in a live trial; 0 if trial is not live. */
+export function trialDaysLeft(shop: Shop): number {
+  if (!isLiveTrial(shop)) return 0;
+  const ms = new Date(shop.trial_ends_at!).getTime() - Date.now();
+  return Math.max(0, Math.ceil(ms / (24 * 60 * 60 * 1000)));
+}
+
 /**
  * Returns the plan code that represents the user's current effective plan:
  *   - active paid subscription → the actual plan_code
@@ -17,11 +33,7 @@ export function effectivePlanCode(shop: Shop): string | null {
   ) {
     return shop.plan_code;
   }
-  if (
-    shop.status === "trial" &&
-    shop.trial_ends_at != null &&
-    new Date(shop.trial_ends_at) > new Date()
-  ) {
+  if (isLiveTrial(shop)) {
     return null;
   }
   return "free";

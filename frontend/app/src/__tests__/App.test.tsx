@@ -510,7 +510,7 @@ describe("Reservations", () => {
 });
 
 describe("Trial banner", () => {
-  it("shows days remaining computed from trial_ends_at", async () => {
+  it("shows days remaining for a live trial", async () => {
     const trialEndsAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
     vi.mocked(api.getMe).mockResolvedValue({
       ...shopFixture,
@@ -527,6 +527,22 @@ describe("Trial banner", () => {
 
   it("does not render when status is not trial", async () => {
     vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+
+    render(<App />);
+    await screen.findByText("Тестовий магазин");
+
+    expect(screen.queryByText(/Тріал:/)).not.toBeInTheDocument();
+  });
+
+  it("does not render when trial_ends_at is in the past (expired trial)", async () => {
+    const expiredAt = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    vi.mocked(api.getMe).mockResolvedValue({
+      ...shopFixture,
+      status: "trial",
+      is_writable: false,
+      trial_ends_at: expiredAt,
+    });
     vi.mocked(api.getProducts).mockResolvedValue([]);
 
     render(<App />);
