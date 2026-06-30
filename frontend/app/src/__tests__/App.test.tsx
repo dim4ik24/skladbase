@@ -36,6 +36,9 @@ vi.mock("../api", () => ({
   checkoutStars: vi.fn(),
   clearDemos: vi.fn(),
   getFinanceSummary: vi.fn(),
+  patchVariant: vi.fn(),
+  addVariant: vi.fn(),
+  deleteVariant: vi.fn(),
 }));
 
 import * as api from "../api";
@@ -152,6 +155,9 @@ beforeEach(() => {
   vi.mocked(api.checkoutStars).mockReset();
   vi.mocked(api.clearDemos).mockReset();
   vi.mocked(api.getFinanceSummary).mockReset().mockResolvedValue({ shop_id: 1, revenue_uah: "0.00" });
+  vi.mocked(api.patchVariant).mockReset();
+  vi.mocked(api.addVariant).mockReset();
+  vi.mocked(api.deleteVariant).mockReset();
   document.documentElement.style.removeProperty("--accent-color");
 });
 
@@ -779,6 +785,103 @@ describe("Demo banner", () => {
 
     expect(screen.getByText(/Це приклади/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Очистити приклади" })).not.toBeInTheDocument();
+  });
+});
+
+describe("Variant CRUD in modal", () => {
+  it("edit variant: changing price calls api.patchVariant with updated price", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    const variant = makeVariant({ id: 201, sku: "SKU-201", price: "450.00" });
+    vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ variants: [variant] })]);
+    vi.mocked(api.patchVariant).mockResolvedValue({ ...variant, price: "500" });
+
+    render(<App />);
+    await goToSklad();
+    await screen.findByText("Футболка");
+
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
+    await screen.findByTestId("available-201");
+
+    fireEvent.click(screen.getByLabelText("Редагувати варіант: SKU-201"));
+
+    fireEvent.change(screen.getByLabelText("Ціна"), { target: { value: "500" } });
+    fireEvent.click(screen.getByRole("button", { name: "Зберегти" }));
+
+    await waitFor(() => {
+      expect(api.patchVariant).toHaveBeenCalledWith(201, expect.objectContaining({ price: "500" }));
+    });
+  });
+
+  it("add variant: calls api.addVariant with last variant price and axis_values, no sku field", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    const variant = makeVariant({ id: 202, sku: "SKU-202", price: "450.00", axis_values: { size: "M" } });
+    vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ id: 1, variants: [variant] })]);
+    vi.mocked(api.addVariant).mockResolvedValue(makeVariant({ id: 203, sku: null, price: "450.00" }));
+
+    render(<App />);
+    await goToSklad();
+    await screen.findByText("Футболка");
+
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
+    await screen.findByTestId("available-202");
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Додати варіант" }));
+
+    await waitFor(() => {
+      expect(api.addVariant).toHaveBeenCalled();
+    });
+
+    const [calledProductId, calledPayload] = vi.mocked(api.addVariant).mock.calls[0];
+    expect(calledProductId).toBe(1);
+    expect(calledPayload.price).toBe("450.00");
+    expect(calledPayload).not.toHaveProperty("sku");
+  });
+
+  it("delete variant: two-step confirm then calls api.deleteVariant", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    const variant = makeVariant({ id: 204, sku: "SKU-204" });
+    vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ variants: [variant] })]);
+    vi.mocked(api.deleteVariant).mockResolvedValue(undefined);
+
+    render(<App />);
+    await goToSklad();
+    await screen.findByText("Футболка");
+
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
+    await screen.findByTestId("available-204");
+
+    fireEvent.click(screen.getByLabelText("Редагувати варіант: SKU-204"));
+    fireEvent.click(screen.getByRole("button", { name: "Видалити" }));
+    fireEvent.click(screen.getByRole("button", { name: "Так, видалити" }));
+
+    await waitFor(() => {
+      expect(api.deleteVariant).toHaveBeenCalledWith(204);
+    });
+  });
+
+  it("409 on delete shows inline error banner without alert", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    const variant = makeVariant({ id: 205, sku: "SKU-205" });
+    vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ variants: [variant] })]);
+    vi.mocked(api.deleteVariant).mockRejectedValue(
+      new ApiError(409, "Неможливо видалити останній варіант"),
+    );
+
+    render(<App />);
+    await goToSklad();
+    await screen.findByText("Футболка");
+
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
+    await screen.findByTestId("available-205");
+
+    fireEvent.click(screen.getByLabelText("Редагувати варіант: SKU-205"));
+    fireEvent.click(screen.getByRole("button", { name: "Видалити" }));
+    fireEvent.click(screen.getByRole("button", { name: "Так, видалити" }));
+
+    expect(
+      await screen.findByText("Неможливо видалити останній варіант"),
+    ).toBeInTheDocument();
+    expect(api.deleteVariant).toHaveBeenCalledWith(205);
   });
 });
 

@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import type { FormEvent } from "react";
 import { ApiError } from "../api";
 import { errorMessage } from "../errors";
-import type { Product, ProductInput, ProductPatch, ReserveInput, Template, TemplateField, VariantInput } from "../types";
+import type { Product, ProductInput, ProductPatch, ReserveInput, Template, TemplateField, Variant, VariantAddPayload, VariantInput, VariantPatchPayload } from "../types";
 import { Panel } from "./ui/Panel";
 import { ProductPhotoGallery } from "./ProductPhotoGallery";
 import { TemplateBuilderModal } from "./TemplateBuilderModal";
@@ -24,6 +24,9 @@ interface ProductModalProps {
   onAdjust: (variantId: number, newOnHand: number) => void;
   onUploadPhoto: (variantId: number, file: File) => Promise<void>;
   onReserve: (variantId: number, payload: ReserveInput) => Promise<void>;
+  onPatchVariant: (variantId: number, patch: VariantPatchPayload) => Promise<void>;
+  onAddVariant: (productId: number, payload: VariantAddPayload) => Promise<Variant>;
+  onDeleteVariant: (variantId: number) => Promise<void>;
   onFrozenAction?: () => void;
   onClose: () => void;
 }
@@ -337,6 +340,7 @@ type EditTab = "variants" | "info" | "photo";
 
 interface EditFormProps {
   product: Product;
+  templates: Template[];
   photosAllowed: boolean;
   onUpdateProduct: (id: number, patch: ProductPatch) => Promise<void>;
   onUploadProductPhoto: (productId: number, file: File) => Promise<void>;
@@ -345,12 +349,16 @@ interface EditFormProps {
   onAdjust: (variantId: number, newOnHand: number) => void;
   onUploadPhoto: (variantId: number, file: File) => Promise<void>;
   onReserve: (variantId: number, payload: ReserveInput) => Promise<void>;
+  onPatchVariant: (variantId: number, patch: VariantPatchPayload) => Promise<void>;
+  onAddVariant: (productId: number, payload: VariantAddPayload) => Promise<Variant>;
+  onDeleteVariant: (variantId: number) => Promise<void>;
   onFrozenAction?: () => void;
   onClose: () => void;
 }
 
 function EditForm({
   product,
+  templates,
   photosAllowed,
   onUpdateProduct,
   onUploadProductPhoto,
@@ -359,6 +367,9 @@ function EditForm({
   onAdjust,
   onUploadPhoto,
   onReserve,
+  onPatchVariant,
+  onAddVariant,
+  onDeleteVariant,
   onFrozenAction,
   onClose,
 }: EditFormProps) {
@@ -367,6 +378,11 @@ function EditForm({
   const [description, setDescription] = useState(product.description ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [addingVariant, setAddingVariant] = useState(false);
+  const [justAddedId, setJustAddedId] = useState<number | null>(null);
+
+  const axes: TemplateField[] =
+    templates.find((t) => t.id === product.template_id)?.field_schema.variant_axes ?? [];
 
   async function handleSave() {
     setError(null);
@@ -385,6 +401,21 @@ function EditForm({
       setError(errorMessage(err, "Не вдалося зберегти"));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleAddVariant() {
+    setAddingVariant(true);
+    try {
+      const last = product.variants.at(-1);
+      const payload: VariantAddPayload = {
+        price: last?.price ?? "0",
+        axis_values: { ...(last?.axis_values ?? {}) },
+      };
+      const newVariant = await onAddVariant(product.id, payload);
+      setJustAddedId(newVariant.id);
+    } finally {
+      setAddingVariant(false);
     }
   }
 
@@ -408,20 +439,34 @@ function EditForm({
       </div>
 
       {tab === "variants" ? (
-        <ul className="variant-list">
-          {product.variants.map((variant) => (
-            <VariantRow
-              key={variant.id}
-              variant={variant}
-              isFrozen={product.is_frozen}
-              onFrozenAction={onFrozenAction}
-              onRestock={onRestock}
-              onAdjust={onAdjust}
-              onUploadPhoto={onUploadPhoto}
-              onReserve={onReserve}
-            />
-          ))}
-        </ul>
+        <>
+          <ul className="variant-list">
+            {product.variants.map((variant) => (
+              <VariantRow
+                key={variant.id}
+                variant={variant}
+                axes={axes}
+                autoOpenEdit={justAddedId === variant.id}
+                isFrozen={product.is_frozen}
+                onFrozenAction={onFrozenAction}
+                onRestock={onRestock}
+                onAdjust={onAdjust}
+                onUploadPhoto={onUploadPhoto}
+                onReserve={onReserve}
+                onPatchVariant={onPatchVariant}
+                onDeleteVariant={onDeleteVariant}
+              />
+            ))}
+          </ul>
+          <button
+            type="button"
+            className="link-button"
+            disabled={addingVariant}
+            onClick={() => void handleAddVariant()}
+          >
+            {addingVariant ? "Додаємо..." : "+ Додати варіант"}
+          </button>
+        </>
       ) : tab === "info" ? (
         <>
           {error ? <p className="error-banner">{error}</p> : null}
@@ -479,6 +524,9 @@ export function ProductModal({
   onAdjust,
   onUploadPhoto,
   onReserve,
+  onPatchVariant,
+  onAddVariant,
+  onDeleteVariant,
   onFrozenAction,
   onClose,
 }: ProductModalProps) {
@@ -506,6 +554,7 @@ export function ProductModal({
           // Edit mode — product exists, show tabs: Варіанти / Інфо / Фото
           <EditForm
             product={liveProduct}
+            templates={templates}
             photosAllowed={photosAllowed}
             onUpdateProduct={onUpdateProduct}
             onUploadProductPhoto={onUploadProductPhoto}
@@ -514,6 +563,9 @@ export function ProductModal({
             onAdjust={onAdjust}
             onUploadPhoto={onUploadPhoto}
             onReserve={onReserve}
+            onPatchVariant={onPatchVariant}
+            onAddVariant={onAddVariant}
+            onDeleteVariant={onDeleteVariant}
             onFrozenAction={onFrozenAction}
             onClose={onClose}
           />

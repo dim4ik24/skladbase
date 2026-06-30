@@ -27,6 +27,8 @@ import type {
   TabId,
   Template,
   Variant,
+  VariantAddPayload,
+  VariantPatchPayload,
 } from "./types";
 
 export default function App() {
@@ -275,6 +277,27 @@ export default function App() {
     return `Варіант #${variantId}`;
   }
 
+  async function handlePatchVariant(variantId: number, payload: VariantPatchPayload) {
+    applyVariantUpdate(await api.patchVariant(variantId, payload));
+  }
+
+  async function handleAddVariant(productId: number, payload: VariantAddPayload): Promise<Variant> {
+    const variant = await api.addVariant(productId, payload);
+    setProducts((prev) =>
+      prev.map((p) =>
+        p.id === productId ? { ...p, variants: [...p.variants, variant] } : p,
+      ),
+    );
+    return variant;
+  }
+
+  async function handleDeleteVariant(variantId: number) {
+    await api.deleteVariant(variantId);
+    setProducts((prev) =>
+      prev.map((p) => ({ ...p, variants: p.variants.filter((v) => v.id !== variantId) })),
+    );
+  }
+
   function handleFrozenAction() {
     setUpgradePrompt({ message: "Цей товар заморожено. Оформіть тариф, щоб редагувати." });
   }
@@ -381,6 +404,9 @@ export default function App() {
             photosAllowed={photosAllowed}
             onUploadProductPhoto={handleUploadProductPhoto}
             onDeleteProductPhoto={handleDeleteProductPhoto}
+            onPatchVariant={handlePatchVariant}
+            onAddVariant={handleAddVariant}
+            onDeleteVariant={handleDeleteVariant}
           />
         ) : activeTab === "dashboard" ? (
           <DashboardScreen

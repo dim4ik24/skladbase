@@ -90,7 +90,7 @@ export interface VariantInput {
 
 export interface VariantPatchPayload {
   price?: string;
-  sku?: string;
+  sku?: string | null;
   axis_values?: Record<string, string>;
 }
 

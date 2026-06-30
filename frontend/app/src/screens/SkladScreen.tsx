@@ -53,6 +53,9 @@ interface SkladScreenProps {
   photosAllowed: boolean;
   onUploadProductPhoto: (productId: number, file: File) => Promise<void>;
   onDeleteProductPhoto: (productId: number, photoId: number) => Promise<void>;
+  onPatchVariant: (variantId: number, patch: import("../types").VariantPatchPayload) => Promise<void>;
+  onAddVariant: (productId: number, payload: import("../types").VariantAddPayload) => Promise<import("../types").Variant>;
+  onDeleteVariant: (variantId: number) => Promise<void>;
 }
 
 export function SkladScreen({
@@ -81,6 +84,9 @@ export function SkladScreen({
   photosAllowed,
   onUploadProductPhoto,
   onDeleteProductPhoto,
+  onPatchVariant,
+  onAddVariant,
+  onDeleteVariant,
 }: SkladScreenProps) {
   const [query, setQuery] = useState("");
   const [sortField, setSortField] = useState<SortField>("date");
@@ -279,6 +285,9 @@ export function SkladScreen({
           onAdjust={onAdjust}
           onUploadPhoto={onUploadPhoto}
           onReserve={onReserve}
+          onPatchVariant={onPatchVariant}
+          onAddVariant={onAddVariant}
+          onDeleteVariant={onDeleteVariant}
           onFrozenAction={onFrozenAction}
           onClose={() => setModalProduct(null)}
         />

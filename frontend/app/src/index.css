@@ -686,6 +686,68 @@ body {
   gap: 8px;
 }
 
+/* ── Variant edit form ───────────────────────────────────────────────── */
+.variant-edit-form {
+  margin-top: 8px;
+  padding: 10px;
+  border-radius: 12px;
+  background: var(--bg);
+  border: 1.5px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.variant-edit-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.variant-delete-zone {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.variant-delete-confirm {
+  font-size: 13px;
+  color: var(--text);
+  margin: 0 0 8px;
+}
+
+.btn-danger {
+  border: none;
+  border-radius: 14px;
+  padding: 7px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  background: #e53935;
+  color: #fff;
+  cursor: pointer;
+}
+
+.btn-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-danger-outline {
+  border: 1.5px solid #e53935;
+  border-radius: 14px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  background: transparent;
+  color: #e53935;
+  cursor: pointer;
+}
+
+.btn-danger-outline:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 /* ── Reservations — glass panel ──────────────────────────────────────── */
 .reservations-section {
   margin-bottom: 16px;

@@ -1,30 +1,41 @@
+import { Pencil } from "lucide-react";
 import { useState } from "react";
 import type { ChangeEvent } from "react";
 import { errorMessage } from "../errors";
-import type { ReserveInput, Variant } from "../types";
+import type { ReserveInput, TemplateField, Variant, VariantPatchPayload } from "../types";
 import { ReserveForm } from "./ReserveForm";
+import { VariantEditForm } from "./VariantEditForm";
 
 interface VariantRowProps {
   variant: Variant;
+  axes: TemplateField[];
+  autoOpenEdit?: boolean;
   isFrozen?: boolean;
   onFrozenAction?: () => void;
   onRestock: (variantId: number, qty: number) => void;
   onAdjust: (variantId: number, newOnHand: number) => void;
   onUploadPhoto: (variantId: number, file: File) => Promise<void>;
   onReserve: (variantId: number, payload: ReserveInput) => Promise<void>;
+  onPatchVariant: (variantId: number, patch: VariantPatchPayload) => Promise<void>;
+  onDeleteVariant: (variantId: number) => Promise<void>;
 }
 
 export function VariantRow({
   variant,
+  axes,
+  autoOpenEdit = false,
   isFrozen = false,
   onFrozenAction,
   onRestock,
   onAdjust,
   onUploadPhoto,
   onReserve,
+  onPatchVariant,
+  onDeleteVariant,
 }: VariantRowProps) {
   const axisLabel = Object.values(variant.axis_values).join(" / ");
   const [showReserveForm, setShowReserveForm] = useState(false);
+  const [showEditForm, setShowEditForm] = useState(autoOpenEdit);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
 
@@ -86,6 +97,7 @@ export function VariantRow({
         <div className="variant-info">
           {axisLabel ? <span className="variant-axis">{axisLabel}</span> : null}
           <span className="variant-price">{variant.price} ₴</span>
+          {variant.sku ? <span className="variant-sku">{variant.sku}</span> : null}
           {photoError ? <span className="error-banner">{photoError}</span> : null}
           <div className="variant-stock-trio">
             <span>складі: {variant.on_hand}</span>
@@ -135,6 +147,16 @@ export function VariantRow({
           >
             Відклади
           </button>
+          <button
+            type="button"
+            aria-label={`Редагувати варіант: ${variant.sku ?? variant.id}`}
+            onClick={() => {
+              setShowReserveForm(false);
+              setShowEditForm((prev) => !prev);
+            }}
+          >
+            <Pencil size={13} />
+          </button>
         </div>
       </div>
 
@@ -144,6 +166,16 @@ export function VariantRow({
           maxQty={variant.available}
           onSubmit={handleReserveSubmit}
           onCancel={() => setShowReserveForm(false)}
+        />
+      ) : null}
+
+      {showEditForm ? (
+        <VariantEditForm
+          variant={variant}
+          axes={axes}
+          onSave={(patch) => onPatchVariant(variant.id, patch)}
+          onDelete={() => onDeleteVariant(variant.id)}
+          onCancel={() => setShowEditForm(false)}
         />
       ) : null}
     </li>
