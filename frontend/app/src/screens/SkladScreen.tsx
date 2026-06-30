@@ -65,7 +65,10 @@ export function SkladScreen({
   maxProducts,
   activeCount,
   variantLabel,
-  // onRestock, onAdjust, onUploadPhoto, onReserve — reserved for B2 modal
+  onRestock,
+  onAdjust,
+  onUploadPhoto,
+  onReserve,
   onRelease,
   onFulfill,
   onCreateProduct,
@@ -253,7 +256,6 @@ export function SkladScreen({
                 product={product}
                 writable={writable}
                 isFrozen={product.is_frozen}
-                onFrozenAction={onFrozenAction}
                 onEdit={(p) => setModalProduct(p)}
               />
             </div>
@@ -273,6 +275,11 @@ export function SkladScreen({
           onUpdateProduct={onUpdateProduct}
           onUploadProductPhoto={onUploadProductPhoto}
           onDeleteProductPhoto={onDeleteProductPhoto}
+          onRestock={onRestock}
+          onAdjust={onAdjust}
+          onUploadPhoto={onUploadPhoto}
+          onReserve={onReserve}
+          onFrozenAction={onFrozenAction}
           onClose={() => setModalProduct(null)}
         />
       ) : null}

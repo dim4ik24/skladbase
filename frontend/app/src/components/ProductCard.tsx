@@ -5,7 +5,6 @@ interface ProductCardProps {
   product: Product;
   writable: boolean;
   isFrozen?: boolean;
-  onFrozenAction?: () => void;
   onEdit: (product: Product) => void;
 }
 
@@ -19,7 +18,6 @@ export function ProductCard({
   product,
   writable,
   isFrozen = false,
-  onFrozenAction,
   onEdit,
 }: ProductCardProps) {
   const sortedPhotos = [...product.photos].sort((a, b) => a.position - b.position);
@@ -66,10 +64,7 @@ export function ProductCard({
           type="button"
           disabled={!writable}
           aria-label={`Редагувати товар: ${product.name}`}
-          onClick={() => {
-            if (isFrozen) { onFrozenAction?.(); return; }
-            onEdit(product);
-          }}
+          onClick={() => onEdit(product)}
           className="shrink-0 rounded-lg p-1 text-green-deep/40 transition-colors hover:bg-green/[0.08] hover:text-green-deep disabled:cursor-not-allowed disabled:opacity-30"
         >
           <Pencil size={15} />

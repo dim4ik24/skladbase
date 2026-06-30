@@ -3,10 +3,11 @@ import { createPortal } from "react-dom";
 import type { FormEvent } from "react";
 import { ApiError } from "../api";
 import { errorMessage } from "../errors";
-import type { Product, ProductInput, ProductPatch, Template, TemplateField, VariantInput } from "../types";
+import type { Product, ProductInput, ProductPatch, ReserveInput, Template, TemplateField, VariantInput } from "../types";
 import { Panel } from "./ui/Panel";
 import { ProductPhotoGallery } from "./ProductPhotoGallery";
 import { TemplateBuilderModal } from "./TemplateBuilderModal";
+import { VariantRow } from "./VariantRow";
 
 interface ProductModalProps {
   product: Product | null;
@@ -19,6 +20,11 @@ interface ProductModalProps {
   onUpdateProduct: (id: number, patch: ProductPatch) => Promise<void>;
   onUploadProductPhoto: (productId: number, file: File) => Promise<void>;
   onDeleteProductPhoto: (productId: number, photoId: number) => Promise<void>;
+  onRestock: (variantId: number, qty: number) => void;
+  onAdjust: (variantId: number, newOnHand: number) => void;
+  onUploadPhoto: (variantId: number, file: File) => Promise<void>;
+  onReserve: (variantId: number, payload: ReserveInput) => Promise<void>;
+  onFrozenAction?: () => void;
   onClose: () => void;
 }
 
@@ -327,12 +333,19 @@ function CreateForm({
 
 // ─── Edit mode ────────────────────────────────────────────────────────────────
 
+type EditTab = "variants" | "info" | "photo";
+
 interface EditFormProps {
   product: Product;
   photosAllowed: boolean;
   onUpdateProduct: (id: number, patch: ProductPatch) => Promise<void>;
   onUploadProductPhoto: (productId: number, file: File) => Promise<void>;
   onDeleteProductPhoto: (productId: number, photoId: number) => Promise<void>;
+  onRestock: (variantId: number, qty: number) => void;
+  onAdjust: (variantId: number, newOnHand: number) => void;
+  onUploadPhoto: (variantId: number, file: File) => Promise<void>;
+  onReserve: (variantId: number, payload: ReserveInput) => Promise<void>;
+  onFrozenAction?: () => void;
   onClose: () => void;
 }
 
@@ -342,8 +355,14 @@ function EditForm({
   onUpdateProduct,
   onUploadProductPhoto,
   onDeleteProductPhoto,
+  onRestock,
+  onAdjust,
+  onUploadPhoto,
+  onReserve,
+  onFrozenAction,
   onClose,
 }: EditFormProps) {
+  const [tab, setTab] = useState<EditTab>("variants");
   const [name, setName] = useState(product.name);
   const [description, setDescription] = useState(product.description ?? "");
   const [saving, setSaving] = useState(false);
@@ -373,37 +392,71 @@ function EditForm({
     <>
       <h2>Редагувати товар</h2>
 
-      {error ? <p className="error-banner">{error}</p> : null}
+      <div className="modal-tabs" role="tablist">
+        {(["variants", "info", "photo"] as EditTab[]).map((t) => (
+          <button
+            key={t}
+            type="button"
+            role="tab"
+            aria-selected={tab === t}
+            className={`modal-tab${tab === t ? " modal-tab--active" : ""}`}
+            onClick={() => setTab(t)}
+          >
+            {t === "variants" ? "Варіанти" : t === "info" ? "Інфо" : "Фото"}
+          </button>
+        ))}
+      </div>
 
-      <label className="form-field">
-        <span>Назва</span>
-        <input
-          aria-label="Назва"
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
+      {tab === "variants" ? (
+        <ul className="variant-list">
+          {product.variants.map((variant) => (
+            <VariantRow
+              key={variant.id}
+              variant={variant}
+              isFrozen={product.is_frozen}
+              onFrozenAction={onFrozenAction}
+              onRestock={onRestock}
+              onAdjust={onAdjust}
+              onUploadPhoto={onUploadPhoto}
+              onReserve={onReserve}
+            />
+          ))}
+        </ul>
+      ) : tab === "info" ? (
+        <>
+          {error ? <p className="error-banner">{error}</p> : null}
+          <label className="form-field">
+            <span>Назва</span>
+            <input
+              aria-label="Назва"
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </label>
+          <label className="form-field">
+            <span>Опис</span>
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} />
+          </label>
+        </>
+      ) : (
+        <ProductPhotoGallery
+          product={product}
+          photosAllowed={photosAllowed}
+          onUpload={(file) => onUploadProductPhoto(product.id, file)}
+          onDelete={(photoId) => onDeleteProductPhoto(product.id, photoId)}
         />
-      </label>
-
-      <label className="form-field">
-        <span>Опис</span>
-        <textarea value={description} onChange={(e) => setDescription(e.target.value)} />
-      </label>
-
-      <ProductPhotoGallery
-        product={product}
-        photosAllowed={photosAllowed}
-        onUpload={(file) => onUploadProductPhoto(product.id, file)}
-        onDelete={(photoId) => onDeleteProductPhoto(product.id, photoId)}
-      />
+      )}
 
       <div className="modal-actions">
         <button type="button" onClick={onClose} disabled={saving}>
           Закрити
         </button>
-        <button type="button" onClick={() => void handleSave()} disabled={saving}>
-          {saving ? "Зберігаємо..." : "Зберегти"}
-        </button>
+        {tab === "info" ? (
+          <button type="button" onClick={() => void handleSave()} disabled={saving}>
+            {saving ? "Зберігаємо..." : "Зберегти"}
+          </button>
+        ) : null}
       </div>
     </>
   );
@@ -422,6 +475,11 @@ export function ProductModal({
   onUpdateProduct,
   onUploadProductPhoto,
   onDeleteProductPhoto,
+  onRestock,
+  onAdjust,
+  onUploadPhoto,
+  onReserve,
+  onFrozenAction,
   onClose,
 }: ProductModalProps) {
   const [createdProduct, setCreatedProduct] = useState<Product | null>(null);
@@ -445,13 +503,18 @@ export function ProductModal({
         onClick={(e) => e.stopPropagation()}
       >
         {product !== null && liveProduct !== null ? (
-          // Edit mode — product exists, show pre-filled form + gallery
+          // Edit mode — product exists, show tabs: Варіанти / Інфо / Фото
           <EditForm
             product={liveProduct}
             photosAllowed={photosAllowed}
             onUpdateProduct={onUpdateProduct}
             onUploadProductPhoto={onUploadProductPhoto}
             onDeleteProductPhoto={onDeleteProductPhoto}
+            onRestock={onRestock}
+            onAdjust={onAdjust}
+            onUploadPhoto={onUploadPhoto}
+            onReserve={onReserve}
+            onFrozenAction={onFrozenAction}
             onClose={onClose}
           />
         ) : isPhase2 && liveProduct !== null ? (

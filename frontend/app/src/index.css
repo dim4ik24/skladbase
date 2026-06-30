@@ -999,6 +999,37 @@ body {
   box-shadow: none;
 }
 
+/* ── Modal edit tabs (Варіанти / Інфо / Фото) ───────────────────────── */
+.modal-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--glass-border);
+  padding-bottom: 4px;
+}
+
+.modal-tab {
+  flex: 1;
+  border: none;
+  border-radius: 10px 10px 0 0;
+  padding: 7px 10px;
+  font-family: "Manrope", system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-soft);
+  background: transparent;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.modal-tab--active {
+  color: var(--text);
+  font-weight: 700;
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+
 /* ── Glass card utility (DashboardScreen / SettingsScreen) ───────────── */
 .glass-card {
   background: var(--glass-bg);

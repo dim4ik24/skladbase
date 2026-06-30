@@ -210,8 +210,7 @@ describe("App catalog screen", () => {
     });
   });
 
-  // TODO B2: перенести у ProductModal (variant controls moved to modal)
-  it.skip("shows low-stock and out-of-stock badges based on threshold", async () => {
+  it("shows low-stock and out-of-stock badges based on threshold", async () => {
     vi.mocked(api.getMe).mockResolvedValue(shopFixture);
     vi.mocked(api.getProducts).mockResolvedValue([
       makeProduct({
@@ -229,8 +228,12 @@ describe("App catalog screen", () => {
     render(<App />);
     await goToSklad();
 
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Товар А"));
     expect(await screen.findByText("мало")).toBeInTheDocument();
-    expect(screen.getByText("нема")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Закрити" }));
+
+    fireEvent.click(await screen.findByLabelText("Редагувати товар: Товар Б"));
+    expect(await screen.findByText("нема")).toBeInTheDocument();
   });
 
   it("filters products by name via the search input", async () => {
@@ -251,8 +254,7 @@ describe("App catalog screen", () => {
     expect(screen.getByText("Свічка")).toBeInTheDocument();
   });
 
-  // TODO B2: перенести у ProductModal (variant controls moved to modal)
-  it.skip("plus button calls restock and updates the displayed stock", async () => {
+  it("plus button calls restock and updates the displayed stock", async () => {
     vi.mocked(api.getMe).mockResolvedValue(shopFixture);
     const variant = makeVariant({ id: 41, sku: "SKU-41", on_hand: 5, available: 5 });
     vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ variants: [variant] })]);
@@ -260,6 +262,8 @@ describe("App catalog screen", () => {
 
     render(<App />);
     await goToSklad();
+    await screen.findByText("Футболка");
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
     await screen.findByTestId("available-41");
 
     fireEvent.click(screen.getByLabelText("Збільшити залишок: SKU-41"));
@@ -270,8 +274,7 @@ describe("App catalog screen", () => {
     expect(api.restock).toHaveBeenCalledWith(41, 1);
   });
 
-  // TODO B2: перенести у ProductModal (variant controls moved to modal)
-  it.skip("minus button calls adjust with on_hand-1 and updates the displayed stock", async () => {
+  it("minus button calls adjust with on_hand-1 and updates the displayed stock", async () => {
     vi.mocked(api.getMe).mockResolvedValue(shopFixture);
     const variant = makeVariant({ id: 42, sku: "SKU-42", on_hand: 5, available: 5 });
     vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ variants: [variant] })]);
@@ -279,6 +282,8 @@ describe("App catalog screen", () => {
 
     render(<App />);
     await goToSklad();
+    await screen.findByText("Футболка");
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
     await screen.findByTestId("available-42");
 
     fireEvent.click(screen.getByLabelText("Зменшити залишок: SKU-42"));
@@ -289,14 +294,15 @@ describe("App catalog screen", () => {
     expect(api.adjust).toHaveBeenCalledWith(42, 4);
   });
 
-  // TODO B2: перенести у ProductModal (variant controls moved to modal)
-  it.skip("minus button is disabled when on_hand is already zero", async () => {
+  it("minus button is disabled when on_hand is already zero", async () => {
     vi.mocked(api.getMe).mockResolvedValue(shopFixture);
     const variant = makeVariant({ id: 43, sku: "SKU-43", on_hand: 0, available: 0 });
     vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ variants: [variant] })]);
 
     render(<App />);
     await goToSklad();
+    await screen.findByText("Футболка");
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
     await screen.findByTestId("available-43");
 
     expect(screen.getByLabelText("Зменшити залишок: SKU-43")).toBeDisabled();
@@ -381,8 +387,7 @@ describe("Add product form", () => {
 });
 
 describe("Variant photo upload", () => {
-  // TODO B2: перенести у ProductModal (variant controls moved to modal)
-  it.skip("uploads a photo and shows it instead of the placeholder", async () => {
+  it("uploads a photo and shows it instead of the placeholder", async () => {
     vi.mocked(api.getMe).mockResolvedValue(shopFixture);
     const variant = makeVariant({ id: 51, sku: "SKU-51", photo_url: null });
     vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ variants: [variant] })]);
@@ -393,6 +398,8 @@ describe("Variant photo upload", () => {
 
     render(<App />);
     await goToSklad();
+    await screen.findByText("Футболка");
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
     await screen.findByTestId("available-51");
 
     const file = new File(["data"], "photo.png", { type: "image/png" });
@@ -408,8 +415,7 @@ describe("Variant photo upload", () => {
     });
   });
 
-  // TODO B2: перенести у ProductModal (variant controls moved to modal)
-  it.skip("shows UpgradePrompt when photo upload returns 402 (plan limit)", async () => {
+  it("shows UpgradePrompt when photo upload returns 402 (plan limit)", async () => {
     vi.mocked(api.getMe).mockResolvedValue(shopFixture);
     const variant = makeVariant({ id: 52, sku: "SKU-52", photo_url: null });
     vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ variants: [variant] })]);
@@ -419,6 +425,8 @@ describe("Variant photo upload", () => {
 
     render(<App />);
     await goToSklad();
+    await screen.findByText("Футболка");
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
     await screen.findByTestId("available-52");
 
     const file = new File(["data"], "photo.png", { type: "image/png" });
@@ -432,8 +440,7 @@ describe("Variant photo upload", () => {
 });
 
 describe("Reservations", () => {
-  // TODO B2: перенести у ProductModal (variant controls moved to modal)
-  it.skip("reserve updates reserved/available on the variant and lists it as active", async () => {
+  it("reserve updates reserved/available on the variant and lists it as active", async () => {
     vi.mocked(api.getMe).mockResolvedValue(shopFixture);
     const variant = makeVariant({ id: 61, sku: "SKU-61", on_hand: 5, reserved: 0, available: 5 });
     vi.mocked(api.getProducts).mockResolvedValue([
@@ -444,6 +451,8 @@ describe("Reservations", () => {
 
     render(<App />);
     await goToSklad();
+    await screen.findByText("Сукня");
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Сукня"));
     await screen.findByTestId("available-61");
 
     fireEvent.click(screen.getByRole("button", { name: "Відклади" }));
@@ -468,8 +477,7 @@ describe("Reservations", () => {
     expect(screen.getByText("Сукня (M)")).toBeInTheDocument();
   });
 
-  // TODO B2: перенести у ProductModal (variant controls moved to modal)
-  it.skip("release calls the endpoint and restores availability", async () => {
+  it("release calls the endpoint and restores availability", async () => {
     vi.mocked(api.getMe).mockResolvedValue(shopFixture);
     const variant = makeVariant({ id: 71, sku: "SKU-71", on_hand: 5, reserved: 2, available: 3 });
     vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ variants: [variant] })]);
@@ -482,6 +490,9 @@ describe("Reservations", () => {
 
     render(<App />);
     await goToSklad();
+    await screen.findByText("Футболка");
+    // Open modal so available-71 enters the DOM
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
     await screen.findByTestId("available-71");
 
     fireEvent.click(screen.getByRole("button", { name: "Резерви (1)" }));
@@ -496,8 +507,7 @@ describe("Reservations", () => {
     expect(screen.getByText("Активних резервів немає")).toBeInTheDocument();
   });
 
-  // TODO B2: перенести у ProductModal (variant controls moved to modal)
-  it.skip("fulfill calls the endpoint and deducts on_hand", async () => {
+  it("fulfill calls the endpoint and deducts on_hand", async () => {
     vi.mocked(api.getMe).mockResolvedValue(shopFixture);
     const variant = makeVariant({ id: 81, sku: "SKU-81", on_hand: 5, reserved: 2, available: 3 });
     vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ variants: [variant] })]);
@@ -510,6 +520,9 @@ describe("Reservations", () => {
 
     render(<App />);
     await goToSklad();
+    await screen.findByText("Футболка");
+    // Open modal so available-81 enters the DOM
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
     await screen.findByTestId("available-81");
 
     fireEvent.click(screen.getByRole("button", { name: "Резерви (1)" }));
@@ -611,8 +624,7 @@ describe("Free plan limits and upgrade prompt", () => {
     expect(screen.queryByLabelText("Назва")).not.toBeInTheDocument();
   });
 
-  // TODO B2: перенести у ProductModal (variant controls moved to modal)
-  it.skip("restock 402 shows UpgradePrompt with the server error message", async () => {
+  it("restock 402 shows UpgradePrompt with the server error message", async () => {
     vi.mocked(api.getMe).mockResolvedValue(shopFixture);
     const variant = makeVariant({ id: 101, sku: "SKU-101" });
     vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ variants: [variant] })]);
@@ -622,6 +634,8 @@ describe("Free plan limits and upgrade prompt", () => {
 
     render(<App />);
     await goToSklad();
+    await screen.findByText("Футболка");
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
     await screen.findByTestId("available-101");
 
     fireEvent.click(screen.getByLabelText("Збільшити залишок: SKU-101"));
@@ -630,8 +644,7 @@ describe("Free plan limits and upgrade prompt", () => {
     expect(screen.getByRole("button", { name: "Обрати тариф" })).toBeInTheDocument();
   });
 
-  // TODO B2: перенести у ProductModal (variant controls moved to modal)
-  it.skip("'Обрати тариф' in UpgradePrompt opens the paywall modal", async () => {
+  it("'Обрати тариф' in UpgradePrompt opens the paywall modal", async () => {
     vi.mocked(api.getMe).mockResolvedValue(shopFixture);
     const variant = makeVariant({ id: 102, sku: "SKU-102" });
     vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ variants: [variant] })]);
@@ -642,6 +655,8 @@ describe("Free plan limits and upgrade prompt", () => {
 
     render(<App />);
     await goToSklad();
+    await screen.findByText("Футболка");
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
     await screen.findByTestId("available-102");
 
     fireEvent.click(screen.getByLabelText("Збільшити залишок: SKU-102"));
@@ -652,8 +667,7 @@ describe("Free plan limits and upgrade prompt", () => {
     expect(await screen.findByText("Pro")).toBeInTheDocument();
   });
 
-  // TODO B2: перенести у ProductModal (variant controls moved to modal)
-  it.skip("hides billing UI for managers in the paywall modal", async () => {
+  it("hides billing UI for managers in the paywall modal", async () => {
     vi.mocked(api.getMe).mockResolvedValue({
       ...shopFixture,
       role: "manager",
@@ -667,6 +681,8 @@ describe("Free plan limits and upgrade prompt", () => {
 
     render(<App />);
     await goToSklad();
+    await screen.findByText("Футболка");
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
     await screen.findByTestId("available-103");
 
     fireEvent.click(screen.getByLabelText("Збільшити залишок: SKU-103"));
@@ -695,8 +711,7 @@ describe("Frozen products", () => {
     expect(screen.getByText("Заморожено")).toBeInTheDocument();
   });
 
-  // TODO B2: перенести у ProductModal (variant controls moved to modal)
-  it.skip("clicking + on a frozen variant shows UpgradePrompt instead of calling restock", async () => {
+  it("clicking + on a frozen variant shows UpgradePrompt instead of calling restock", async () => {
     vi.mocked(api.getMe).mockResolvedValue(shopFixture);
     const variant = makeVariant({ id: 111, sku: "SKU-111" });
     vi.mocked(api.getProducts).mockResolvedValue([
@@ -705,6 +720,9 @@ describe("Frozen products", () => {
 
     render(<App />);
     await goToSklad();
+    await screen.findByText("Футболка");
+    // Frozen product: modal opens (pencil does NOT block), frozen check is inside VariantRow
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
     await screen.findByTestId("available-111");
 
     fireEvent.click(screen.getByLabelText("Збільшити залишок: SKU-111"));
