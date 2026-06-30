@@ -495,10 +495,11 @@ body {
 
 .pcard-price {
   font-family: "DM Mono", ui-monospace, monospace;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: -0.02em;
   color: var(--text);
+  white-space: nowrap;
 }
 
 .pcard-substats {

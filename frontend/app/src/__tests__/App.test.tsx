@@ -176,7 +176,7 @@ describe("App catalog screen", () => {
 
     expect(await screen.findByText("Футболка")).toBeInTheDocument();
     // Компактна картка: діапазон цін, сумарний available, бейдж варіантів
-    expect(screen.getByText("450.00 ₴")).toBeInTheDocument();
+    expect(screen.getByText("450 ₴")).toBeInTheDocument();
     expect(screen.getByText("5 шт.")).toBeInTheDocument();
     expect(screen.getByText("1 варіант")).toBeInTheDocument();
     expect(screen.getAllByText("📦").length).toBeGreaterThan(0);

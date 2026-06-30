@@ -31,12 +31,13 @@ export function ProductCard({
   const prices = product.variants.map((v) => parseFloat(v.price));
   const minP = prices.length > 0 ? Math.min(...prices) : null;
   const maxP = prices.length > 0 ? Math.max(...prices) : null;
+  const fmt = (p: number) => (Number.isInteger(p) ? String(p) : p.toFixed(2));
   const priceLabel =
     minP === null || maxP === null
       ? "—"
       : minP === maxP
-        ? `${minP.toFixed(2)} ₴`
-        : `${minP.toFixed(2)}–${maxP.toFixed(2)} ₴`;
+        ? `${fmt(minP)} ₴`
+        : `${fmt(minP)}–${fmt(maxP)} ₴`;
 
   const totalAvailable = product.variants.reduce((s, v) => s + v.available, 0);
 
