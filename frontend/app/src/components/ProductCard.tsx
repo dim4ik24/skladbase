@@ -76,9 +76,11 @@ export function ProductCard({
       </div>
 
       <div className="product-card-meta">
-        <span className="product-price-range">{priceLabel}</span>
-        <span className="product-stock-total">{totalAvailable} шт.</span>
-        <span className="variant-count-badge">{variantBadge(product.variants.length)}</span>
+        <span className="pcard-price">{priceLabel}</span>
+        <div className="pcard-substats">
+          <span className="pcard-stock">{totalAvailable} шт.</span>
+          <span className="pcard-variants">{variantBadge(product.variants.length)}</span>
+        </div>
       </div>
     </article>
   );
