@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from decimal import Decimal
 from http import HTTPStatus
+from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -21,6 +22,8 @@ from app.models import (
     Plan,
     Product,
     ProductTemplate,
+    Reservation,
+    ReservationStatus,
     Subscription,
     SubStatus,
     Variant,
@@ -280,3 +283,153 @@ async def create_product_with_variants(
     await session.commit()
     await session.refresh(product, attribute_names=["variants", "photos"])
     return product
+
+
+# --------------------------------------------------------------------------- #
+#  Variant CRUD (feat-variant-crud)                                           #
+# --------------------------------------------------------------------------- #
+
+async def _load_variant_for_shop(
+    session: AsyncSession, variant_id: int, shop_id: int
+) -> Variant:
+    variant = await session.scalar(
+        select(Variant).where(Variant.id == variant_id, Variant.shop_id == shop_id)
+    )
+    if variant is None:
+        raise CatalogError(HTTPStatus.NOT_FOUND, "Варіант не знайдено")
+    return variant
+
+
+async def _check_no_axis_duplicate(
+    session: AsyncSession,
+    product_id: int,
+    axis_values: dict[str, Any],
+    exclude_id: int | None = None,
+) -> None:
+    """Raise 409 if any sibling variant has the same axis_values dict."""
+    q = select(Variant).where(Variant.product_id == product_id)
+    if exclude_id is not None:
+        q = q.where(Variant.id != exclude_id)
+    rows = (await session.scalars(q)).all()
+    for v in rows:
+        if v.axis_values == axis_values:
+            raise CatalogError(HTTPStatus.CONFLICT, "Варіант з такими осями вже існує")
+
+
+async def patch_variant(
+    session: AsyncSession,
+    membership: Membership,
+    variant_id: int,
+    updates: dict[str, Any],
+) -> Variant:
+    """Update price/sku/axis_values only. Never touches on_hand or reserved."""
+    variant = await _load_variant_for_shop(session, variant_id, membership.shop_id)
+    await enforce_product_writable(variant.product_id, membership.shop_id, session)
+
+    if "axis_values" in updates:
+        new_axis: dict[str, Any] = updates["axis_values"]
+        product = await session.get(Product, variant.product_id)
+        assert product is not None
+        template = await _resolve_template(session, membership.shop_id, product.template_id)
+        _validate_axis_values(template, VariantInput(price=variant.price, axis_values=new_axis))
+        await _check_no_axis_duplicate(
+            session, variant.product_id, new_axis, exclude_id=variant.id
+        )
+
+    for field_name in ("price", "sku", "axis_values"):
+        if field_name in updates:
+            setattr(variant, field_name, updates[field_name])
+
+    try:
+        await session.flush()
+    except IntegrityError as exc:
+        await session.rollback()
+        if _is_sku_conflict(exc):
+            raise CatalogError(
+                HTTPStatus.CONFLICT, "SKU вже використовується в цьому магазині"
+            ) from exc
+        raise CatalogError(HTTPStatus.CONFLICT, "Не вдалося оновити варіант") from exc
+
+    await session.commit()
+    await session.refresh(variant)
+    return variant
+
+
+@dataclass
+class VariantAddInput:
+    price: Decimal
+    axis_values: dict[str, str] = field(default_factory=dict)
+    sku: str | None = None
+
+
+async def add_variant_to_product(
+    session: AsyncSession,
+    membership: Membership,
+    product_id: int,
+    payload: VariantAddInput,
+) -> Variant:
+    product = await session.scalar(
+        select(Product).where(Product.id == product_id, Product.shop_id == membership.shop_id)
+    )
+    if product is None:
+        raise CatalogError(HTTPStatus.NOT_FOUND, "Товар не знайдено")
+
+    await enforce_product_writable(product_id, membership.shop_id, session)
+
+    template = await _resolve_template(session, membership.shop_id, product.template_id)
+    _validate_axis_values(template, VariantInput(price=payload.price, axis_values=payload.axis_values))
+    await _check_no_axis_duplicate(session, product_id, payload.axis_values)
+
+    variant = Variant(
+        shop_id=membership.shop_id,
+        product_id=product_id,
+        sku=payload.sku,
+        axis_values=payload.axis_values,
+        price=payload.price,
+        on_hand=0,
+    )
+    session.add(variant)
+
+    try:
+        await session.flush()
+    except IntegrityError as exc:
+        await session.rollback()
+        if _is_sku_conflict(exc):
+            raise CatalogError(
+                HTTPStatus.CONFLICT, "SKU вже використовується в цьому магазині"
+            ) from exc
+        raise CatalogError(HTTPStatus.CONFLICT, "Не вдалося додати варіант") from exc
+
+    await session.commit()
+    await session.refresh(variant)
+    return variant
+
+
+async def delete_variant(
+    session: AsyncSession,
+    membership: Membership,
+    variant_id: int,
+) -> str | None:
+    """Delete variant. Returns photo_url so caller can best-effort remove from R2."""
+    variant = await _load_variant_for_shop(session, variant_id, membership.shop_id)
+    await enforce_product_writable(variant.product_id, membership.shop_id, session)
+
+    sibling_count = await session.scalar(
+        select(func.count(Variant.id)).where(Variant.product_id == variant.product_id)
+    )
+    if (sibling_count or 0) <= 1:
+        raise CatalogError(HTTPStatus.CONFLICT, "Товар має лишити хоча б один варіант")
+
+    active_res = await session.scalar(
+        select(func.count(Reservation.id)).where(
+            Reservation.variant_id == variant_id,
+            Reservation.status == ReservationStatus.active,
+        )
+    )
+    if (active_res or 0) > 0:
+        raise CatalogError(HTTPStatus.CONFLICT, "Зніміть резерви перед видаленням варіанта")
+
+    photo_url = variant.photo_url
+    await session.delete(variant)
+    await session.commit()
+    return photo_url

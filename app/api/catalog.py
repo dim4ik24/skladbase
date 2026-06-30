@@ -57,6 +57,18 @@ class VariantIn(BaseModel):
     low_stock_threshold: int = 3
 
 
+class VariantPatch(BaseModel):
+    price: Decimal | None = None
+    sku: str | None = None
+    axis_values: dict[str, str] | None = None
+
+
+class VariantAddIn(BaseModel):
+    price: Decimal
+    axis_values: dict[str, str] = Field(default_factory=dict)
+    sku: str | None = None
+
+
 class VariantOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -424,3 +436,62 @@ async def delete_product_photo(
     await media_service.delete_photo(photo.url)
     await session.delete(photo)
     await session.commit()
+
+
+# --------------------------------------------------------------------------- #
+#  Variant CRUD (feat-variant-crud)
+# --------------------------------------------------------------------------- #
+
+@router.patch("/variants/{variant_id}", response_model=VariantOut)
+async def patch_variant(
+    variant_id: int,
+    payload: VariantPatch,
+    membership: Membership = require_permission_writable("can_edit_products"),
+    session: AsyncSession = Depends(get_session),
+) -> Variant:
+    try:
+        return await catalog_service.patch_variant(
+            session, membership, variant_id, payload.model_dump(exclude_unset=True)
+        )
+    except catalog_service.CatalogError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+
+@router.post(
+    "/products/{product_id}/variants",
+    response_model=VariantOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_variant(
+    product_id: int,
+    payload: VariantAddIn,
+    membership: Membership = require_permission_writable("can_edit_products"),
+    session: AsyncSession = Depends(get_session),
+) -> Variant:
+    try:
+        return await catalog_service.add_variant_to_product(
+            session,
+            membership,
+            product_id,
+            catalog_service.VariantAddInput(
+                price=payload.price,
+                axis_values=payload.axis_values,
+                sku=payload.sku,
+            ),
+        )
+    except catalog_service.CatalogError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+
+@router.delete("/variants/{variant_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_variant(
+    variant_id: int,
+    membership: Membership = require_permission_writable("can_edit_products"),
+    session: AsyncSession = Depends(get_session),
+) -> None:
+    try:
+        photo_url = await catalog_service.delete_variant(session, membership, variant_id)
+    except catalog_service.CatalogError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    if photo_url:
+        await media_service.delete_photo(photo_url)
