@@ -1,17 +1,18 @@
 import { Pencil } from "lucide-react";
-import type { Product, ReserveInput } from "../types";
-import { VariantRow } from "./VariantRow";
+import type { Product } from "../types";
 
 interface ProductCardProps {
   product: Product;
   writable: boolean;
   isFrozen?: boolean;
   onFrozenAction?: () => void;
-  onRestock: (variantId: number, qty: number) => void;
-  onAdjust: (variantId: number, newOnHand: number) => void;
-  onUploadPhoto: (variantId: number, file: File) => Promise<void>;
-  onReserve: (variantId: number, payload: ReserveInput) => Promise<void>;
   onEdit: (product: Product) => void;
+}
+
+function variantBadge(n: number): string {
+  if (n % 10 === 1 && n % 100 !== 11) return `${n} варіант`;
+  if (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) return `${n} варіанти`;
+  return `${n} варіантів`;
 }
 
 export function ProductCard({
@@ -19,10 +20,6 @@ export function ProductCard({
   writable,
   isFrozen = false,
   onFrozenAction,
-  onRestock,
-  onAdjust,
-  onUploadPhoto,
-  onReserve,
   onEdit,
 }: ProductCardProps) {
   const sortedPhotos = [...product.photos].sort((a, b) => a.position - b.position);
@@ -30,7 +27,18 @@ export function ProductCard({
     sortedPhotos[0]?.url ??
     product.variants.find((v) => v.photo_url)?.photo_url ??
     null;
-  const stripPhotos = sortedPhotos.slice(1);
+
+  const prices = product.variants.map((v) => parseFloat(v.price));
+  const minP = prices.length > 0 ? Math.min(...prices) : null;
+  const maxP = prices.length > 0 ? Math.max(...prices) : null;
+  const priceLabel =
+    minP === null || maxP === null
+      ? "—"
+      : minP === maxP
+        ? `${minP.toFixed(2)} ₴`
+        : `${minP.toFixed(2)}–${maxP.toFixed(2)} ₴`;
+
+  const totalAvailable = product.variants.reduce((s, v) => s + v.available, 0);
 
   return (
     <article className={`product-card${isFrozen ? " product-card--frozen" : ""}`}>
@@ -67,28 +75,11 @@ export function ProductCard({
         </button>
       </div>
 
-      {stripPhotos.length > 0 ? (
-        <div className="photo-strip" aria-label="Додаткові фото товару">
-          {stripPhotos.map((ph) => (
-            <img key={ph.id} src={ph.url} alt="" className="photo-strip-thumb" />
-          ))}
-        </div>
-      ) : null}
-
-      <ul className="variant-list">
-        {product.variants.map((variant) => (
-          <VariantRow
-            key={variant.id}
-            variant={variant}
-            isFrozen={isFrozen}
-            onFrozenAction={onFrozenAction}
-            onRestock={onRestock}
-            onAdjust={onAdjust}
-            onUploadPhoto={onUploadPhoto}
-            onReserve={onReserve}
-          />
-        ))}
-      </ul>
+      <div className="product-card-meta">
+        <span className="product-price-range">{priceLabel}</span>
+        <span className="product-stock-total">{totalAvailable} шт.</span>
+        <span className="variant-count-badge">{variantBadge(product.variants.length)}</span>
+      </div>
     </article>
   );
 }

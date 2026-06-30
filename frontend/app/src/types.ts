@@ -88,6 +88,18 @@ export interface VariantInput {
   low_stock_threshold?: number;
 }
 
+export interface VariantPatchPayload {
+  price?: string;
+  sku?: string;
+  axis_values?: Record<string, string>;
+}
+
+export interface VariantAddPayload {
+  price: string;
+  axis_values?: Record<string, string>;
+  sku?: string;
+}
+
 export interface ProductInput {
   name: string;
   variants: VariantInput[];

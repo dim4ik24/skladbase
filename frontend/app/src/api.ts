@@ -17,6 +17,8 @@ import type {
   Shop,
   Template,
   Variant,
+  VariantAddPayload,
+  VariantPatchPayload,
 } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_BASE;
@@ -184,4 +186,22 @@ export function deleteShopLogo(): Promise<void> {
 
 export function getFinanceSummary(): Promise<FinanceSummary> {
   return request<FinanceSummary>("/api/finance/summary");
+}
+
+export function patchVariant(variantId: number, payload: VariantPatchPayload): Promise<Variant> {
+  return request<Variant>(`/api/variants/${variantId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function addVariant(productId: number, payload: VariantAddPayload): Promise<Variant> {
+  return request<Variant>(`/api/products/${productId}/variants`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteVariant(variantId: number): Promise<void> {
+  return request<void>(`/api/variants/${variantId}`, { method: "DELETE" });
 }
