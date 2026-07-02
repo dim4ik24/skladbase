@@ -73,6 +73,29 @@ async def test_create_clothing_product_with_three_variants(client: AsyncClient) 
 
 
 @pytest.mark.asyncio
+async def test_create_clothing_product_with_product_type_attribute(client: AsyncClient) -> None:
+    """Пункт 11 фідбеку: "Тип товару" — необов'язковий enum-атрибут шаблону "Одяг"."""
+    init_data, _shop_id = await _bootstrap(client, 1003)
+    template_id = await _clothing_template_id(client, init_data)
+
+    payload = {
+        "name": "Худі оверсайз",
+        "template_id": template_id,
+        "attributes": {"product_type": "Худі", "material": "футер"},
+        "variants": [
+            {"axis_values": {"size": "M", "color": "сірий"}, "sku": "HD-M-GRY",
+             "price": "890", "on_hand": 4},
+        ],
+    }
+    r = await client.post("/api/products", json=payload, headers={HEADER: init_data})
+    assert r.status_code == 201, r.text
+    body = r.json()
+
+    assert body["attributes"]["product_type"] == "Худі"
+    assert body["attributes"]["material"] == "футер"
+
+
+@pytest.mark.asyncio
 async def test_duplicate_sku_in_same_shop_returns_409(client: AsyncClient) -> None:
     init_data, _shop_id = await _bootstrap(client, 1002)
 

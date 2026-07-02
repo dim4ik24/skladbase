@@ -35,6 +35,9 @@ SYSTEM_TEMPLATES = {
         "name": "Одяг",
         "field_schema": {
             "attributes": [
+                {"key": "product_type", "label": "Тип", "type": "enum",
+                 "options": ["Футболка", "Худі", "Светр", "Сорочка", "Штани", "Шорти",
+                             "Куртка", "Взуття", "Аксесуар", "Інше"]},
                 {"key": "material", "label": "Матеріал", "type": "string"},
                 {"key": "brand", "label": "Бренд", "type": "string"},
             ],

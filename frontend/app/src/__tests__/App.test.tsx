@@ -76,7 +76,10 @@ const clothingTemplate: Template = {
   code: "clothing",
   name: "Одяг",
   field_schema: {
-    attributes: [{ key: "material", label: "Матеріал", type: "string" }],
+    attributes: [
+      { key: "product_type", label: "Тип", type: "enum", options: ["Футболка", "Худі"] },
+      { key: "material", label: "Матеріал", type: "string" },
+    ],
     variant_axes: [
       { key: "size", label: "Розмір", type: "enum", options: ["XS", "S", "M", "L"] },
       { key: "color", label: "Колір", type: "string" },
@@ -409,6 +412,36 @@ describe("Add product form", () => {
           { axis_values: { size: "L", color: "Білий" }, price: "320", sku: undefined, on_hand: 0 },
         ],
       });
+    });
+  });
+
+  it("renders an enum attribute as a select and includes the chosen value in attributes", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.getTemplates).mockResolvedValue([clothingTemplate]);
+    vi.mocked(api.createProduct).mockResolvedValue(makeProduct({ id: 8, name: "Худі" }));
+
+    render(<App />);
+    await goToSklad();
+
+    fireEvent.click(screen.getByRole("button", { name: "Додати товар" }));
+    fireEvent.change(screen.getByLabelText("Шаблон"), { target: { value: "7" } });
+    fireEvent.change(screen.getByLabelText("Назва"), { target: { value: "Худі" } });
+    fireEvent.click(screen.getByRole("button", { name: "Додатково" }));
+
+    const typeField = screen.getByLabelText("Тип");
+    expect(typeField.tagName).toBe("SELECT");
+    fireEvent.change(typeField, { target: { value: "Худі" } });
+
+    const firstRow = within(document.querySelectorAll(".variant-builder-row")[0] as HTMLElement);
+    fireEvent.change(firstRow.getByLabelText("Ціна"), { target: { value: "890" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Створити" }));
+
+    await waitFor(() => {
+      expect(api.createProduct).toHaveBeenCalledWith(
+        expect.objectContaining({ attributes: { product_type: "Худі" } }),
+      );
     });
   });
 });

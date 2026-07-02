@@ -280,13 +280,30 @@ function CreateForm({
                 {attributeFields.map((field) => (
                   <label className="form-field" key={field.key}>
                     <span>{field.label}</span>
-                    <input
-                      type="text"
-                      value={attributeValues[field.key] ?? ""}
-                      onChange={(e) =>
-                        setAttributeValues((prev) => ({ ...prev, [field.key]: e.target.value }))
-                      }
-                    />
+                    {field.type === "enum" ? (
+                      <select
+                        aria-label={field.label}
+                        value={attributeValues[field.key] ?? ""}
+                        onChange={(e) =>
+                          setAttributeValues((prev) => ({ ...prev, [field.key]: e.target.value }))
+                        }
+                      >
+                        <option value="" />
+                        {(field.options ?? []).map((opt) => (
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        value={attributeValues[field.key] ?? ""}
+                        onChange={(e) =>
+                          setAttributeValues((prev) => ({ ...prev, [field.key]: e.target.value }))
+                        }
+                      />
+                    )}
                   </label>
                 ))}
               </div>
