@@ -1,5 +1,7 @@
 export type SubscriptionStatus = "trial" | "active" | "past_due" | "canceled" | "expired";
 
+export type InviteStatus = "joined" | "already_member" | "invite_invalid" | null;
+
 export interface Shop {
   shop_id: number;
   shop_name: string;
@@ -16,6 +18,28 @@ export interface Shop {
   products_count: number;
   active_count: number;
   max_products: number | null;
+  invite_status: InviteStatus;
+}
+
+export interface Invite {
+  id: number;
+  token: string;
+  url: string;
+  expires_at: string;
+  created_at?: string;
+}
+
+export interface TeamMember {
+  id: number;
+  tg_id: number;
+  display_name: string | null;
+  role: "owner" | "manager";
+  can_view_inventory: boolean;
+  can_edit_products: boolean;
+  can_manage_reservations: boolean;
+  can_manage_stock: boolean;
+  can_view_finance: boolean;
+  can_manage_billing: boolean;
 }
 
 export interface Plan {

@@ -43,6 +43,9 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<TabId>("dashboard");
   const [showPaywall, setShowPaywall] = useState(false);
   const [upgradePrompt, setUpgradePrompt] = useState<{ message: string } | null>(null);
+  const [inviteBanner, setInviteBanner] = useState<{ status: string; shopName: string } | null>(
+    null,
+  );
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -66,6 +69,9 @@ export default function App() {
         setTemplates(templatesResult);
         setReservations(reservationsResult);
         setPlans(plansResult);
+        if (meResult.invite_status) {
+          setInviteBanner({ status: meResult.invite_status, shopName: meResult.shop_name });
+        }
       } catch (err) {
         if (!mounted) return;
         setError(errorMessage(err, "Не вдалося завантажити дані"));
@@ -79,6 +85,12 @@ export default function App() {
       mounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (inviteBanner?.status !== "joined") return;
+    const timer = setTimeout(() => setInviteBanner(null), 5000);
+    return () => clearTimeout(timer);
+  }, [inviteBanner]);
 
   function applyVariantUpdate(updated: Variant) {
     setProducts((prev) =>
@@ -360,6 +372,35 @@ export default function App() {
         <Header shop={shop} />
 
         {error ? <p className="error-banner">{error}</p> : null}
+
+        {inviteBanner ? (
+          <div
+            className={`banner ${
+              inviteBanner.status === "joined"
+                ? "banner-success"
+                : inviteBanner.status === "invite_invalid"
+                  ? "banner-warning"
+                  : "banner-neutral"
+            }`}
+            onClick={() => setInviteBanner(null)}
+          >
+            <span>
+              {inviteBanner.status === "joined"
+                ? `Вітаємо! Ви приєднались до магазину ${inviteBanner.shopName}`
+                : inviteBanner.status === "already_member"
+                  ? "Ви вже маєте магазин — запрошення не застосовано"
+                  : "Запрошення недійсне або прострочене. Створено ваш власний магазин."}
+            </span>
+            <button
+              type="button"
+              className="banner-dismiss"
+              aria-label="Закрити"
+              onClick={() => setInviteBanner(null)}
+            >
+              ×
+            </button>
+          </div>
+        ) : null}
 
         {shop && isLiveTrial(shop) ? (
           <TrialBanner shop={shop} />

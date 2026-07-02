@@ -7,6 +7,7 @@
 import { getInitData } from "./telegram";
 import type {
   FinanceSummary,
+  Invite,
   Photo,
   Plan,
   Product,
@@ -15,6 +16,7 @@ import type {
   Reservation,
   ReserveInput,
   Shop,
+  TeamMember,
   Template,
   Variant,
   VariantAddPayload,
@@ -204,4 +206,24 @@ export function addVariant(productId: number, payload: VariantAddPayload): Promi
 
 export function deleteVariant(variantId: number): Promise<void> {
   return request<void>(`/api/variants/${variantId}`, { method: "DELETE" });
+}
+
+export function createInvite(): Promise<Invite> {
+  return request<Invite>("/api/team/invites", { method: "POST" });
+}
+
+export function listInvites(): Promise<Invite[]> {
+  return request<Invite[]>("/api/team/invites");
+}
+
+export function revokeInvite(id: number): Promise<void> {
+  return request<void>(`/api/team/invites/${id}`, { method: "DELETE" });
+}
+
+export function listMembers(): Promise<TeamMember[]> {
+  return request<TeamMember[]>("/api/team/members");
+}
+
+export function removeMember(membershipId: number): Promise<void> {
+  return request<void>(`/api/team/members/${membershipId}`, { method: "DELETE" });
 }

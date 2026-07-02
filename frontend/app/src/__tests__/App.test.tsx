@@ -39,6 +39,11 @@ vi.mock("../api", () => ({
   patchVariant: vi.fn(),
   addVariant: vi.fn(),
   deleteVariant: vi.fn(),
+  createInvite: vi.fn(),
+  listInvites: vi.fn(),
+  revokeInvite: vi.fn(),
+  listMembers: vi.fn(),
+  removeMember: vi.fn(),
 }));
 
 import * as api from "../api";
@@ -60,6 +65,7 @@ const shopFixture: Shop = {
   products_count: 0,
   active_count: 0,
   max_products: null,
+  invite_status: null,
 };
 
 const planFixture: Plan = {
@@ -161,6 +167,11 @@ beforeEach(() => {
   vi.mocked(api.patchVariant).mockReset();
   vi.mocked(api.addVariant).mockReset();
   vi.mocked(api.deleteVariant).mockReset();
+  vi.mocked(api.createInvite).mockReset();
+  vi.mocked(api.listInvites).mockReset().mockResolvedValue([]);
+  vi.mocked(api.revokeInvite).mockReset();
+  vi.mocked(api.listMembers).mockReset().mockResolvedValue([]);
+  vi.mocked(api.removeMember).mockReset();
   document.documentElement.style.removeProperty("--accent-color");
   localStorage.clear();
 });
@@ -1013,6 +1024,193 @@ describe("Tab navigation", () => {
       "aria-selected",
       "true",
     );
+  });
+});
+
+describe("Team section (Settings, owner-only)", () => {
+  async function goToSettings() {
+    await screen.findByText("Тестовий магазин");
+    fireEvent.click(screen.getByRole("tab", { name: "Налаштування" }));
+  }
+
+  it("is visible for owner", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+
+    render(<App />);
+    await goToSettings();
+
+    expect(await screen.findByText("Команда")).toBeInTheDocument();
+  });
+
+  it("is hidden for manager", async () => {
+    vi.mocked(api.getMe).mockResolvedValue({ ...shopFixture, role: "manager" });
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+
+    render(<App />);
+    await goToSettings();
+
+    await screen.findByText("Підписка");
+    expect(screen.queryByText("Команда")).not.toBeInTheDocument();
+  });
+
+  it("creates an invite and shows the url", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.createInvite).mockResolvedValue({
+      id: 1,
+      token: "tok-123",
+      url: "https://t.me/sklad_base_bot?startapp=invite_tok-123",
+      expires_at: new Date(Date.now() + 48 * 3600 * 1000).toISOString(),
+    });
+
+    render(<App />);
+    await goToSettings();
+    await screen.findByText("Команда");
+
+    fireEvent.click(screen.getByRole("button", { name: "Запросити людину" }));
+
+    await waitFor(() => {
+      expect(api.createInvite).toHaveBeenCalled();
+    });
+    expect(
+      await screen.findByDisplayValue("https://t.me/sklad_base_bot?startapp=invite_tok-123"),
+    ).toBeInTheDocument();
+  });
+
+  it("revokes an invite via two-step confirm", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.listInvites).mockResolvedValue([
+      {
+        id: 42,
+        token: "tok-42",
+        url: "https://t.me/sklad_base_bot?startapp=invite_tok-42",
+        expires_at: new Date(Date.now() + 47 * 3600 * 1000).toISOString(),
+      },
+    ]);
+    vi.mocked(api.revokeInvite).mockResolvedValue(undefined);
+
+    render(<App />);
+    await goToSettings();
+    await screen.findByText(/Діє ще/);
+
+    fireEvent.click(screen.getByRole("button", { name: "Скасувати" }));
+    fireEvent.click(screen.getByRole("button", { name: "Так, скасувати" }));
+
+    await waitFor(() => {
+      expect(api.revokeInvite).toHaveBeenCalledWith(42);
+    });
+  });
+
+  it("removes a manager via two-step confirm", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.listMembers).mockResolvedValue([
+      {
+        id: 1, tg_id: 1001, display_name: "Дмитро", role: "owner",
+        can_view_inventory: true, can_edit_products: true, can_manage_reservations: true,
+        can_manage_stock: true, can_view_finance: true, can_manage_billing: true,
+      },
+      {
+        id: 2, tg_id: 1002, display_name: "Менеджер Іван", role: "manager",
+        can_view_inventory: true, can_edit_products: true, can_manage_reservations: true,
+        can_manage_stock: true, can_view_finance: true, can_manage_billing: true,
+      },
+    ]);
+    vi.mocked(api.removeMember).mockResolvedValue(undefined);
+
+    render(<App />);
+    await goToSettings();
+    const managerRow = (await screen.findByText("Менеджер Іван")).closest("li");
+    expect(managerRow).not.toBeNull();
+
+    fireEvent.click(within(managerRow as HTMLElement).getByRole("button", { name: "Видалити" }));
+    fireEvent.click(
+      within(managerRow as HTMLElement).getByRole("button", { name: "Так, видалити" }),
+    );
+
+    await waitFor(() => {
+      expect(api.removeMember).toHaveBeenCalledWith(2);
+    });
+  });
+
+  it("does not show a delete button for the owner's own row", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.listMembers).mockResolvedValue([
+      {
+        id: 1, tg_id: 1001, display_name: "Дмитро", role: "owner",
+        can_view_inventory: true, can_edit_products: true, can_manage_reservations: true,
+        can_manage_stock: true, can_view_finance: true, can_manage_billing: true,
+      },
+    ]);
+
+    render(<App />);
+    await goToSettings();
+    const ownerRow = (await screen.findByText("Дмитро")).closest("li");
+    expect(ownerRow).not.toBeNull();
+
+    expect(
+      within(ownerRow as HTMLElement).queryByRole("button", { name: "Видалити" }),
+    ).not.toBeInTheDocument();
+  });
+});
+
+describe("invite_status banner", () => {
+  it("shows a success banner when invite_status is joined", async () => {
+    vi.mocked(api.getMe).mockResolvedValue({ ...shopFixture, invite_status: "joined" });
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+
+    render(<App />);
+
+    expect(
+      await screen.findByText("Вітаємо! Ви приєднались до магазину Тестовий магазин"),
+    ).toBeInTheDocument();
+  });
+
+  it("shows a neutral banner when invite_status is already_member", async () => {
+    vi.mocked(api.getMe).mockResolvedValue({ ...shopFixture, invite_status: "already_member" });
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+
+    render(<App />);
+
+    expect(
+      await screen.findByText("Ви вже маєте магазин — запрошення не застосовано"),
+    ).toBeInTheDocument();
+  });
+
+  it("shows a warning banner when invite_status is invite_invalid", async () => {
+    vi.mocked(api.getMe).mockResolvedValue({ ...shopFixture, invite_status: "invite_invalid" });
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+
+    render(<App />);
+
+    expect(
+      await screen.findByText("Запрошення недійсне або прострочене. Створено ваш власний магазин."),
+    ).toBeInTheDocument();
+  });
+
+  it("shows no banner when invite_status is null", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+
+    render(<App />);
+    await screen.findByText("Тестовий магазин");
+
+    expect(screen.queryByText(/приєднались|запрошення/i)).not.toBeInTheDocument();
+  });
+
+  it("dismisses the banner on click", async () => {
+    vi.mocked(api.getMe).mockResolvedValue({ ...shopFixture, invite_status: "already_member" });
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+
+    render(<App />);
+    const message = await screen.findByText("Ви вже маєте магазин — запрошення не застосовано");
+
+    fireEvent.click(screen.getByRole("button", { name: "Закрити" }));
+
+    expect(message).not.toBeInTheDocument();
   });
 });
 

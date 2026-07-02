@@ -25,6 +25,7 @@ interface TelegramWebApp {
   ready: () => void;
   expand: () => void;
   openInvoice?: (url: string, callback?: (status: string) => void) => void;
+  openTelegramLink?: (url: string) => void;
 }
 
 declare global {
@@ -78,4 +79,27 @@ export function openInvoice(link: string, onClose?: (status: string) => void): b
   if (!webApp?.openInvoice) return false;
   webApp.openInvoice(link, onClose);
   return true;
+}
+
+/** Ділиться інвайт-лінком через нативний Telegram-шер: `openTelegramLink` на
+ * `t.me/share/url` — офіційно рекомендований спосіб для Mini Apps, працює
+ * однаково на iOS/Android/Desktop (на відміну від window.open, якого
+ * WebView може заблокувати). Поза Telegram — фолбек на Web Share API.
+ * Якщо й того нема — повертає `false`: викликач лишає поле з лінком для
+ * копіювання як універсальний запасний варіант. */
+export function shareInviteLink(url: string, text: string): boolean {
+  const webApp = window.Telegram?.WebApp;
+  const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`;
+
+  if (webApp?.openTelegramLink) {
+    webApp.openTelegramLink(shareUrl);
+    return true;
+  }
+  if (navigator.share) {
+    void navigator.share({ url, text }).catch(() => {
+      // юзер скасував/шер не спрацював — поле з лінком лишається як фолбек
+    });
+    return true;
+  }
+  return false;
 }
