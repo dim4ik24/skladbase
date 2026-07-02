@@ -159,6 +159,7 @@ beforeEach(() => {
   vi.mocked(api.addVariant).mockReset();
   vi.mocked(api.deleteVariant).mockReset();
   document.documentElement.style.removeProperty("--accent-color");
+  localStorage.clear();
 });
 
 // Default tab is Dashboard; navigate to Sklad when tests need catalog content.
@@ -398,6 +399,123 @@ describe("Add product form", () => {
         ],
       });
     });
+  });
+});
+
+describe("Create form field validation highlighting", () => {
+  it("highlights the name field and shows a banner when name is empty", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.getTemplates).mockResolvedValue([]);
+
+    render(<App />);
+    await goToSklad();
+    fireEvent.click(screen.getByRole("button", { name: "Додати товар" }));
+
+    fireEvent.change(screen.getByLabelText("Ціна"), { target: { value: "120" } });
+    fireEvent.click(screen.getByRole("button", { name: "Створити" }));
+
+    expect(await screen.findByText("Вкажіть назву товару")).toBeInTheDocument();
+    expect(screen.getByLabelText("Назва")).toHaveClass("input-error");
+    expect(api.createProduct).not.toHaveBeenCalled();
+  });
+
+  it("highlights the empty price field for the second variant with a 1-based message", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.getTemplates).mockResolvedValue([clothingTemplate]);
+
+    render(<App />);
+    await goToSklad();
+    fireEvent.click(screen.getByRole("button", { name: "Додати товар" }));
+    fireEvent.change(screen.getByLabelText("Шаблон"), { target: { value: "7" } });
+    fireEvent.change(screen.getByLabelText("Назва"), { target: { value: "Футболка" } });
+
+    const firstRow = within(document.querySelectorAll(".variant-builder-row")[0] as HTMLElement);
+    fireEvent.change(firstRow.getByLabelText("Ціна"), { target: { value: "300" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Додати варіант" }));
+    const rows = document.querySelectorAll(".variant-builder-row");
+    expect(rows).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole("button", { name: "Створити" }));
+
+    expect(await screen.findByText("Вкажіть ціну для варіанта 2")).toBeInTheDocument();
+    const secondRow = within(document.querySelectorAll(".variant-builder-row")[1] as HTMLElement);
+    expect(secondRow.getByLabelText("Ціна")).toHaveClass("input-error");
+    expect(api.createProduct).not.toHaveBeenCalled();
+  });
+
+  it("clears the highlight once the user starts typing into the field", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.getTemplates).mockResolvedValue([]);
+
+    render(<App />);
+    await goToSklad();
+    fireEvent.click(screen.getByRole("button", { name: "Додати товар" }));
+
+    fireEvent.change(screen.getByLabelText("Ціна"), { target: { value: "120" } });
+    fireEvent.click(screen.getByRole("button", { name: "Створити" }));
+    expect(await screen.findByText("Вкажіть назву товару")).toBeInTheDocument();
+    expect(screen.getByLabelText("Назва")).toHaveClass("input-error");
+
+    fireEvent.change(screen.getByLabelText("Назва"), { target: { value: "Свічка" } });
+    expect(screen.getByLabelText("Назва")).not.toHaveClass("input-error");
+  });
+});
+
+describe("Create form template memory", () => {
+  it("saves the selected template id to localStorage after a successful create", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.getTemplates).mockResolvedValue([clothingTemplate]);
+    vi.mocked(api.createProduct).mockResolvedValue(makeProduct({ id: 5, name: "Футболка" }));
+    const setItemSpy = vi.spyOn(Storage.prototype, "setItem");
+
+    render(<App />);
+    await goToSklad();
+    fireEvent.click(screen.getByRole("button", { name: "Додати товар" }));
+    fireEvent.change(screen.getByLabelText("Шаблон"), { target: { value: "7" } });
+    fireEvent.change(screen.getByLabelText("Назва"), { target: { value: "Футболка" } });
+
+    const firstRow = within(document.querySelectorAll(".variant-builder-row")[0] as HTMLElement);
+    fireEvent.change(firstRow.getByLabelText("Ціна"), { target: { value: "300" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Створити" }));
+
+    await waitFor(() => {
+      expect(setItemSpy).toHaveBeenCalledWith("skladbase:lastTemplateId", "7");
+    });
+  });
+
+  it("preselects the last used template when opening the create form", async () => {
+    localStorage.setItem("skladbase:lastTemplateId", "7");
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.getTemplates).mockResolvedValue([clothingTemplate]);
+
+    render(<App />);
+    await goToSklad();
+    fireEvent.click(screen.getByRole("button", { name: "Додати товар" }));
+
+    expect(screen.getByLabelText("Шаблон")).toHaveValue("7");
+    expect(screen.getByLabelText("Розмір")).toBeInTheDocument();
+    expect(screen.getByLabelText("Колір")).toBeInTheDocument();
+  });
+
+  it("ignores a saved template id that no longer exists, without crashing", async () => {
+    localStorage.setItem("skladbase:lastTemplateId", "999");
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.getTemplates).mockResolvedValue([clothingTemplate]);
+
+    render(<App />);
+    await goToSklad();
+    fireEvent.click(screen.getByRole("button", { name: "Додати товар" }));
+
+    expect(screen.getByLabelText("Шаблон")).toHaveValue("");
+    expect(screen.queryByLabelText("Розмір")).not.toBeInTheDocument();
   });
 });
 

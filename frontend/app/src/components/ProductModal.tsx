@@ -53,6 +53,21 @@ function emptyRow(axes: TemplateField[]): VariantRowState {
 
 // ─── Create mode ─────────────────────────────────────────────────────────────
 
+const LAST_TEMPLATE_KEY = "skladbase:lastTemplateId";
+
+// localStorage can throw in some WebViews (e.g. private mode) — fail silently.
+function resolveInitialTemplate(templates: Template[]): Template | null {
+  try {
+    const saved = localStorage.getItem(LAST_TEMPLATE_KEY);
+    if (saved) {
+      return templates.find((t) => String(t.id) === saved) ?? null;
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
 interface CreateFormProps {
   templates: Template[];
   isOwner?: boolean;
@@ -70,14 +85,21 @@ function CreateForm({
   onCreateProduct,
   onClose,
 }: CreateFormProps) {
-  const [templateId, setTemplateId] = useState<string>("");
+  const [templateId, setTemplateId] = useState<string>(() => {
+    const saved = resolveInitialTemplate(templates);
+    return saved ? String(saved.id) : "";
+  });
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [attributeValues, setAttributeValues] = useState<Record<string, string>>({});
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [rows, setRows] = useState<VariantRowState[]>([emptyRow([])]);
+  const [rows, setRows] = useState<VariantRowState[]>(() => {
+    const saved = resolveInitialTemplate(templates);
+    return [emptyRow(saved?.field_schema.variant_axes ?? [])];
+  });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [invalidFields, setInvalidFields] = useState<Set<string>>(new Set());
   const [localTemplates, setLocalTemplates] = useState<Template[]>(templates);
   const [showBuilder, setShowBuilder] = useState(false);
 
@@ -119,20 +141,45 @@ function CreateForm({
 
   function removeRow(index: number) {
     setRows((prev) => prev.filter((_, i) => i !== index));
+    // Indices shift on removal — drop stale highlights rather than mislabel a row.
+    setInvalidFields(new Set());
+  }
+
+  function clearInvalid(field: string) {
+    setInvalidFields((prev) => {
+      if (!prev.has(field)) return prev;
+      const next = new Set(prev);
+      next.delete(field);
+      return next;
+    });
   }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError(null);
 
+    const nextInvalid = new Set<string>();
     if (!name.trim()) {
-      setError("Вкажіть назву товару");
+      nextInvalid.add("name");
+    }
+    let firstEmptyPriceIndex = -1;
+    rows.forEach((row, index) => {
+      if (!row.price.trim()) {
+        nextInvalid.add(`price-${index}`);
+        if (firstEmptyPriceIndex === -1) firstEmptyPriceIndex = index;
+      }
+    });
+
+    if (nextInvalid.size > 0) {
+      setInvalidFields(nextInvalid);
+      setError(
+        nextInvalid.has("name")
+          ? "Вкажіть назву товару"
+          : `Вкажіть ціну для варіанта ${firstEmptyPriceIndex + 1}`,
+      );
       return;
     }
-    if (rows.some((row) => !row.price.trim())) {
-      setError("Вкажіть ціну для кожного варіанта");
-      return;
-    }
+    setInvalidFields(new Set());
 
     const variants: VariantInput[] = rows.map((row) => ({
       axis_values: row.axisValues,
@@ -152,6 +199,13 @@ function CreateForm({
     setSubmitting(true);
     try {
       const product = await onCreateProduct(payload);
+      if (selectedTemplate) {
+        try {
+          localStorage.setItem(LAST_TEMPLATE_KEY, String(selectedTemplate.id));
+        } catch {
+          // ignore
+        }
+      }
       // Transition to Phase 2 ONLY on success:
       onCreated(product);
     } catch (err) {
@@ -197,9 +251,12 @@ function CreateForm({
           <input
             aria-label="Назва"
             type="text"
+            className={invalidFields.has("name") ? "input-error" : undefined}
             value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
+            onChange={(e) => {
+              setName(e.target.value);
+              clearInvalid("name");
+            }}
           />
         </label>
 
@@ -272,9 +329,12 @@ function CreateForm({
                 type="number"
                 min="0"
                 step="0.01"
+                className={invalidFields.has(`price-${index}`) ? "input-error" : undefined}
                 value={row.price}
-                onChange={(e) => updateRow(index, { price: e.target.value })}
-                required
+                onChange={(e) => {
+                  updateRow(index, { price: e.target.value });
+                  clearInvalid(`price-${index}`);
+                }}
               />
             </label>
 
@@ -379,6 +439,7 @@ function EditForm({
   const [description, setDescription] = useState(product.description ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [nameInvalid, setNameInvalid] = useState(false);
   const [addingVariant, setAddingVariant] = useState(false);
   const [activeVariantId, setActiveVariantId] = useState<number | null>(null);
 
@@ -391,8 +452,10 @@ function EditForm({
     setError(null);
     if (!name.trim()) {
       setError("Вкажіть назву товару");
+      setNameInvalid(true);
       return;
     }
+    setNameInvalid(false);
     setSaving(true);
     try {
       await onUpdateProduct(product.id, {
@@ -487,8 +550,12 @@ function EditForm({
             <input
               aria-label="Назва"
               type="text"
+              className={nameInvalid ? "input-error" : undefined}
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                setName(e.target.value);
+                setNameInvalid(false);
+              }}
             />
           </label>
           <label className="form-field">

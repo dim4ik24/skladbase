@@ -1325,6 +1325,11 @@ body {
   border-color: var(--green);
 }
 
+.input-error {
+  border-color: #c0392b !important;
+  background: var(--state-low);
+}
+
 .advanced-fields {
   border-top: 1.5px solid var(--line);
   padding-top: 8px;
