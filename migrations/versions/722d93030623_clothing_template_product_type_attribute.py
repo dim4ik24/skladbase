@@ -45,7 +45,13 @@ def _get_clothing_row(conn: sa.engine.Connection) -> sa.engine.Row | None:
     return conn.execute(
         sa.select(product_templates.c.id, product_templates.c.field_schema).where(
             product_templates.c.shop_id.is_(None),
-            product_templates.c.code == "clothing",
+            # code — нативний Postgres ENUM (templatecode) у проді, plain TEXT
+            # на sqlite (CI). Ad-hoc sa.table()/sa.column() тут не знає
+            # реального типу колонки, тож порівняння з голим рядком генерує
+            # `operator does not exist: templatecode = character varying` на
+            # Postgres. Каст КОЛОНКИ до Text прибирає розбіжність на обох базах
+            # (sqlite: no-op, Postgres: enum::text = varchar — валідно).
+            sa.cast(product_templates.c.code, sa.Text) == "clothing",
         )
     ).first()
 
