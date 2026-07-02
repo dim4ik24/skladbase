@@ -167,6 +167,11 @@ async function goToSklad() {
   fireEvent.click(screen.getByRole("tab", { name: "Склад" }));
 }
 
+// Open modal, then open the variant sheet for the tag with the given axisLabel.
+async function openSheet(tagLabel: string) {
+  fireEvent.click(await screen.findByLabelText(`Варіант: ${tagLabel}`));
+}
+
 describe("App catalog screen", () => {
   it("renders products from the API: photo placeholder, name, price, stock", async () => {
     vi.mocked(api.getMe).mockResolvedValue(shopFixture);
@@ -216,7 +221,7 @@ describe("App catalog screen", () => {
     });
   });
 
-  it("shows low-stock and out-of-stock badges based on threshold", async () => {
+  it("shows low-stock and out-of-stock badges in the variant tag (no sheet needed)", async () => {
     vi.mocked(api.getMe).mockResolvedValue(shopFixture);
     vi.mocked(api.getProducts).mockResolvedValue([
       makeProduct({
@@ -234,6 +239,7 @@ describe("App catalog screen", () => {
     render(<App />);
     await goToSklad();
 
+    // Badge "мало" is visible in the VariantTag without opening the sheet
     fireEvent.click(screen.getByLabelText("Редагувати товар: Товар А"));
     expect(await screen.findByText("мало")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Закрити" }));
@@ -270,8 +276,9 @@ describe("App catalog screen", () => {
     await goToSklad();
     await screen.findByText("Футболка");
     fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
-    await screen.findByTestId("available-41");
+    await screen.findByTestId("available-41"); // visible in VariantTag
 
+    await openSheet("M");
     fireEvent.click(screen.getByLabelText("Збільшити залишок: SKU-41"));
 
     await waitFor(() => {
@@ -292,6 +299,7 @@ describe("App catalog screen", () => {
     fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
     await screen.findByTestId("available-42");
 
+    await openSheet("M");
     fireEvent.click(screen.getByLabelText("Зменшити залишок: SKU-42"));
 
     await waitFor(() => {
@@ -311,6 +319,7 @@ describe("App catalog screen", () => {
     fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
     await screen.findByTestId("available-43");
 
+    await openSheet("M");
     expect(screen.getByLabelText("Зменшити залишок: SKU-43")).toBeDisabled();
   });
 });
@@ -408,6 +417,8 @@ describe("Variant photo upload", () => {
     fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
     await screen.findByTestId("available-51");
 
+    await openSheet("M");
+
     const file = new File(["data"], "photo.png", { type: "image/png" });
     const input = screen.getByLabelText("Завантажити фото: SKU-51");
     fireEvent.change(input, { target: { files: [file] } });
@@ -435,6 +446,8 @@ describe("Variant photo upload", () => {
     fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
     await screen.findByTestId("available-52");
 
+    await openSheet("M");
+
     const file = new File(["data"], "photo.png", { type: "image/png" });
     fireEvent.change(screen.getByLabelText("Завантажити фото: SKU-52"), {
       target: { files: [file] },
@@ -460,6 +473,8 @@ describe("Reservations", () => {
     await screen.findByText("Сукня");
     fireEvent.click(screen.getByLabelText("Редагувати товар: Сукня"));
     await screen.findByTestId("available-61");
+
+    await openSheet("M");
 
     fireEvent.click(screen.getByRole("button", { name: "Відклади" }));
     fireEvent.change(screen.getByLabelText("Кількість (доступно 5)"), {
@@ -497,7 +512,7 @@ describe("Reservations", () => {
     render(<App />);
     await goToSklad();
     await screen.findByText("Футболка");
-    // Open modal so available-71 enters the DOM
+    // Open modal so available-71 enters the DOM (visible in VariantTag without opening sheet)
     fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
     await screen.findByTestId("available-71");
 
@@ -527,7 +542,7 @@ describe("Reservations", () => {
     render(<App />);
     await goToSklad();
     await screen.findByText("Футболка");
-    // Open modal so available-81 enters the DOM
+    // Open modal so available-81 enters the DOM (visible in VariantTag without opening sheet)
     fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
     await screen.findByTestId("available-81");
 
@@ -644,6 +659,7 @@ describe("Free plan limits and upgrade prompt", () => {
     fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
     await screen.findByTestId("available-101");
 
+    await openSheet("M");
     fireEvent.click(screen.getByLabelText("Збільшити залишок: SKU-101"));
 
     expect(await screen.findByText("Ліміт товарів вичерпано")).toBeInTheDocument();
@@ -665,6 +681,7 @@ describe("Free plan limits and upgrade prompt", () => {
     fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
     await screen.findByTestId("available-102");
 
+    await openSheet("M");
     fireEvent.click(screen.getByLabelText("Збільшити залишок: SKU-102"));
     await screen.findByRole("button", { name: "Обрати тариф" });
 
@@ -691,6 +708,7 @@ describe("Free plan limits and upgrade prompt", () => {
     fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
     await screen.findByTestId("available-103");
 
+    await openSheet("M");
     fireEvent.click(screen.getByLabelText("Збільшити залишок: SKU-103"));
     await screen.findByRole("button", { name: "Обрати тариф" });
 
@@ -727,10 +745,11 @@ describe("Frozen products", () => {
     render(<App />);
     await goToSklad();
     await screen.findByText("Футболка");
-    // Frozen product: modal opens (pencil does NOT block), frozen check is inside VariantRow
+    // Frozen product: modal opens (pencil does NOT block), frozen check is inside VariantSheet stepper
     fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
     await screen.findByTestId("available-111");
 
+    await openSheet("M");
     fireEvent.click(screen.getByLabelText("Збільшити залишок: SKU-111"));
 
     expect(
@@ -788,103 +807,6 @@ describe("Demo banner", () => {
   });
 });
 
-describe("Variant CRUD in modal", () => {
-  it("edit variant: changing price calls api.patchVariant with updated price", async () => {
-    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
-    const variant = makeVariant({ id: 201, sku: "SKU-201", price: "450.00" });
-    vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ variants: [variant] })]);
-    vi.mocked(api.patchVariant).mockResolvedValue({ ...variant, price: "500" });
-
-    render(<App />);
-    await goToSklad();
-    await screen.findByText("Футболка");
-
-    fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
-    await screen.findByTestId("available-201");
-
-    fireEvent.click(screen.getByLabelText("Редагувати варіант: SKU-201"));
-
-    fireEvent.change(screen.getByLabelText("Ціна"), { target: { value: "500" } });
-    fireEvent.click(screen.getByRole("button", { name: "Зберегти" }));
-
-    await waitFor(() => {
-      expect(api.patchVariant).toHaveBeenCalledWith(201, expect.objectContaining({ price: "500" }));
-    });
-  });
-
-  it("add variant: calls api.addVariant with last variant price and axis_values, no sku field", async () => {
-    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
-    const variant = makeVariant({ id: 202, sku: "SKU-202", price: "450.00", axis_values: { size: "M" } });
-    vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ id: 1, variants: [variant] })]);
-    vi.mocked(api.addVariant).mockResolvedValue(makeVariant({ id: 203, sku: null, price: "450.00" }));
-
-    render(<App />);
-    await goToSklad();
-    await screen.findByText("Футболка");
-
-    fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
-    await screen.findByTestId("available-202");
-
-    fireEvent.click(screen.getByRole("button", { name: "+ Додати варіант" }));
-
-    await waitFor(() => {
-      expect(api.addVariant).toHaveBeenCalled();
-    });
-
-    const [calledProductId, calledPayload] = vi.mocked(api.addVariant).mock.calls[0];
-    expect(calledProductId).toBe(1);
-    expect(calledPayload.price).toBe("450.00");
-    expect(calledPayload).not.toHaveProperty("sku");
-  });
-
-  it("delete variant: two-step confirm then calls api.deleteVariant", async () => {
-    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
-    const variant = makeVariant({ id: 204, sku: "SKU-204" });
-    vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ variants: [variant] })]);
-    vi.mocked(api.deleteVariant).mockResolvedValue(undefined);
-
-    render(<App />);
-    await goToSklad();
-    await screen.findByText("Футболка");
-
-    fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
-    await screen.findByTestId("available-204");
-
-    fireEvent.click(screen.getByLabelText("Редагувати варіант: SKU-204"));
-    fireEvent.click(screen.getByRole("button", { name: "Видалити" }));
-    fireEvent.click(screen.getByRole("button", { name: "Так, видалити" }));
-
-    await waitFor(() => {
-      expect(api.deleteVariant).toHaveBeenCalledWith(204);
-    });
-  });
-
-  it("409 on delete shows inline error banner without alert", async () => {
-    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
-    const variant = makeVariant({ id: 205, sku: "SKU-205" });
-    vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ variants: [variant] })]);
-    vi.mocked(api.deleteVariant).mockRejectedValue(
-      new ApiError(409, "Неможливо видалити останній варіант"),
-    );
-
-    render(<App />);
-    await goToSklad();
-    await screen.findByText("Футболка");
-
-    fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
-    await screen.findByTestId("available-205");
-
-    fireEvent.click(screen.getByLabelText("Редагувати варіант: SKU-205"));
-    fireEvent.click(screen.getByRole("button", { name: "Видалити" }));
-    fireEvent.click(screen.getByRole("button", { name: "Так, видалити" }));
-
-    expect(
-      await screen.findByText("Неможливо видалити останній варіант"),
-    ).toBeInTheDocument();
-    expect(api.deleteVariant).toHaveBeenCalledWith(205);
-  });
-});
-
 describe("Tab navigation", () => {
   it("renders Дашборд screen by default with MetricCarousel", async () => {
     vi.mocked(api.getMe).mockResolvedValue(shopFixture);
@@ -929,5 +851,101 @@ describe("Tab navigation", () => {
       "aria-selected",
       "true",
     );
+  });
+});
+
+describe("Variant CRUD in modal (tag → sheet)", () => {
+  it("edit variant: tap tag → sheet → change price → Зберегти → patchVariant called", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    const variant = makeVariant({ id: 201, sku: "SKU-201", price: "450.00" });
+    vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ variants: [variant] })]);
+    vi.mocked(api.patchVariant).mockResolvedValue({ ...variant, price: "500" });
+
+    render(<App />);
+    await goToSklad();
+    await screen.findByText("Футболка");
+
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
+    await screen.findByTestId("available-201");
+
+    await openSheet("M");
+    fireEvent.change(screen.getByLabelText("Ціна"), { target: { value: "500" } });
+    fireEvent.click(screen.getByRole("button", { name: "Зберегти" }));
+
+    await waitFor(() => {
+      expect(api.patchVariant).toHaveBeenCalledWith(201, expect.objectContaining({ price: "500" }));
+    });
+  });
+
+  it("add variant: '+ Додати варіант' calls addVariant with last price, no sku", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    const variant = makeVariant({ id: 202, sku: "SKU-202", price: "450.00", axis_values: { size: "M" } });
+    vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ id: 1, variants: [variant] })]);
+    vi.mocked(api.addVariant).mockResolvedValue(makeVariant({ id: 203, sku: null, price: "450.00" }));
+
+    render(<App />);
+    await goToSklad();
+    await screen.findByText("Футболка");
+
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
+    await screen.findByTestId("available-202");
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Додати варіант" }));
+
+    await waitFor(() => {
+      expect(api.addVariant).toHaveBeenCalled();
+    });
+
+    const [calledProductId, calledPayload] = vi.mocked(api.addVariant).mock.calls[0];
+    expect(calledProductId).toBe(1);
+    expect(calledPayload.price).toBe("450.00");
+    expect(calledPayload).not.toHaveProperty("sku");
+  });
+
+  it("delete variant: tag → sheet → Видалити → Так → deleteVariant called", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    const variant = makeVariant({ id: 204, sku: "SKU-204" });
+    vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ variants: [variant] })]);
+    vi.mocked(api.deleteVariant).mockResolvedValue(undefined);
+
+    render(<App />);
+    await goToSklad();
+    await screen.findByText("Футболка");
+
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
+    await screen.findByTestId("available-204");
+
+    await openSheet("M");
+    fireEvent.click(screen.getByRole("button", { name: "Видалити варіант" }));
+    fireEvent.click(screen.getByRole("button", { name: "Так, видалити" }));
+
+    await waitFor(() => {
+      expect(api.deleteVariant).toHaveBeenCalledWith(204);
+    });
+  });
+
+  it("409 on delete shows inline error banner in the sheet", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    const variant = makeVariant({ id: 205, sku: "SKU-205" });
+    vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ variants: [variant] })]);
+    vi.mocked(api.deleteVariant).mockRejectedValue(
+      new ApiError(409, "Неможливо видалити останній варіант"),
+    );
+
+    render(<App />);
+    await goToSklad();
+    await screen.findByText("Футболка");
+
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
+    await screen.findByTestId("available-205");
+
+    await openSheet("M");
+    fireEvent.click(screen.getByRole("button", { name: "Видалити варіант" }));
+    fireEvent.click(screen.getByRole("button", { name: "Так, видалити" }));
+
+    expect(
+      await screen.findByText("Неможливо видалити останній варіант"),
+    ).toBeInTheDocument();
+    expect(api.deleteVariant).toHaveBeenCalledWith(205);
   });
 });

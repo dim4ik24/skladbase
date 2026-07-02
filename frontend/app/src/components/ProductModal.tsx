@@ -7,7 +7,8 @@ import type { Product, ProductInput, ProductPatch, ReserveInput, Template, Templ
 import { Panel } from "./ui/Panel";
 import { ProductPhotoGallery } from "./ProductPhotoGallery";
 import { TemplateBuilderModal } from "./TemplateBuilderModal";
-import { VariantRow } from "./VariantRow";
+import { VariantTag } from "./VariantTag";
+import { VariantSheet } from "./VariantSheet";
 
 interface ProductModalProps {
   product: Product | null;
@@ -379,10 +380,12 @@ function EditForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [addingVariant, setAddingVariant] = useState(false);
-  const [justAddedId, setJustAddedId] = useState<number | null>(null);
+  const [activeVariantId, setActiveVariantId] = useState<number | null>(null);
 
   const axes: TemplateField[] =
     templates.find((t) => t.id === product.template_id)?.field_schema.variant_axes ?? [];
+
+  const activeVariant = product.variants.find((v) => v.id === activeVariantId);
 
   async function handleSave() {
     setError(null);
@@ -413,7 +416,7 @@ function EditForm({
         axis_values: { ...(last?.axis_values ?? {}) },
       };
       const newVariant = await onAddVariant(product.id, payload);
-      setJustAddedId(newVariant.id);
+      setActiveVariantId(newVariant.id);
     } finally {
       setAddingVariant(false);
     }
@@ -440,32 +443,41 @@ function EditForm({
 
       {tab === "variants" ? (
         <>
-          <ul className="variant-list">
+          <ul className="variant-tag-list">
             {product.variants.map((variant) => (
-              <VariantRow
-                key={variant.id}
-                variant={variant}
-                axes={axes}
-                autoOpenEdit={justAddedId === variant.id}
-                isFrozen={product.is_frozen}
-                onFrozenAction={onFrozenAction}
-                onRestock={onRestock}
-                onAdjust={onAdjust}
-                onUploadPhoto={onUploadPhoto}
-                onReserve={onReserve}
-                onPatchVariant={onPatchVariant}
-                onDeleteVariant={onDeleteVariant}
-              />
+              <li key={variant.id}>
+                <VariantTag
+                  variant={variant}
+                  axes={axes}
+                  onClick={() => setActiveVariantId(variant.id)}
+                />
+              </li>
             ))}
           </ul>
           <button
             type="button"
-            className="link-button"
+            className="variant-add-tag"
             disabled={addingVariant}
             onClick={() => void handleAddVariant()}
           >
             {addingVariant ? "Додаємо..." : "+ Додати варіант"}
           </button>
+
+          {activeVariantId !== null && activeVariant !== undefined ? (
+            <VariantSheet
+              variant={activeVariant}
+              axes={axes}
+              isFrozen={product.is_frozen}
+              onFrozenAction={onFrozenAction}
+              onRestock={onRestock}
+              onAdjust={onAdjust}
+              onUploadPhoto={onUploadPhoto}
+              onReserve={onReserve}
+              onPatchVariant={onPatchVariant}
+              onDeleteVariant={onDeleteVariant}
+              onClose={() => setActiveVariantId(null)}
+            />
+          ) : null}
         </>
       ) : tab === "info" ? (
         <>
