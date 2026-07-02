@@ -202,19 +202,32 @@ async def test_no_start_param_gives_none_invite_status(client: AsyncClient) -> N
 
 
 @pytest.mark.asyncio
-async def test_existing_member_with_invite_param_stays_in_own_shop(client: AsyncClient) -> None:
-    _existing_init, existing_me = await _bootstrap(client, 3070)
+async def test_member_retapping_own_shop_invite_gets_already_in_shop(client: AsyncClient) -> None:
+    """Multi-shop (Стадія 3а): re-tap інвайту СВОГО Ж магазину не дублює
+    Membership. (Приєднання до ІНШОГО магазину — tests/test_multi_shop.py,
+    там "joined", а не "already_in_shop".)"""
+    owner_init, owner_me = await _bootstrap(client, 3070)
+    invite = await _create_invite(client, owner_init)
 
-    other_owner_init, _other_me = await _bootstrap(client, 3071, first_name="Інший")
-    invite = await _create_invite(client, other_owner_init)
-
-    rejoin_init = make_init_data(3070, start_param=f"invite_{invite['token']}")
-    r = await client.get("/api/me", headers={HEADER: rejoin_init})
+    retap_init = make_init_data(3070, start_param=f"invite_{invite['token']}")
+    r = await client.get("/api/me", headers={HEADER: retap_init})
     assert r.status_code == 200
     body = r.json()
 
-    assert body["invite_status"] == "already_member"
-    assert body["shop_id"] == existing_me["shop_id"]
+    assert body["invite_status"] == "already_in_shop"
+    assert body["shop_id"] == owner_me["shop_id"]
+
+    async with db.async_session() as s:
+        count = len(
+            (
+                await s.scalars(
+                    select(Membership).where(
+                        Membership.tg_id == 3070, Membership.shop_id == owner_me["shop_id"]
+                    )
+                )
+            ).all()
+        )
+    assert count == 1
 
 
 # --------------------------------------------------------------------------- #

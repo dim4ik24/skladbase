@@ -5,6 +5,13 @@ FastAPI-залежності tenancy/ролей.
 з валідованого Telegram initData (заголовок `X-Telegram-Init-Data`). Жоден
 ендпоінт не має брати shop_id з тіла/параметрів запиту (CLAUDE.md, інваріант №1).
 
+Multi-shop (Стадія 3а): одна людина може мати Membership у кількох магазинах.
+Опційний заголовок `X-Shop-Id` — ЛИШЕ ВИБІР серед СВОЇХ membership (фільтр у
+парі з tg_id, тобто перевіряється членство, а не голий id), сам по собі не
+довіряється: чужий/невідомий shop_id -> 403, а не "магія" з чужими даними.
+Без заголовка — перше (найменше id) membership цього tg_id, детерміновано;
+так фронт до 3b, що заголовок не шле, поводиться так само, як і зараз.
+
 `require_api_key` — окремий шлях авторизації для server-to-server запитів із
 сайту (заголовок `X-API-Key`), НЕ initData: це не дія користувача в Telegram.
 """
@@ -51,6 +58,7 @@ _bootstrap_limiter = InMemoryRateLimiter(
 async def resolve_membership(
     request: Request,
     x_telegram_init_data: str = Header(alias="X-Telegram-Init-Data"),
+    x_shop_id: int | None = Header(default=None, alias="X-Shop-Id"),
     session: AsyncSession = Depends(get_session),
 ) -> Membership:
     try:
@@ -62,8 +70,26 @@ async def resolve_membership(
     except InitDataError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
 
+    if x_shop_id is not None:
+        # Заголовок — лише фільтр СЕРЕД membership цього tg_id, не самостійне
+        # джерело shop_id: чуже/неіснуюче членство -> 403, ніякого bootstrap.
+        membership = await session.scalar(
+            select(Membership).where(
+                Membership.tg_id == init_data.user.id, Membership.shop_id == x_shop_id
+            )
+        )
+        if membership is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Немає доступу до цього магазину"
+            )
+        request.state.invite_status = None
+        return membership
+
     membership = await session.scalar(
-        select(Membership).where(Membership.tg_id == init_data.user.id)
+        select(Membership)
+        .where(Membership.tg_id == init_data.user.id)
+        .order_by(Membership.id)
+        .limit(1)
     )
     invite_status: str | None = None
     if membership is None:
@@ -76,8 +102,11 @@ async def resolve_membership(
             session, init_data.user, init_data.start_param
         )
     elif parse_invite_token(init_data.start_param) is not None:
-        # Юзер уже десь є — інвайт не застосовується, multi-shop не робимо.
-        invite_status = "already_member"
+        # Existing юзер + invite-токен: bootstrap_shop сам вирішить
+        # already_in_shop / joined (нове membership!) / invite_invalid.
+        membership, invite_status = await bootstrap_shop(
+            session, init_data.user, init_data.start_param
+        )
 
     request.state.invite_status = invite_status
     return membership

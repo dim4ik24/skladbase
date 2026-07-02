@@ -45,6 +45,34 @@ async def get_me(
     else:
         active_count = min(products_count, max_products)
 
+    # Multi-shop (Стадія 3а): усі магазини цього tg_id, не лише активний —
+    # той самий детермінований порядок (найменший id першим), що й
+    # resolve_membership без X-Shop-Id.
+    memberships = (
+        await session.scalars(
+            select(Membership)
+            .where(Membership.tg_id == membership.tg_id)
+            .order_by(Membership.id)
+        )
+    ).all()
+    shops_by_id = {
+        s.id: s
+        for s in (
+            await session.scalars(
+                select(Shop).where(Shop.id.in_([m.shop_id for m in memberships]))
+            )
+        ).all()
+    }
+    shops = [
+        {
+            "shop_id": m.shop_id,
+            "shop_name": shops_by_id[m.shop_id].name,
+            "logo_url": shops_by_id[m.shop_id].logo_url,
+            "role": m.role.value,
+        }
+        for m in memberships
+    ]
+
     return {
         "shop_id": shop.id,
         "shop_name": shop.name,
@@ -63,6 +91,11 @@ async def get_me(
         "products_count": products_count,
         "active_count": active_count,
         "max_products": max_products,
-        # Deep-link інвайти (Стадія 2а): "joined" / "already_member" / "invite_invalid" / None.
+        # Deep-link інвайти: "joined" / "already_in_shop" / "invite_invalid" / None
+        # (Стадія 3а: "already_member" більше не повертається — existing юзер
+        # тепер приєднується як multi-shop, а не ігнорує інвайт).
         "invite_status": getattr(request.state, "invite_status", None),
+        # Multi-shop (Стадія 3а): перемикач магазинів на фронті (X-Shop-Id).
+        "shops": shops,
+        "active_shop_id": membership.shop_id,
     }
