@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import type { FormEvent } from "react";
+import { useReducedMotion } from "motion/react";
 import { ApiError } from "../api";
 import { errorMessage } from "../errors";
 import type { Product, ProductInput, ProductPatch, ReserveInput, Template, TemplateField, Variant, VariantAddPayload, VariantInput, VariantPatchPayload } from "../types";
@@ -350,7 +351,7 @@ function CreateForm({
             </label>
 
             <label className="form-field">
-              <span>SKU</span>
+              <span>Артикул</span>
               <input
                 type="text"
                 value={row.sku}
@@ -610,6 +611,8 @@ export function ProductModal({
   onClose,
 }: ProductModalProps) {
   const [createdProduct, setCreatedProduct] = useState<Product | null>(null);
+  const [isClosing, setIsClosing] = useState(false);
+  const prefersReducedMotion = useReducedMotion();
 
   const isPhase2 = createdProduct !== null;
 
@@ -620,14 +623,34 @@ export function ProductModal({
       ? (products.find((p) => p.id === targetId) ?? createdProduct ?? product)
       : null;
 
+  function handleClose() {
+    if (prefersReducedMotion) {
+      onClose();
+      return;
+    }
+    setIsClosing(true);
+    setTimeout(onClose, 200);
+  }
+
   return (
-    <div className="modal-overlay" role="presentation" onClick={isPhase2 ? undefined : onClose}>
+    <div
+      className={`modal-overlay${isClosing ? " modal-overlay--closing" : ""}`}
+      role="presentation"
+      onClick={isPhase2 ? undefined : handleClose}
+    >
       <Panel
         className="modal-card"
         role="dialog"
         aria-modal="true"
         aria-label={product ? "Редагувати товар" : "Додати товар"}
         onClick={(e) => e.stopPropagation()}
+        initial={{ opacity: 0, scale: prefersReducedMotion ? 1 : 0.96 }}
+        animate={
+          isClosing
+            ? { opacity: 0, scale: prefersReducedMotion ? 1 : 0.96 }
+            : { opacity: 1, scale: 1 }
+        }
+        transition={{ duration: prefersReducedMotion ? 0 : 0.2, ease: "easeOut" }}
       >
         {product !== null && liveProduct !== null ? (
           // Edit mode — product exists, show tabs: Варіанти / Інфо / Фото
@@ -646,7 +669,7 @@ export function ProductModal({
             onAddVariant={onAddVariant}
             onDeleteVariant={onDeleteVariant}
             onFrozenAction={onFrozenAction}
-            onClose={onClose}
+            onClose={handleClose}
           />
         ) : isPhase2 && liveProduct !== null ? (
           // Create mode Phase 2 — product created, upload photos
@@ -659,7 +682,7 @@ export function ProductModal({
               onDelete={(photoId) => onDeleteProductPhoto(liveProduct.id, photoId)}
             />
             <div className="modal-actions">
-              <button type="button" onClick={onClose}>
+              <button type="button" onClick={handleClose}>
                 Готово
               </button>
             </div>
@@ -672,7 +695,7 @@ export function ProductModal({
             onTemplateAdded={onTemplateAdded}
             onCreated={(p) => setCreatedProduct(p)}
             onCreateProduct={onCreateProduct}
-            onClose={onClose}
+            onClose={handleClose}
           />
         )}
       </Panel>

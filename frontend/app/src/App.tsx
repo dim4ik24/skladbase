@@ -357,7 +357,7 @@ export default function App() {
     <>
       <AtmosphereBackground />
       <div className="app" ref={scrollContainerRef}>
-        <Header shop={shop} scrollContainerRef={scrollContainerRef} />
+        <Header shop={shop} />
 
         {error ? <p className="error-banner">{error}</p> : null}
 
@@ -373,61 +373,63 @@ export default function App() {
           />
         ) : null}
 
-        {activeTab === "sklad" ? (
-          <SkladScreen
-            products={products}
-            templates={templates}
-            reservations={reservations}
-            loading={loading}
-            writable={writable}
-            atLimit={atLimit}
-            maxProducts={maxProducts}
-            activeCount={activeCount}
-            variantLabel={variantLabel}
-            onRestock={handleRestock}
-            onAdjust={handleAdjust}
-            onUploadPhoto={handleUploadPhoto}
-            onReserve={handleReserve}
-            onRelease={handleRelease}
-            onFulfill={handleFulfill}
-            onCreateProduct={handleCreateProduct}
-            onUpdateProduct={handleUpdateProduct}
-            onFrozenAction={handleFrozenAction}
-            onAddAtLimit={() =>
-              setUpgradePrompt({
-                message: `Ліміт плану: ${maxProducts} товарів. Оформіть тариф для розширення.`,
-              })
-            }
-            scrollContainerRef={scrollContainerRef}
-            isOwner={shop?.role === "owner"}
-            onTemplateAdded={(t) => setTemplates((prev) => [...prev, t])}
-            photosAllowed={photosAllowed}
-            onUploadProductPhoto={handleUploadProductPhoto}
-            onDeleteProductPhoto={handleDeleteProductPhoto}
-            onPatchVariant={handlePatchVariant}
-            onAddVariant={handleAddVariant}
-            onDeleteVariant={handleDeleteVariant}
-          />
-        ) : activeTab === "dashboard" ? (
-          <DashboardScreen
-            shop={shop}
-            loading={loading}
-            metricCards={metricCards}
-            reservations={reservations}
-            variantLabel={variantLabel}
-            onRelease={handleRelease}
-            onFulfill={handleFulfill}
-            scrollContainerRef={scrollContainerRef}
-          />
-        ) : (
-          <SettingsScreen
-            shop={shop}
-            onOpenPaywall={() => setShowPaywall(true)}
-            onUpdateShopName={handleUpdateShopName}
-            onUploadShopLogo={handleUploadShopLogo}
-            onDeleteShopLogo={handleDeleteShopLogo}
-          />
-        )}
+        <div key={activeTab} className="screen-enter">
+          {activeTab === "sklad" ? (
+            <SkladScreen
+              products={products}
+              templates={templates}
+              reservations={reservations}
+              loading={loading}
+              writable={writable}
+              atLimit={atLimit}
+              maxProducts={maxProducts}
+              activeCount={activeCount}
+              variantLabel={variantLabel}
+              onRestock={handleRestock}
+              onAdjust={handleAdjust}
+              onUploadPhoto={handleUploadPhoto}
+              onReserve={handleReserve}
+              onRelease={handleRelease}
+              onFulfill={handleFulfill}
+              onCreateProduct={handleCreateProduct}
+              onUpdateProduct={handleUpdateProduct}
+              onFrozenAction={handleFrozenAction}
+              onAddAtLimit={() =>
+                setUpgradePrompt({
+                  message: `Ліміт плану: ${maxProducts} товарів. Оформіть тариф для розширення.`,
+                })
+              }
+              scrollContainerRef={scrollContainerRef}
+              isOwner={shop?.role === "owner"}
+              onTemplateAdded={(t) => setTemplates((prev) => [...prev, t])}
+              photosAllowed={photosAllowed}
+              onUploadProductPhoto={handleUploadProductPhoto}
+              onDeleteProductPhoto={handleDeleteProductPhoto}
+              onPatchVariant={handlePatchVariant}
+              onAddVariant={handleAddVariant}
+              onDeleteVariant={handleDeleteVariant}
+            />
+          ) : activeTab === "dashboard" ? (
+            <DashboardScreen
+              shop={shop}
+              loading={loading}
+              metricCards={metricCards}
+              reservations={reservations}
+              variantLabel={variantLabel}
+              onRelease={handleRelease}
+              onFulfill={handleFulfill}
+              scrollContainerRef={scrollContainerRef}
+            />
+          ) : (
+            <SettingsScreen
+              shop={shop}
+              onOpenPaywall={() => setShowPaywall(true)}
+              onUpdateShopName={handleUpdateShopName}
+              onUploadShopLogo={handleUploadShopLogo}
+              onDeleteShopLogo={handleDeleteShopLogo}
+            />
+          )}
+        </div>
       </div>
 
       <BottomTabBar active={activeTab} onChange={setActiveTab} />

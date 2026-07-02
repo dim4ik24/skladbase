@@ -127,11 +127,27 @@ body {
   .toolbar button:not(:disabled):active,
   .modal-actions button:not(:disabled):active,
   .banner-demo button:active,
-  .variant-controls button:not(:disabled):active {
+  .variant-controls button:not(:disabled):active,
+  .modal-tab:active,
+  .link-button:active,
+  .variant-add-tag:not(:disabled):active,
+  .sheet-stepper-btn:not(:disabled):active {
     transform: scale(0.97);
   }
   .variant-controls button:not(:disabled):active {
     transform: scale(0.93);
+  }
+}
+
+/* ── Hover feedback (desktop/mouse only — no sticky hover on touch) ───── */
+@media (hover: hover) {
+  .modal-actions button:not(:disabled):hover,
+  .modal-tab:hover,
+  .link-button:hover,
+  .variant-add-tag:not(:disabled):hover,
+  .sheet-stepper-btn:not(:disabled):hover,
+  .tab-bar__item:hover {
+    filter: brightness(0.97);
   }
 }
 
@@ -154,6 +170,22 @@ body {
   margin: 0 auto;
   padding: 12px 16px calc(60px + env(safe-area-inset-bottom) + 20px);
   background: transparent;
+}
+
+/* ── Tab switch transition ─────────────────────────────────────────────── */
+@keyframes screen-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.screen-enter {
+  animation: screen-enter 180ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screen-enter {
+    animation: none;
+  }
 }
 
 /* ── Header ─────────────────────────────────────────────────────────── */
@@ -190,6 +222,29 @@ body {
   letter-spacing: -0.02em;
   margin: 0;
   color: var(--text);
+}
+
+/* ── Gradient text (shop name — one deliberate premium accent) ────────── */
+@keyframes gradient-shift {
+  0%   { background-position: 0% 50%; }
+  100% { background-position: 300% 50%; }
+}
+
+.gradient-text {
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation-name: gradient-shift;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gradient-text {
+    animation: none;
+    background-position: 0% 50%;
+  }
 }
 
 /* ── Section titles ──────────────────────────────────────────────────── */
@@ -871,6 +926,7 @@ body {
   font-size: 14px;
   font-family: "Manrope", system-ui, sans-serif;
   cursor: pointer;
+  transition: transform 0.12s ease, filter 0.15s ease;
 }
 
 .variant-add-tag:disabled {
@@ -1002,7 +1058,7 @@ body {
   align-items: center;
   justify-content: center;
   box-shadow: 0 2px 8px rgba(52, 199, 89, 0.30);
-  transition: opacity 0.15s ease;
+  transition: opacity 0.15s ease, transform 0.12s ease, filter 0.15s ease;
   touch-action: manipulation;
 }
 
@@ -1124,6 +1180,16 @@ body {
 }
 
 /* ── Modal ───────────────────────────────────────────────────────────── */
+@keyframes modal-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes modal-fade-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -1133,6 +1199,18 @@ body {
   justify-content: center;
   padding: 16px;
   z-index: 100;
+  animation: modal-fade-in 150ms ease-out;
+}
+
+.modal-overlay--closing {
+  animation: modal-fade-out 150ms ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-overlay,
+  .modal-overlay--closing {
+    animation: none;
+  }
 }
 
 /* Modal card — heavier glass for readability over blurred content */
@@ -1353,6 +1431,7 @@ body {
   font-size: 13px;
   font-weight: 600;
   text-align: left;
+  transition: transform 0.12s ease, filter 0.15s ease;
 }
 
 .modal-actions {
@@ -1373,7 +1452,7 @@ body {
   font-weight: 700;
   cursor: pointer;
   box-shadow: var(--shadow-cta);
-  transition: opacity 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+  transition: opacity 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease, filter 0.15s ease;
   touch-action: manipulation;
 }
 
@@ -1385,10 +1464,6 @@ body {
   border: 1px solid var(--glass-border);
   color: var(--text-soft);
   box-shadow: var(--shadow-card);
-}
-
-.modal-actions button:not(:disabled):hover {
-  opacity: 0.88;
 }
 
 .modal-actions button:disabled {
@@ -1417,7 +1492,7 @@ body {
   color: var(--text-soft);
   background: transparent;
   cursor: pointer;
-  transition: color 0.15s, background 0.15s;
+  transition: color 0.15s, background 0.15s, transform 0.12s ease, filter 0.15s ease;
 }
 
 .modal-tab--active {
@@ -1479,7 +1554,7 @@ body {
 
 @media (prefers-reduced-motion: no-preference) {
   .tab-bar__item:active {
-    transform: scale(0.91);
+    transform: scale(0.97);
     transition: color 0.15s ease, transform 0.1s ease;
   }
 }
@@ -1530,6 +1605,13 @@ body {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  animation: modal-fade-in 200ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .upgrade-prompt {
+    animation: none;
+  }
 }
 
 .upgrade-prompt__message {

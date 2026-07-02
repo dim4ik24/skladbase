@@ -222,6 +222,17 @@ describe("App catalog screen", () => {
     });
   });
 
+  it("renders the shop name inside the animated GradientText heading", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+
+    render(<App />);
+
+    const name = await screen.findByText("Тестовий магазин");
+    expect(name).toHaveClass("gradient-text");
+    expect(name.closest("h1")).toHaveClass("shop-name");
+  });
+
   it("shows low-stock and out-of-stock badges in the variant tag (no sheet needed)", async () => {
     vi.mocked(api.getMe).mockResolvedValue(shopFixture);
     vi.mocked(api.getProducts).mockResolvedValue([

@@ -1,13 +1,11 @@
-import type { RefObject } from "react";
-import { ScrollFloat } from "./ScrollFloat";
+import { GradientText } from "./GradientText";
 import type { Shop } from "../types";
 
 interface HeaderProps {
   shop: Shop | null;
-  scrollContainerRef?: RefObject<HTMLElement | null>;
 }
 
-export function Header({ shop, scrollContainerRef }: HeaderProps) {
+export function Header({ shop }: HeaderProps) {
   if (!shop) {
     return null;
   }
@@ -21,9 +19,9 @@ export function Header({ shop, scrollContainerRef }: HeaderProps) {
           {shop.shop_name.charAt(0).toUpperCase()}
         </div>
       )}
-      <ScrollFloat as="h1" className="shop-name" scrollContainerRef={scrollContainerRef}>
-        {shop.shop_name}
-      </ScrollFloat>
+      <h1 className="shop-name">
+        <GradientText>{shop.shop_name}</GradientText>
+      </h1>
     </header>
   );
 }
