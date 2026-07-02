@@ -42,6 +42,7 @@ class InitData:
     user: TelegramUser
     auth_date: datetime
     query_id: str | None = None
+    start_param: str | None = None
 
 
 def _expected_hash(data_check_string: str, bot_token: str) -> str:
@@ -107,4 +108,9 @@ def validate_init_data(
     except (KeyError, TypeError, ValueError) as exc:
         raise InitDataError("user — некоректна структура") from exc
 
-    return InitData(user=user, auth_date=auth_date, query_id=fields.get("query_id"))
+    return InitData(
+        user=user,
+        auth_date=auth_date,
+        query_id=fields.get("query_id"),
+        start_param=fields.get("start_param"),
+    )

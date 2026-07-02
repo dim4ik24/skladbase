@@ -17,6 +17,7 @@ from app.api import (
     payment_webhooks,
     public,
     shop,
+    team,
     telegram,
 )
 from app.config import settings
@@ -62,6 +63,7 @@ app.include_router(catalog.router)
 app.include_router(orders.router)
 app.include_router(public.router)
 app.include_router(shop.router)
+app.include_router(team.router)
 app.include_router(billing.router)
 app.include_router(telegram.router)
 app.include_router(payment_webhooks.router)

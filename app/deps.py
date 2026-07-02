@@ -24,7 +24,7 @@ from app.models import MemberRole, Membership, Shop, Subscription
 from app.security.crypto import CryptoError, decrypt
 from app.security.initdata import InitDataError, validate_init_data
 from app.security.rate_limit import InMemoryRateLimiter, client_ip
-from app.services.bootstrap import bootstrap_shop
+from app.services.bootstrap import bootstrap_shop, parse_invite_token
 
 __all__ = [
     "get_session",
@@ -65,14 +65,21 @@ async def resolve_membership(
     membership = await session.scalar(
         select(Membership).where(Membership.tg_id == init_data.user.id)
     )
+    invite_status: str | None = None
     if membership is None:
         if not _bootstrap_limiter.hit(client_ip(request)):
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="Занадто багато нових магазинів з цієї IP, спробуйте пізніше",
             )
-        membership = await bootstrap_shop(session, init_data.user)
+        membership, invite_status = await bootstrap_shop(
+            session, init_data.user, init_data.start_param
+        )
+    elif parse_invite_token(init_data.start_param) is not None:
+        # Юзер уже десь є — інвайт не застосовується, multi-shop не робимо.
+        invite_status = "already_member"
 
+    request.state.invite_status = invite_status
     return membership
 
 

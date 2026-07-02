@@ -70,13 +70,20 @@ def make_init_data(
     auth_date: int | None = None,
     bot_token: str = TEST_BOT_TOKEN,
     tamper_hash: bool = False,
+    start_param: str | None = None,
 ) -> str:
-    """Будує query-string initData, підписаний так само, як це робить Telegram."""
+    """Будує query-string initData, підписаний так само, як це робить Telegram.
+
+    `start_param` — те саме поле, що Telegram підставляє при відкритті TMA
+    через `?startapp=...`; включається у підписаний data_check_string, як
+    і в реальному initData (deep-link інвайти, Стадія 2а)."""
     fields = {
         "query_id": "AAFakeQueryId",
         "user": json.dumps({"id": tg_id, "first_name": first_name}, separators=(",", ":")),
         "auth_date": str(auth_date if auth_date is not None else int(time.time())),
     }
+    if start_param is not None:
+        fields["start_param"] = start_param
     data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(fields.items()))
     secret_key = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
     computed_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()

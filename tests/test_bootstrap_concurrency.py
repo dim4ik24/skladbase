@@ -32,9 +32,9 @@ async def test_bootstrap_shop_repeat_call_returns_same_membership_no_duplicate_s
     user = TelegramUser(id=9001, first_name="Перший")
 
     async with db.async_session() as session:
-        membership_1 = await bootstrap_shop(session, user)
+        membership_1, _status_1 = await bootstrap_shop(session, user)
     async with db.async_session() as session:
-        membership_2 = await bootstrap_shop(session, user)
+        membership_2, _status_2 = await bootstrap_shop(session, user)
 
     assert membership_1.id == membership_2.id
     assert membership_1.shop_id == membership_2.shop_id
@@ -54,7 +54,7 @@ async def test_bootstrap_shop_recovers_from_lost_race_without_raising(
 
     # Переможець гонки вже закомітив свій Shop+Membership для цього tg_id.
     async with db.async_session() as winner_session:
-        winner_membership = await bootstrap_shop(winner_session, user)
+        winner_membership, _status = await bootstrap_shop(winner_session, user)
 
     real_find_membership = bootstrap_module._find_membership
     calls = {"n": 0}
@@ -68,7 +68,7 @@ async def test_bootstrap_shop_recovers_from_lost_race_without_raising(
     monkeypatch.setattr(bootstrap_module, "_find_membership", flaky_find_membership)
 
     async with db.async_session() as loser_session:
-        loser_membership = await bootstrap_shop(loser_session, user)
+        loser_membership, _status = await bootstrap_shop(loser_session, user)
 
     assert loser_membership.id == winner_membership.id
     assert calls["n"] == 2  # початкова перевірка (None) + рекавері після IntegrityError

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,6 +14,7 @@ router = APIRouter(prefix="/api", tags=["me"])
 
 @router.get("/me")
 async def get_me(
+    request: Request,
     membership: Membership = Depends(require_member),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
@@ -62,4 +63,6 @@ async def get_me(
         "products_count": products_count,
         "active_count": active_count,
         "max_products": max_products,
+        # Deep-link інвайти (Стадія 2а): "joined" / "already_member" / "invite_invalid" / None.
+        "invite_status": getattr(request.state, "invite_status", None),
     }

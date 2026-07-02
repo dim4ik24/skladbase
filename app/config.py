@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite+aiosqlite:///./skladbase.db"
 
     BOT_TOKEN: str = ""
+    BOT_USERNAME: str = "sklad_base_bot"  # для deep-link інвайтів (t.me/<BOT_USERNAME>?startapp=...)
     INIT_DATA_MAX_AGE_HOURS: int = 24
     ENCRYPTION_KEY: str = ""  # base64, 32 байти — для AES-256-GCM (app/security/crypto.py)
     RUN_SCHEDULER: bool = True  # False у web-процесі прода — крон живе в app/worker.py (один процес)

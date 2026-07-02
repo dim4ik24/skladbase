@@ -198,6 +198,30 @@ class Membership(Base):
     shop: Mapped["Shop"] = relationship(back_populates="members")
 
 
+class Invite(Base):
+    """Deep-link запрошення в команду (Стадія 2а, t.me/<bot>?startapp=invite_<token>).
+
+    Багаторазове: кожен, хто перейде за посиланням до expires_at (48h від
+    створення) і revoked_at IS NULL, приєднається як manager. shop_id при
+    приєднанні береться ТІЛЬКИ звідси, ніколи з параметрів клієнта
+    (CLAUDE.md, інваріант №1)."""
+    __tablename__ = "invites"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    shop_id: Mapped[int] = mapped_column(ForeignKey("shops.id", ondelete="CASCADE"), index=True)
+    token: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    created_by_tg_id: Mapped[int] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    shop: Mapped["Shop"] = relationship()
+
+    @property
+    def is_active(self) -> bool:
+        return self.revoked_at is None and ensure_aware_utc(self.expires_at) > utcnow()
+
+
 # --------------------------------------------------------------------------- #
 #  Каталог: шаблони -> товари -> варіанти                                     #
 # --------------------------------------------------------------------------- #
