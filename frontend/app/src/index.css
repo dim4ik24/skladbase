@@ -224,6 +224,118 @@ body {
   color: var(--text);
 }
 
+/* ── Shop switcher (multi-shop, Стадія 3б) ─────────────────────────────── */
+.shop-name-wrap {
+  position: relative;
+  min-width: 0;
+}
+
+.shop-name-button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.shop-switcher-chevron {
+  flex-shrink: 0;
+  color: var(--text-soft);
+}
+
+.shop-switcher-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+}
+
+.shop-switcher-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 91;
+  min-width: 220px;
+  max-width: 280px;
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  border-radius: 16px;
+  background: var(--glass-bg-heavy);
+  -webkit-backdrop-filter: var(--glass-blur-heavy);
+  backdrop-filter: var(--glass-blur-heavy);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 12px 32px rgba(28, 37, 32, 0.16);
+}
+
+.shop-switcher-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.shop-switcher-item[aria-selected="true"] {
+  background: var(--glass-bg);
+}
+
+.shop-switcher-avatar {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-color);
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.shop-switcher-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.shop-switcher-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.shop-switcher-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shop-switcher-role {
+  font-size: 11px;
+  color: var(--text-soft);
+}
+
+.shop-switcher-check {
+  flex-shrink: 0;
+  color: var(--green-deep);
+}
+
 /* ── Gradient text (shop name — one deliberate premium accent) ────────── */
 @keyframes gradient-shift {
   0%   { background-position: 0% 50%; }

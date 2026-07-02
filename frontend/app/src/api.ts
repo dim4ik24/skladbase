@@ -37,10 +37,22 @@ export class ApiError extends Error {
   }
 }
 
+// Multi-shop (Стадія 3б): яке membership обирає бекенд серед СВОЇХ tg_id
+// (X-Shop-Id — лише вибір, backend сам валідує; чужий/невідомий id -> 403,
+// НЕ підробка shop_id). null -> заголовок не шлеться, бекенд бере дефолт.
+let activeShopId: number | null = null;
+
+export function setActiveShopId(id: number | null): void {
+  activeShopId = id;
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = {
     "X-Telegram-Init-Data": getInitData(),
   };
+  if (activeShopId != null) {
+    headers["X-Shop-Id"] = String(activeShopId);
+  }
   if (init.body && !(init.body instanceof FormData)) {
     headers["Content-Type"] = "application/json";
   }

@@ -44,6 +44,7 @@ vi.mock("../api", () => ({
   revokeInvite: vi.fn(),
   listMembers: vi.fn(),
   removeMember: vi.fn(),
+  setActiveShopId: vi.fn(),
 }));
 
 import * as api from "../api";
@@ -66,6 +67,8 @@ const shopFixture: Shop = {
   active_count: 0,
   max_products: null,
   invite_status: null,
+  shops: [{ shop_id: 1, shop_name: "Тестовий магазин", logo_url: null, role: "owner" }],
+  active_shop_id: 1,
 };
 
 const planFixture: Plan = {
@@ -172,6 +175,7 @@ beforeEach(() => {
   vi.mocked(api.revokeInvite).mockReset();
   vi.mocked(api.listMembers).mockReset().mockResolvedValue([]);
   vi.mocked(api.removeMember).mockReset();
+  vi.mocked(api.setActiveShopId).mockReset();
   document.documentElement.style.removeProperty("--accent-color");
   localStorage.clear();
 });
@@ -1191,6 +1195,15 @@ describe("invite_status banner", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows a neutral banner when invite_status is already_in_shop", async () => {
+    vi.mocked(api.getMe).mockResolvedValue({ ...shopFixture, invite_status: "already_in_shop" });
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+
+    render(<App />);
+
+    expect(await screen.findByText("Ви вже учасник цього магазину")).toBeInTheDocument();
+  });
+
   it("shows no banner when invite_status is null", async () => {
     vi.mocked(api.getMe).mockResolvedValue(shopFixture);
     vi.mocked(api.getProducts).mockResolvedValue([]);
@@ -1198,7 +1211,7 @@ describe("invite_status banner", () => {
     render(<App />);
     await screen.findByText("Тестовий магазин");
 
-    expect(screen.queryByText(/приєднались|запрошення/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/приєднались|запрошення|учасник/i)).not.toBeInTheDocument();
   });
 
   it("dismisses the banner on click", async () => {
@@ -1211,6 +1224,90 @@ describe("invite_status banner", () => {
     fireEvent.click(screen.getByRole("button", { name: "Закрити" }));
 
     expect(message).not.toBeInTheDocument();
+  });
+});
+
+describe("Shop switcher (multi-shop, Стадія 3б)", () => {
+  const shopBSummary = { shop_id: 2, shop_name: "Другий магазин", logo_url: null, role: "manager" as const };
+  const multiShopFixture: Shop = {
+    ...shopFixture,
+    shops: [
+      { shop_id: 1, shop_name: "Тестовий магазин", logo_url: null, role: "owner" as const },
+      shopBSummary,
+    ],
+  };
+  const shopBActiveFixture: Shop = {
+    ...multiShopFixture,
+    shop_id: 2,
+    shop_name: "Другий магазин",
+    active_shop_id: 2,
+  };
+
+  it("shows no switcher when the user has only one shop", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+
+    render(<App />);
+    await screen.findByText("Тестовий магазин");
+
+    expect(screen.queryByRole("button", { name: /Тестовий магазин/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+  });
+
+  it("opens the switcher list when tapping the shop name with multiple shops", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(multiShopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+
+    render(<App />);
+    const nameButton = await screen.findByRole("button", { name: /Тестовий магазин/ });
+
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    fireEvent.click(nameButton);
+
+    expect(screen.getByRole("listbox")).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /Другий магазин/ })).toBeInTheDocument();
+  });
+
+  it("selecting a shop calls setActiveShopId and refetches", async () => {
+    vi.mocked(api.getMe).mockResolvedValueOnce(multiShopFixture).mockResolvedValue(
+      shopBActiveFixture,
+    );
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+
+    render(<App />);
+    const nameButton = await screen.findByRole("button", { name: /Тестовий магазин/ });
+    fireEvent.click(nameButton);
+    fireEvent.click(screen.getByRole("option", { name: /Другий магазин/ }));
+
+    await waitFor(() => {
+      expect(api.setActiveShopId).toHaveBeenCalledWith(2);
+    });
+    expect(await screen.findByText("Другий магазин")).toBeInTheDocument();
+    expect(api.getProducts).toHaveBeenCalledTimes(2);
+  });
+
+  it("restores a persisted shop selection if still a member", async () => {
+    localStorage.setItem("skladbase:activeShopId", "2");
+    vi.mocked(api.getMe).mockResolvedValueOnce(multiShopFixture).mockResolvedValueOnce(
+      shopBActiveFixture,
+    );
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+
+    render(<App />);
+
+    expect(await screen.findByText("Другий магазин")).toBeInTheDocument();
+    expect(api.setActiveShopId).toHaveBeenCalledWith(2);
+  });
+
+  it("ignores a persisted shop id that is no longer a membership", async () => {
+    localStorage.setItem("skladbase:activeShopId", "999");
+    vi.mocked(api.getMe).mockResolvedValue(multiShopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+
+    render(<App />);
+
+    expect(await screen.findByText("Тестовий магазин")).toBeInTheDocument();
+    expect(api.getMe).toHaveBeenCalledTimes(1);
   });
 });
 

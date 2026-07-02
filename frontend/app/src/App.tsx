@@ -24,6 +24,7 @@ import type {
   Reservation,
   ReserveInput,
   Shop,
+  ShopSummary,
   TabId,
   Template,
   Variant,
@@ -31,8 +32,28 @@ import type {
   VariantPatchPayload,
 } from "./types";
 
+const LAST_SHOP_KEY = "skladbase:activeShopId";
+
+function readSavedShopId(): number | null {
+  try {
+    const raw = localStorage.getItem(LAST_SHOP_KEY);
+    return raw ? Number(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function persistShopId(id: number): void {
+  try {
+    localStorage.setItem(LAST_SHOP_KEY, String(id));
+  } catch {
+    // деякі WebView можуть кидати — вибір магазину просто не переживе перезапуск
+  }
+}
+
 export default function App() {
   const [shop, setShop] = useState<Shop | null>(null);
+  const [shops, setShops] = useState<ShopSummary[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
@@ -47,44 +68,98 @@ export default function App() {
     null,
   );
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const mountedRef = useRef(true);
+
+  // Повний рефетч під ВЖЕ встановлений api.setActiveShopId() — той самий
+  // ланцюг, що й на старті (init нижче), переюзаний і для switchShop().
+  async function loadAll(meResult: Shop) {
+    const [productsResult, templatesResult, reservationsResult, plansResult] = await Promise.all([
+      api.getProducts(),
+      api.getTemplates(),
+      api.getReservations(),
+      api.getPlans(),
+    ]);
+    if (!mountedRef.current) return;
+    setShop(meResult);
+    setShops(meResult.shops);
+    setAccentColor(meResult.accent_color);
+    setProducts(productsResult);
+    setTemplates(templatesResult);
+    setReservations(reservationsResult);
+    setPlans(plansResult);
+    if (meResult.invite_status) {
+      setInviteBanner({ status: meResult.invite_status, shopName: meResult.shop_name });
+    }
+    persistShopId(meResult.active_shop_id);
+  }
 
   useEffect(() => {
     initTelegram();
-    let mounted = true;
+    mountedRef.current = true;
 
-    async function load() {
+    async function init() {
       try {
-        const [meResult, productsResult, templatesResult, reservationsResult, plansResult] =
-          await Promise.all([
-            api.getMe(),
-            api.getProducts(),
-            api.getTemplates(),
-            api.getReservations(),
-            api.getPlans(),
-          ]);
-        if (!mounted) return;
-        setShop(meResult);
-        setAccentColor(meResult.accent_color);
-        setProducts(productsResult);
-        setTemplates(templatesResult);
-        setReservations(reservationsResult);
-        setPlans(plansResult);
-        if (meResult.invite_status) {
-          setInviteBanner({ status: meResult.invite_status, shopName: meResult.shop_name });
+        // Без заголовка — дефолтне (найменше id) membership, як завжди.
+        const meResult = await api.getMe();
+        if (!mountedRef.current) return;
+
+        const savedShopId = readSavedShopId();
+        const wantsDifferentShop =
+          savedShopId != null &&
+          savedShopId !== meResult.active_shop_id &&
+          meResult.shops.some((s) => s.shop_id === savedShopId);
+
+        if (!wantsDifferentShop) {
+          api.setActiveShopId(meResult.active_shop_id);
+          await loadAll(meResult);
+          return;
+        }
+
+        api.setActiveShopId(savedShopId);
+        try {
+          const switchedMe = await api.getMe();
+          if (!mountedRef.current) return;
+          await loadAll(switchedMe);
+        } catch (err) {
+          if (!mountedRef.current) return;
+          if (err instanceof ApiError && err.status === 403) {
+            // Збережений shopId устиг стати недійсним (видалили з команди
+            // між сесіями) — скидаємо і йдемо дефолтним магазином з першого
+            // виклику, без ще одного зайвого /me.
+            api.setActiveShopId(null);
+            await loadAll(meResult);
+          } else {
+            throw err;
+          }
         }
       } catch (err) {
-        if (!mounted) return;
+        if (!mountedRef.current) return;
         setError(errorMessage(err, "Не вдалося завантажити дані"));
       } finally {
-        if (mounted) setLoading(false);
+        if (mountedRef.current) setLoading(false);
       }
     }
 
-    void load();
+    void init();
     return () => {
-      mounted = false;
+      mountedRef.current = false;
     };
   }, []);
+
+  async function switchShop(shopId: number) {
+    if (shop && shopId === shop.shop_id) return;
+    setLoading(true);
+    setError(null);
+    api.setActiveShopId(shopId);
+    try {
+      const meResult = await api.getMe();
+      await loadAll(meResult);
+    } catch (err) {
+      setError(errorMessage(err, "Не вдалося переключити магазин"));
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (inviteBanner?.status !== "joined") return;
@@ -369,7 +444,7 @@ export default function App() {
     <>
       <AtmosphereBackground />
       <div className="app" ref={scrollContainerRef}>
-        <Header shop={shop} />
+        <Header shop={shop} shops={shops} onSwitchShop={(id) => void switchShop(id)} />
 
         {error ? <p className="error-banner">{error}</p> : null}
 
@@ -389,7 +464,9 @@ export default function App() {
                 ? `Вітаємо! Ви приєднались до магазину ${inviteBanner.shopName}`
                 : inviteBanner.status === "already_member"
                   ? "Ви вже маєте магазин — запрошення не застосовано"
-                  : "Запрошення недійсне або прострочене. Створено ваш власний магазин."}
+                  : inviteBanner.status === "already_in_shop"
+                    ? "Ви вже учасник цього магазину"
+                    : "Запрошення недійсне або прострочене. Створено ваш власний магазин."}
             </span>
             <button
               type="button"

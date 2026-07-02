@@ -1,6 +1,18 @@
 export type SubscriptionStatus = "trial" | "active" | "past_due" | "canceled" | "expired";
 
-export type InviteStatus = "joined" | "already_member" | "invite_invalid" | null;
+export type InviteStatus =
+  | "joined"
+  | "already_member"
+  | "already_in_shop"
+  | "invite_invalid"
+  | null;
+
+export interface ShopSummary {
+  shop_id: number;
+  shop_name: string;
+  logo_url: string | null;
+  role: "owner" | "manager";
+}
 
 export interface Shop {
   shop_id: number;
@@ -19,6 +31,8 @@ export interface Shop {
   active_count: number;
   max_products: number | null;
   invite_status: InviteStatus;
+  shops: ShopSummary[];
+  active_shop_id: number;
 }
 
 export interface Invite {
