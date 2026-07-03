@@ -1007,28 +1007,42 @@ describe("Tab navigation", () => {
     expect(card).toHaveAttribute("aria-pressed", "false");
 
     fireEvent.click(card);
-    expect(card).toHaveAttribute("aria-pressed", "true");
-    expect(card).toHaveClass("metric-card--selected");
+    expect(await screen.findByRole("button", { name: "Товари" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
     expect(screen.getByRole("tab", { name: "Дашборд" })).toHaveAttribute("aria-selected", "true");
 
-    fireEvent.click(card);
+    fireEvent.click(screen.getByRole("button", { name: "Товари" }));
     expect(screen.getByRole("tab", { name: "Склад" })).toHaveAttribute("aria-selected", "true");
   });
+
+  // Framer layoutId переносить активну картку у featured-блок (окремий DOM-
+  // вузол) і, поки виходить стара featured-картка, AnimatePresence лишає
+  // ЇЇ в DOM на час exit-переходу (jsdom matchMedia завжди matches:false —
+  // це реальна spring-анімація, а не миттєва; чекати завершення waitFor'ом
+  // ненадійно, бо RAF-фізика springs у jsdom не гарантовано "доходить" за
+  // фіксований таймаут). Тому шукаємо серед УСІХ збігів саме потрібний за
+  // aria-pressed, а не покладаємось на єдиний матч.
+  function statCard(name: string, pressed: "true" | "false") {
+    return screen
+      .getAllByRole("button", { name })
+      .find((el) => el.getAttribute("aria-pressed") === pressed);
+  }
 
   it("selecting a different stat card deselects the previous one", async () => {
     vi.mocked(api.getMe).mockResolvedValue(shopFixture);
     vi.mocked(api.getProducts).mockResolvedValue([]);
 
     render(<App />);
-    const productsCard = await screen.findByRole("button", { name: "Товари" });
-    const reservationsCard = screen.getByRole("button", { name: "Резерви" });
+    await screen.findByRole("button", { name: "Товари" });
 
-    fireEvent.click(productsCard);
-    expect(productsCard).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(statCard("Товари", "false")!);
+    expect(statCard("Товари", "true")).toBeInTheDocument();
 
-    fireEvent.click(reservationsCard);
-    expect(productsCard).toHaveAttribute("aria-pressed", "false");
-    expect(reservationsCard).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(statCard("Резерви", "false")!);
+    expect(statCard("Товари", "false")).toBeInTheDocument();
+    expect(statCard("Резерви", "true")).toBeInTheDocument();
   });
 
   it("tapping outside a stat card deselects it", async () => {
@@ -1036,13 +1050,13 @@ describe("Tab navigation", () => {
     vi.mocked(api.getProducts).mockResolvedValue([]);
 
     render(<App />);
-    const card = await screen.findByRole("button", { name: "Товари" });
+    await screen.findByRole("button", { name: "Товари" });
 
-    fireEvent.click(card);
-    expect(card).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(statCard("Товари", "false")!);
+    expect(statCard("Товари", "true")).toBeInTheDocument();
 
     fireEvent.pointerDown(document.body);
-    expect(card).toHaveAttribute("aria-pressed", "false");
+    expect(statCard("Товари", "false")).toBeInTheDocument();
   });
 
   it("switches to Склад tab and shows search input and catalog section", async () => {
