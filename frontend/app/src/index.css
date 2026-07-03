@@ -628,6 +628,7 @@ body {
 .product-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-auto-rows: 1fr;
   gap: 10px;
   position: relative; /* required for GSAP Flip absolute:true */
 }
@@ -642,6 +643,9 @@ body {
   padding: 14px;
   box-shadow: var(--shadow-card);
   transition: box-shadow 0.2s ease;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .product-card:hover {
@@ -685,7 +689,8 @@ body {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin-top: 8px;
+  margin-top: auto;
+  padding-top: 8px;
 }
 
 .pcard-price {
@@ -1353,21 +1358,44 @@ body {
   }
 }
 
-/* Modal card — heavier glass for readability over blurred content */
+/* Modal card — heavier glass for readability over blurred content.
+   Flex column shell: h2/tabs/actions stay fixed, only .modal-card-body
+   scrolls — Telegram in-app WebKit needs -webkit-overflow-scrolling on the
+   actual scroll region, not the whole card, or touch scroll sticks. */
 .modal-card {
   border-radius: 20px;
   padding: 22px;
   max-width: 480px;
   width: 100%;
-  max-height: 90vh;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  max-height: 90dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   color: var(--text);
   background: var(--glass-bg-heavy);
   -webkit-backdrop-filter: var(--glass-blur-heavy);
   backdrop-filter: var(--glass-blur-heavy);
   border: 1px solid var(--glass-border);
   box-shadow: 0 12px 40px rgba(28, 37, 32, 0.14);
+}
+
+.modal-card > h2 {
+  flex-shrink: 0;
+}
+
+.modal-card > form {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.modal-card-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 /* ── Template Builder modal (z-index 150: above product modal, below paywall) */
@@ -1579,6 +1607,9 @@ body {
   justify-content: flex-end;
   gap: 8px;
   margin-top: 10px;
+  padding-top: 12px;
+  flex-shrink: 0;
+  border-top: 1px solid var(--glass-border);
 }
 
 /* Primary save/confirm — green gradient */
@@ -1619,6 +1650,7 @@ body {
   margin-bottom: 14px;
   border-bottom: 1px solid var(--glass-border);
   padding-bottom: 4px;
+  flex-shrink: 0;
 }
 
 .modal-tab {

@@ -225,6 +225,7 @@ function CreateForm({
       <form onSubmit={handleSubmit}>
         {error ? <p className="error-banner">{error}</p> : null}
 
+        <div className="modal-card-body">
         <label className="form-field">
           <span>Шаблон</span>
           <select
@@ -389,6 +390,7 @@ function CreateForm({
             + Додати варіант
           </button>
         ) : null}
+        </div>
 
         <div className="modal-actions">
           <button type="button" onClick={onClose} disabled={submitting}>
@@ -455,14 +457,22 @@ function EditForm({
   const [tab, setTab] = useState<EditTab>("variants");
   const [name, setName] = useState(product.name);
   const [description, setDescription] = useState(product.description ?? "");
+  const [attributeValues, setAttributeValues] = useState<Record<string, string>>(() => {
+    const initial: Record<string, string> = {};
+    for (const [key, value] of Object.entries(product.attributes)) {
+      initial[key] = typeof value === "string" ? value : String(value ?? "");
+    }
+    return initial;
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nameInvalid, setNameInvalid] = useState(false);
   const [addingVariant, setAddingVariant] = useState(false);
   const [activeVariantId, setActiveVariantId] = useState<number | null>(null);
 
-  const axes: TemplateField[] =
-    templates.find((t) => t.id === product.template_id)?.field_schema.variant_axes ?? [];
+  const template = templates.find((t) => t.id === product.template_id) ?? null;
+  const axes: TemplateField[] = template?.field_schema.variant_axes ?? [];
+  const attributeFields: TemplateField[] = template?.field_schema.attributes ?? [];
 
   const activeVariant = product.variants.find((v) => v.id === activeVariantId);
 
@@ -479,6 +489,7 @@ function EditForm({
       await onUpdateProduct(product.id, {
         name: name.trim(),
         description: description.trim() || null,
+        attributes: attributeValues,
       });
       onClose();
     } catch (err) {
@@ -489,6 +500,10 @@ function EditForm({
   }
 
   async function handleAddVariant() {
+    if (product.is_frozen) {
+      onFrozenAction?.();
+      return;
+    }
     setAddingVariant(true);
     try {
       const last = product.variants.at(-1);
@@ -498,6 +513,11 @@ function EditForm({
       };
       const newVariant = await onAddVariant(product.id, payload);
       setActiveVariantId(newVariant.id);
+    } catch (err) {
+      // 402 already surfaced via App's UpgradePrompt (see onAddVariant) — anything else, as before.
+      if (!(err instanceof ApiError && err.status === 402)) {
+        throw err;
+      }
     } finally {
       setAddingVariant(false);
     }
@@ -522,6 +542,7 @@ function EditForm({
         ))}
       </div>
 
+      <div className="modal-card-body">
       {tab === "variants" ? (
         <>
           <ul className="variant-tag-list">
@@ -538,6 +559,7 @@ function EditForm({
           <button
             type="button"
             className="variant-add-tag"
+            aria-disabled={product.is_frozen}
             disabled={addingVariant}
             onClick={() => void handleAddVariant()}
           >
@@ -580,6 +602,36 @@ function EditForm({
             <span>Опис</span>
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} />
           </label>
+
+          {attributeFields.map((field) => (
+            <label className="form-field" key={field.key}>
+              <span>{field.label}</span>
+              {field.type === "enum" ? (
+                <select
+                  aria-label={field.label}
+                  value={attributeValues[field.key] ?? ""}
+                  onChange={(e) =>
+                    setAttributeValues((prev) => ({ ...prev, [field.key]: e.target.value }))
+                  }
+                >
+                  <option value="" />
+                  {(field.options ?? []).map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  value={attributeValues[field.key] ?? ""}
+                  onChange={(e) =>
+                    setAttributeValues((prev) => ({ ...prev, [field.key]: e.target.value }))
+                  }
+                />
+              )}
+            </label>
+          ))}
         </>
       ) : (
         <ProductPhotoGallery
@@ -589,6 +641,7 @@ function EditForm({
           onDelete={(photoId) => onDeleteProductPhoto(product.id, photoId)}
         />
       )}
+      </div>
 
       <div className="modal-actions">
         <button type="button" onClick={onClose} disabled={saving}>
@@ -691,13 +744,15 @@ export function ProductModal({
         ) : isPhase2 && liveProduct !== null ? (
           // Create mode Phase 2 — product created, upload photos
           <>
-            <p className="product-modal-success">✓ Товар створено!</p>
-            <ProductPhotoGallery
-              product={liveProduct}
-              photosAllowed={photosAllowed}
-              onUpload={(file) => onUploadProductPhoto(liveProduct.id, file)}
-              onDelete={(photoId) => onDeleteProductPhoto(liveProduct.id, photoId)}
-            />
+            <div className="modal-card-body">
+              <p className="product-modal-success">✓ Товар створено!</p>
+              <ProductPhotoGallery
+                product={liveProduct}
+                photosAllowed={photosAllowed}
+                onUpload={(file) => onUploadProductPhoto(liveProduct.id, file)}
+                onDelete={(photoId) => onDeleteProductPhoto(liveProduct.id, photoId)}
+              />
+            </div>
             <div className="modal-actions">
               <button type="button" onClick={handleClose}>
                 Готово
