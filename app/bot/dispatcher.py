@@ -1,5 +1,6 @@
 """
-SkladBase — aiogram Dispatcher: обробка Telegram Stars платежів (Стадія 5a).
+SkladBase — aiogram Dispatcher: обробка Telegram Stars платежів (Стадія 5a)
++ техпідтримка (app/bot/handlers.py).
 
 Підписку активуємо ТІЛЬКИ тут, з вебхука Telegram, ніколи з відповіді
 Mini App (CLAUDE.md, інваріант №2: клієнт може підробити «я оплатив»,
@@ -10,16 +11,28 @@ Mini App (CLAUDE.md, інваріант №2: клієнт може підроб
 `session` сюди не Depends-иться (aiogram — не FastAPI): викликач
 (`app/api/telegram.py`) передає її через `dp.feed_update(bot, update,
 session=session)`, а aiogram підставляє в хендлер за збігом імені параметра.
+
+Цей самий `dp` тепер живиться ДВОМА шляхами: вебхуком (`app/api/telegram.py`,
+`session=` передається явно на кожен виклик) і polling-процесом
+(`app/bot/main.py`, `session=` НЕ передається — там немає per-request
+FastAPI-залежності, що б її дала). Без `_session_middleware` нижче
+`on_successful_payment` впав би з TypeError на кожен платіж, що прийшов
+через polling, а не вебхук: aiogram підставляє хендлеру лише те, що є
+в `data`, а `session` там просто не буде. Мідлварь ставить сесію, ЛИШЕ
+якщо її ще нема (вебхуків-виклик з явним `session=` не займаємо).
 """
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from aiogram import Dispatcher, F
-from aiogram.types import Message, PreCheckoutQuery
+from aiogram.types import Message, PreCheckoutQuery, TelegramObject
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import db
 from app.billing.providers import StarsProvider
 from app.bot.handlers import router as support_router
 from app.models import Membership, Plan, SubPeriod, SubProvider, Subscription
@@ -29,6 +42,26 @@ logger = logging.getLogger(__name__)
 
 dp = Dispatcher()
 dp.include_router(support_router)
+
+
+async def _session_middleware(
+    handler: Callable[[TelegramObject, dict[str, Any]], Awaitable[Any]],
+    event: TelegramObject,
+    data: dict[str, Any],
+) -> Any:
+    if "session" in data:
+        return await handler(event, data)
+    # db.async_session, не імпортоване напряму: monkeypatch у тестах
+    # (tests/conftest.py) підміняє db.async_session на ізольовану in-memory
+    # БД — це працює лише через пізній module-attribute lookup (як
+    # get_session() у app/db.py), а НЕ через `from app.db import async_session`,
+    # яке зафіксувало б посилання на реальну БД ще при імпорті цього модуля.
+    async with db.async_session() as session:
+        data["session"] = session
+        return await handler(event, data)
+
+
+dp.update.outer_middleware(_session_middleware)
 
 
 @dp.pre_checkout_query()

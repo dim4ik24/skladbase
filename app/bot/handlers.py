@@ -1,5 +1,11 @@
 """
-SkladBase — техпідтримка через бота (FSM-режим).
+SkladBase — /start (привітання) + техпідтримка через бота (FSM-режим).
+
+`/start` НІЧОГО не створює: магазин заводиться явно через POST /api/shops
+(shop lifecycle) з екрана онбордингу в Mini App, не через бота. Тут лише
+привітання + кнопка "Відкрити" (web_app, якщо MINI_APP_URL налаштований).
+Deep-link інвайти (`?startapp=invite_<token>`) теж не обробляються тут —
+їх читає сам Mini App із `initDataUnsafe.start_param`, бот про них не знає.
 
 Юзер пише /support -> усе, що він пише далі, пересилається адміну
 (`settings.ADMIN_TG_ID`) з контекстним рядком (ім'я, username, tg_id).
@@ -34,10 +40,10 @@ from __future__ import annotations
 import logging
 
 from aiogram import Bot, Router
-from aiogram.filters import Command, StateFilter
+from aiogram.filters import Command, CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import Message
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, WebAppInfo
 
 from app.config import settings
 from app.security.rate_limit import InMemoryRateLimiter
@@ -54,6 +60,21 @@ support_map: dict[int, int] = {}
 
 class SupportStates(StatesGroup):
     active = State()
+
+
+@router.message(CommandStart())
+async def cmd_start(message: Message) -> None:
+    keyboard = None
+    if settings.MINI_APP_URL:
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="Відкрити SkladBase", web_app=WebAppInfo(url=settings.MINI_APP_URL))]
+            ]
+        )
+    await message.answer(
+        "Ласкаво просимо в SkladBase! Натисніть кнопку нижче, щоб відкрити застосунок.",
+        reply_markup=keyboard,
+    )
 
 
 @router.message(Command("support"))

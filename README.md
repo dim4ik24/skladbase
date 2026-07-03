@@ -88,9 +88,11 @@ docker compose up
 
 Шаблони (без самого запуску деплою) — у `deploy/`:
 
-- `skladbase-web.service`, `skladbase-scheduler.service` — systemd-юніти;
-  веб і планувальник — окремі процеси (`RUN_SCHEDULER=False` у веб-юніті,
-  крони піднімає лише `skladbase-scheduler.service` через `app/worker.py`).
+- `skladbase-web.service`, `skladbase-scheduler.service`,
+  `skladbase-bot.service` — systemd-юніти; веб, планувальник і бот-polling —
+  окремі процеси (`RUN_SCHEDULER=False` у веб-юніті, крони піднімає лише
+  `skladbase-scheduler.service` через `app/worker.py`; техпідтримка бота —
+  `skladbase-bot.service` через `app/bot/main.py`, `app/bot/handlers.py`).
 - `nginx.conf` — reverse proxy на uvicorn + HTTPS + статика TMA напряму з
   nginx; передає `X-Forwarded-For`, який застосунок довіряє лише від
   налаштованих проксі (`app/security/proxy_headers.py`, `TRUSTED_PROXY_IPS`).

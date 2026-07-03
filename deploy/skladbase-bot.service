@@ -1,0 +1,22 @@
+[Unit]
+Description=SkladBase bot (long-polling — техпідтримка, app/bot/handlers.py)
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=skladbase
+Group=skladbase
+WorkingDirectory=/opt/skladbase
+EnvironmentFile=/opt/skladbase/.env
+ExecStart=/opt/skladbase/venv/bin/python -m app.bot.main
+Restart=always
+RestartSec=5
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

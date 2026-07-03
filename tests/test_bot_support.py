@@ -58,6 +58,50 @@ def _reset_support_state(monkeypatch: pytest.MonkeyPatch):
 
 
 @pytest.mark.asyncio
+async def test_cmd_start_greets_with_open_button_when_mini_app_url_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "MINI_APP_URL", "https://app.example.test")
+    message = _make_message()
+
+    await handlers.cmd_start(message)
+
+    message.answer.assert_awaited_once()
+    _, kwargs = message.answer.call_args
+    markup = kwargs["reply_markup"]
+    button = markup.inline_keyboard[0][0]
+    assert button.web_app.url == "https://app.example.test"
+
+
+@pytest.mark.asyncio
+async def test_cmd_start_greets_without_button_when_mini_app_url_unset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "MINI_APP_URL", "")
+    message = _make_message()
+
+    await handlers.cmd_start(message)
+
+    message.answer.assert_awaited_once()
+    _, kwargs = message.answer.call_args
+    assert kwargs["reply_markup"] is None
+
+
+@pytest.mark.asyncio
+async def test_cmd_start_does_not_touch_fsm_state_or_create_anything(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """/start нічого не створює (shop lifecycle — POST /api/shops, не бот)."""
+    monkeypatch.setattr(settings, "MINI_APP_URL", "")
+    message = _make_message()
+
+    await handlers.cmd_start(message)
+
+    text = message.answer.call_args.args[0]
+    assert "магазин" not in text.lower()
+
+
+@pytest.mark.asyncio
 async def test_cmd_support_sets_active_state_and_greets() -> None:
     message = _make_message()
     state = AsyncMock()
