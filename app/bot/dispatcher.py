@@ -42,6 +42,12 @@ logger = logging.getLogger(__name__)
 
 dp = Dispatcher()
 dp.include_router(support_router)
+# Для admin_close (app/bot/handlers.py) — знімає FSM-стан ЮЗЕРА (не того,
+# хто зараз пише), тож звичайне aiogram-інжектування `state: FSMContext`
+# (завжди прив'язане до ПОТОЧНОГО відправника) тут не підходить. Пряме
+# `from app.bot.dispatcher import dp` у handlers.py неможливе — цей модуль
+# уже імпортує `router` ЗВІДТИ, вийшов би circular import.
+dp["storage"] = dp.storage
 
 
 async def _session_middleware(

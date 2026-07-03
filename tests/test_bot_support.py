@@ -1,22 +1,32 @@
 """
 Техпідтримка через бота — юніт-тести хендлерів (app/bot/handlers.py).
 
-Мокаються Message/FSMContext/Bot напряму, хендлери викликаються як звичайні
-async-функції — без dp.feed_update і без мережі. На відміну від
-test_stage5a.py (платіжні хендлери не роблять жодних вихідних викликів
-Telegram API, тож фідити через реальний dp з реальним Bot безпечно) — тут
-хендлери активно кличуть message.answer/bot.send_message/bot.copy_message,
-фідити через dp довелось би мокати aiohttp-сесію бота, а це складніше й
-крихкіше за прямий виклик функцій.
+Більшість тестів мокають Message/FSMContext/Bot напряму й кличуть
+хендлери як звичайні async-функції — без dp.feed_update і без мережі.
+Так простіше й швидше, ЛИШЕ ОДИН тест (test_admin_reply_wins_even_when_...)
+свідомо йде іншим шляхом: пряме виклик функції-хендлера ОБХОДИТЬ реальний
+aiogram dispatch/filter-matching, а живий баг ("reply адміна не доходив
+юзеру") жив саме там — у порядку, в якому aiogram перебирає зареєстровані
+хендлери. Такий клас багів прямий виклик handlers.admin_reply(...) в
+принципі не міг би зловити, тож для НЬОГО ганяємо справжній Update через
+dp.feed_update з реальним (але без мережі — Bot.send_message замокано)
+Bot, як test_stage5a.py.
 """
 from __future__ import annotations
 
+import time
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from aiogram import Bot
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.storage.base import StorageKey
+from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.types import Update
 
 from app.bot import handlers
 from app.config import settings
+from tests.conftest import TEST_BOT_TOKEN
 
 
 def _make_user(tg_id: int, first_name: str = "Тест", username: str | None = None) -> MagicMock:
@@ -118,11 +128,43 @@ async def test_cmd_support_sets_active_state_and_greets() -> None:
 async def test_cmd_cancel_clears_state() -> None:
     message = _make_message()
     state = AsyncMock()
+    bot = AsyncMock()
 
-    await handlers.cmd_cancel(message, state)
+    await handlers.cmd_cancel(message, state, bot)
 
     state.clear.assert_awaited_once()
     message.answer.assert_awaited_once_with("Ви вийшли з режиму підтримки.")
+
+
+@pytest.mark.asyncio
+async def test_cmd_cancel_notifies_admin() -> None:
+    message = _make_message(tg_id=2010, first_name="Ольга", username="olya")
+    state = AsyncMock()
+    bot = AsyncMock()
+
+    await handlers.cmd_cancel(message, state, bot)
+
+    bot.send_message.assert_awaited_once()
+    admin_id_arg, text = bot.send_message.call_args.args
+    assert admin_id_arg == settings.ADMIN_TG_ID
+    assert "закінчив чат" in text
+    assert "Ольга" in text
+    assert "@olya" in text
+    assert "id=2010" in text
+
+
+@pytest.mark.asyncio
+async def test_cmd_cancel_skips_admin_notification_when_admin_not_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "ADMIN_TG_ID", 0)
+    message = _make_message()
+    state = AsyncMock()
+    bot = AsyncMock()
+
+    await handlers.cmd_cancel(message, state, bot)
+
+    bot.send_message.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -148,8 +190,8 @@ async def test_support_message_forwards_to_admin_with_id_in_context_line() -> No
         chat_id=settings.ADMIN_TG_ID, from_chat_id=2002, message_id=600
     )
 
-    assert handlers.support_map[701] == 2002
-    assert handlers.support_map[702] == 2002
+    assert handlers.support_map[701] == handlers.SupportTarget(2002, "Ольга")
+    assert handlers.support_map[702] == handlers.SupportTarget(2002, "Ольга")
     message.answer.assert_awaited_once_with("Передано ✅")
 
 
@@ -169,7 +211,7 @@ async def test_support_message_without_username_falls_back() -> None:
 
 @pytest.mark.asyncio
 async def test_admin_reply_sends_answer_to_mapped_user() -> None:
-    handlers.support_map[701] = 2002
+    handlers.support_map[701] = handlers.SupportTarget(2002, "Тест")
     reply_to = MagicMock(message_id=701)
     admin_message = _make_message(
         tg_id=settings.ADMIN_TG_ID,
@@ -194,6 +236,130 @@ async def test_admin_reply_ignores_unmapped_reply() -> None:
     await handlers.admin_reply(admin_message, bot)
 
     bot.send_message.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_admin_close_closes_chat_clears_user_state_and_confirms_to_admin() -> None:
+    storage = MemoryStorage()
+    bot_id = 555
+    user_tg_id = 2020
+    user_key = StorageKey(bot_id=bot_id, chat_id=user_tg_id, user_id=user_tg_id)
+    user_state = FSMContext(storage=storage, key=user_key)
+    await user_state.set_state(handlers.SupportStates.active)
+
+    handlers.support_map[701] = handlers.SupportTarget(user_tg_id, "Ольга")
+    reply_to = MagicMock(message_id=701)
+    admin_message = _make_message(
+        tg_id=settings.ADMIN_TG_ID, text="/close", reply_to_message=reply_to
+    )
+    bot = AsyncMock()
+    bot.id = bot_id
+
+    await handlers.admin_close(admin_message, bot, storage)
+
+    bot.send_message.assert_awaited_once_with(
+        user_tg_id, "Адміністратор закінчив чат підтримки. Дякуємо за звернення!"
+    )
+    assert await user_state.get_state() is None
+    admin_message.answer.assert_awaited_once_with("Чат із Ольга закрито.")
+
+
+@pytest.mark.asyncio
+async def test_admin_close_without_reply_shows_hint() -> None:
+    storage = MemoryStorage()
+    admin_message = _make_message(
+        tg_id=settings.ADMIN_TG_ID, text="/close", reply_to_message=None
+    )
+    bot = AsyncMock()
+
+    await handlers.admin_close(admin_message, bot, storage)
+
+    admin_message.answer.assert_awaited_once()
+    hint = admin_message.answer.call_args.args[0]
+    assert "reply" in hint.lower()
+    assert "звернення" in hint.lower()
+    bot.send_message.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_admin_close_unmapped_reply_shows_hint() -> None:
+    storage = MemoryStorage()
+    reply_to = MagicMock(message_id=999999)  # не в мапі
+    admin_message = _make_message(
+        tg_id=settings.ADMIN_TG_ID, text="/close", reply_to_message=reply_to
+    )
+    bot = AsyncMock()
+
+    await handlers.admin_close(admin_message, bot, storage)
+
+    admin_message.answer.assert_awaited_once()
+    bot.send_message.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_admin_reply_wins_even_when_admin_is_in_active_support_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Регресія: живий тест показав, що reply адміна не завжди доходив
+    юзеру, коли адмін сам колись тестував /support на собі й не вийшов
+    через /cancel (його ВЛАСНИЙ FSM-стан лишався active). Прямий виклик
+    handlers.admin_reply(...) НЕ міг би зловити цей клас багів — тут
+    справжній Update іде через dp.feed_update, і саме порядок реєстрації
+    хендлерів (admin_reply РАНІШЕ за support_message) вирішує, хто
+    забирає апдейт."""
+    from app.bot.dispatcher import dp
+
+    admin_tg_id = settings.ADMIN_TG_ID
+    user_tg_id = 8001
+    handlers.support_map.clear()
+    handlers.support_map[555] = handlers.SupportTarget(user_tg_id, "Юзер")
+
+    sent: list[tuple[int, str]] = []
+
+    async def fake_send_message(self, chat_id, text, **kwargs):
+        sent.append((chat_id, text))
+        return MagicMock(message_id=999)
+
+    monkeypatch.setattr(Bot, "send_message", fake_send_message)
+
+    bot = Bot(token=TEST_BOT_TOKEN)
+
+    admin_state = FSMContext(
+        storage=dp.storage,
+        key=StorageKey(bot_id=bot.id, chat_id=admin_tg_id, user_id=admin_tg_id),
+    )
+    await admin_state.set_state(handlers.SupportStates.active)
+
+    update = Update.model_validate(
+        {
+            "update_id": 1,
+            "message": {
+                "message_id": 600,
+                "date": int(time.time()),
+                "chat": {"id": admin_tg_id, "type": "private"},
+                "from": {"id": admin_tg_id, "is_bot": False, "first_name": "Адмін"},
+                "text": "Спробуйте перезапустити застосунок",
+                "reply_to_message": {
+                    "message_id": 555,
+                    "date": int(time.time()),
+                    "chat": {"id": admin_tg_id, "type": "private"},
+                    "from": {"id": bot.id, "is_bot": True, "first_name": "Bot"},
+                    "text": "🆘 Підтримка від Юзер (id=8001)",
+                },
+            },
+        }
+    )
+
+    try:
+        await dp.feed_update(bot, update)
+    finally:
+        await admin_state.clear()
+        handlers.support_map.clear()
+
+    assert (
+        user_tg_id,
+        "💬 Відповідь підтримки:\nСпробуйте перезапустити застосунок",
+    ) in sent
 
 
 def test_is_admin_reply_filter_rejects_non_admin_reply() -> None:

@@ -10,39 +10,53 @@ Deep-link інвайти (`?startapp=invite_<token>`) теж не обробля
 Юзер пише /support -> усе, що він пише далі, пересилається адміну
 (`settings.ADMIN_TG_ID`) з контекстним рядком (ім'я, username, tg_id).
 Адмін відповідає REPLY'єм на переслане -> бот повертає відповідь юзеру.
+Чат закривається з БУДЬ-ЯКОГО боку: юзер /cancel -> адмін повідомлений;
+адмін reply+/close на переслане -> юзер повідомлений і його FSM-стан
+знімається (щоб зайве повідомлення юзера після закриття не пересилалось
+адміну знову як нове звернення).
 
 Мапінг "яке повідомлення в чаті адміна -> чий це юзер" — in-memory dict за
 message_id, НЕ `forward_from` (юзери з прихованим форвардом (privacy) його
 ховають — ненадійно) і НЕ парсинг тексту (крихко). Адміну йде ДВА
 повідомлення на кожне юзерське (контекст-рядок окремо + copy_message
-вмісту) — обидва message_id мапляться на той самий tg_id, тож reply на
-БУДЬ-ЯКЕ з двох спрацює. Втрата мапінгу при рестарті web-процесу — той
-самий прийнятний трейдофф, що й FSM-стан (MemoryStorage): юзер просто
-пише /support знову.
+вмісту) — обидва message_id мапляться на той самий SupportTarget, тож
+reply на БУДЬ-ЯКЕ з двох спрацює (і для відповіді, і для /close). Втрата
+мапінгу при рестарті web-процесу — той самий прийнятний трейдофф, що й
+FSM-стан (MemoryStorage): юзер просто пише /support знову.
 
-`from_user.id == settings.ADMIN_TG_ID` перевіряється у ФІЛЬТРІ хендлера
-(`_is_admin_reply`), не всередині його тіла. Причина: якщо фільтр —
-лише "це reply" (а перевірку автора зробити вже в тілі), aiogram once і
-назавжди віддає update саме сюди, щойно фільтр збігся, — і звичайний
-юзер-НЕ-адмін, що в active-стані відповість reply'єм на своє ж
-повідомлення (описуючи проблему), потрапить у ЦЕЙ хендлер, тіло зробить
-ранній `return`, і повідомлення НІКОЛИ не дійде до `support_message` —
-загубиться замість пересилання адміну. Автора треба відсіювати ще на
-рівні фільтра, щоб aiogram сам пробував наступний хендлер.
+Пріоритет хендлерів (aiogram: перший, чиї фільтри ВСІ пройшли, забирає
+апдейт собі, далі не пробує — `TelegramEventObserver.trigger`, перевірено
+в джерелі aiogram): admin_close і admin_reply зареєстровані РАНІШЕ за
+support_message. Це не просто "має бути так" — конкретний живий баг був
+у зворотному сценарії: якщо адмін сам колись тестував /support на собі
+й не вийшов через /cancel, його FSM-стан лишається `active`; без
+пріоритету його reply на СПРАВЖНЄ звернення юзера впав би в
+support_message (бо і той матчиться за станом) замість admin_reply, і
+відповідь юзеру НІКОЛИ не пішла б. support_message додатково явно
+виключає "це reply від адміна" (`not _is_admin_reply`) — навіть якщо
+колись хтось переставить порядок хендлерів, ця гілка не оживе випадково.
 
-`_is_admin_reply` — звичайна функція, не magic-filter: `F.from_user.id ==
-settings.ADMIN_TG_ID` обчислив би праву частину ОДИН РАЗ при імпорті
-модуля (заморозив би значення) — monkeypatch у тестах на нього б не
-подіяв. Функція читає settings.ADMIN_TG_ID наживо на кожен виклик.
+`_is_admin`/`_is_admin_reply` — звичайні функції, не magic-filter:
+`F.from_user.id == settings.ADMIN_TG_ID` обчислив би праву частину ОДИН
+РАЗ при імпорті модуля (заморозив би значення) — monkeypatch у тестах на
+нього б не подіяв. Функції читають settings.ADMIN_TG_ID наживо на кожен
+виклик.
+
+`storage: BaseStorage` у admin_close — інжектиться aiogram-ом через
+`dp["storage"] = dp.storage` (app/bot/dispatcher.py), а не імпортом `dp`
+напряму сюди: dispatcher.py й так імпортує `router` звідси, прямий імпорт
+`dp` у зворотному напрямку створив би circular import.
 """
 from __future__ import annotations
 
 import logging
+from typing import NamedTuple
 
 from aiogram import Bot, Router
 from aiogram.filters import Command, CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+from aiogram.fsm.storage.base import BaseStorage, StorageKey
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, WebAppInfo
 
 from app.config import settings
@@ -54,8 +68,14 @@ router = Router(name="support")
 
 support_limiter = InMemoryRateLimiter("support_message", max_requests=1, window_seconds=60)
 
-# message_id (у чаті адміна) -> tg_id юзера, якому переслати відповідь.
-support_map: dict[int, int] = {}
+
+class SupportTarget(NamedTuple):
+    tg_id: int
+    name: str
+
+
+# message_id (у чаті адміна) -> хто юзер, якому переслати відповідь/закрити чат.
+support_map: dict[int, SupportTarget] = {}
 
 
 class SupportStates(StatesGroup):
@@ -87,16 +107,56 @@ async def cmd_support(message: Message, state: FSMContext) -> None:
 
 
 @router.message(Command("cancel"), StateFilter(SupportStates.active))
-async def cmd_cancel(message: Message, state: FSMContext) -> None:
+async def cmd_cancel(message: Message, state: FSMContext, bot: Bot) -> None:
     await state.clear()
     await message.answer("Ви вийшли з режиму підтримки.")
+
+    if message.from_user is None or not settings.ADMIN_TG_ID:
+        return
+    user = message.from_user
+    username = f"@{user.username}" if user.username else "без username"
+    try:
+        await bot.send_message(
+            settings.ADMIN_TG_ID,
+            f"❌ Користувач {user.first_name} ({username}, id={user.id}) закінчив чат",
+        )
+    except Exception:
+        logger.warning("не вдалося повідомити адміна про /cancel tg_id=%s", user.id, exc_info=True)
+
+
+def _is_admin(message: Message) -> bool:
+    return message.from_user is not None and message.from_user.id == settings.ADMIN_TG_ID
 
 
 def _is_admin_reply(message: Message) -> bool:
     """Див. докстрінг модуля — чому це фільтр, а не перевірка в тілі хендлера."""
-    return message.reply_to_message is not None and (
-        message.from_user is not None and message.from_user.id == settings.ADMIN_TG_ID
+    return message.reply_to_message is not None and _is_admin(message)
+
+
+@router.message(Command("close"), _is_admin)
+async def admin_close(message: Message, bot: Bot, storage: BaseStorage) -> None:
+    reply_to = message.reply_to_message
+    target = support_map.get(reply_to.message_id) if reply_to is not None else None
+    if target is None:
+        await message.answer("Зробіть reply на звернення, яке хочете закрити.")
+        return
+
+    try:
+        await bot.send_message(
+            target.tg_id, "Адміністратор закінчив чат підтримки. Дякуємо за звернення!"
+        )
+    except Exception:
+        logger.warning(
+            "не вдалося повідомити юзера tg_id=%s про закриття чату", target.tg_id, exc_info=True
+        )
+
+    user_state = FSMContext(
+        storage=storage,
+        key=StorageKey(bot_id=bot.id, chat_id=target.tg_id, user_id=target.tg_id),
     )
+    await user_state.clear()
+
+    await message.answer(f"Чат із {target.name} закрито.")
 
 
 @router.message(_is_admin_reply)
@@ -104,8 +164,8 @@ async def admin_reply(message: Message, bot: Bot) -> None:
     reply_to = message.reply_to_message
     assert reply_to is not None  # гарантовано фільтром _is_admin_reply
 
-    user_tg_id = support_map.get(reply_to.message_id)
-    if user_tg_id is None:
+    target = support_map.get(reply_to.message_id)
+    if target is None:
         return
 
     text = message.text or message.caption
@@ -113,14 +173,14 @@ async def admin_reply(message: Message, bot: Bot) -> None:
         return
 
     try:
-        await bot.send_message(user_tg_id, f"💬 Відповідь підтримки:\n{text}")
+        await bot.send_message(target.tg_id, f"💬 Відповідь підтримки:\n{text}")
     except Exception:
         logger.warning(
-            "не вдалося надіслати відповідь підтримки tg_id=%s", user_tg_id, exc_info=True
+            "не вдалося надіслати відповідь підтримки tg_id=%s", target.tg_id, exc_info=True
         )
 
 
-@router.message(StateFilter(SupportStates.active))
+@router.message(StateFilter(SupportStates.active), lambda m: not _is_admin_reply(m))
 async def support_message(message: Message, state: FSMContext, bot: Bot) -> None:
     if message.from_user is None:
         return
@@ -148,7 +208,8 @@ async def support_message(message: Message, state: FSMContext, bot: Bot) -> None
         logger.warning("не вдалося переслати повідомлення підтримки адміну", exc_info=True)
         return
 
-    support_map[context_msg.message_id] = user.id
-    support_map[copied.message_id] = user.id
+    target = SupportTarget(tg_id=user.id, name=user.first_name)
+    support_map[context_msg.message_id] = target
+    support_map[copied.message_id] = target
 
     await message.answer("Передано ✅")
