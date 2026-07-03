@@ -2,9 +2,18 @@ import { useEffect, useState } from "react";
 import * as api from "../api";
 import { errorMessage } from "../errors";
 import { shareInviteLink } from "../telegram";
-import type { Invite, TeamMember } from "../types";
+import type { Invite, PermissionsPatch, TeamMember } from "../types";
 
 const SHARE_TEXT = "Приєднуйся до мого магазину в SkladBase";
+
+const PERMISSION_FIELDS: Array<{ key: keyof PermissionsPatch; label: string }> = [
+  { key: "can_view_inventory", label: "Перегляд складу" },
+  { key: "can_edit_products", label: "Редагування товарів" },
+  { key: "can_manage_reservations", label: "Резерви й замовлення" },
+  { key: "can_manage_stock", label: "Рух складу (прихід/списання)" },
+  { key: "can_view_finance", label: "Фінанси" },
+  { key: "can_manage_billing", label: "Оплата й тариф" },
+];
 
 function hoursLeft(expiresAt: string): number {
   const ms = new Date(expiresAt).getTime() - Date.now();
@@ -20,6 +29,7 @@ export function TeamSection() {
   const [newInvite, setNewInvite] = useState<Invite | null>(null);
   const [confirmRevokeId, setConfirmRevokeId] = useState<number | null>(null);
   const [confirmRemoveId, setConfirmRemoveId] = useState<number | null>(null);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -77,10 +87,31 @@ export function TeamSection() {
     try {
       await api.removeMember(id);
       setMembers((prev) => prev.filter((m) => m.id !== id));
+      setExpandedId((prev) => (prev === id ? null : prev));
     } catch (err) {
       setError(errorMessage(err, "Не вдалося видалити учасника"));
     } finally {
       setConfirmRemoveId(null);
+    }
+  }
+
+  async function handlePermissionChange(
+    memberId: number,
+    field: keyof PermissionsPatch,
+    value: boolean,
+  ) {
+    setError(null);
+    const previous = members.find((m) => m.id === memberId)?.[field];
+    setMembers((prev) =>
+      prev.map((m) => (m.id === memberId ? { ...m, [field]: value } : m)),
+    );
+    try {
+      await api.updateMemberPermissions(memberId, { [field]: value });
+    } catch (err) {
+      setMembers((prev) =>
+        prev.map((m) => (m.id === memberId ? { ...m, [field]: previous ?? !value } : m)),
+      );
+      setError(errorMessage(err, "Не вдалося оновити дозвіл"));
     }
   }
 
@@ -183,45 +214,87 @@ export function TeamSection() {
           ) : null}
 
           <ul className="mt-4 flex flex-col gap-2">
-            {members.map((member) => (
-              <li
-                key={member.id}
-                className="flex items-center justify-between gap-2 rounded-xl px-3 py-2 bg-[var(--glass-bg)] border border-[var(--line)]"
-              >
-                <div className="min-w-0">
-                  <p className="text-sm text-text truncate">
-                    {member.display_name ?? String(member.tg_id)}
-                  </p>
-                  <p className="text-xs text-text-soft">
-                    {member.role === "owner" ? "Власник" : "Менеджер"}
-                  </p>
-                </div>
-                {member.role !== "owner" ? (
-                  confirmRemoveId === member.id ? (
-                    <div className="flex gap-2 shrink-0">
-                      <button type="button" onClick={() => setConfirmRemoveId(null)}>
-                        Ні
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-danger"
-                        onClick={() => void handleRemoveMember(member.id)}
-                      >
-                        Так, видалити
-                      </button>
+            {members.map((member) => {
+              const isOwner = member.role === "owner";
+              const isExpanded = expandedId === member.id;
+              return (
+                <li
+                  key={member.id}
+                  className="rounded-xl bg-[var(--glass-bg)] border border-[var(--line)] overflow-hidden"
+                >
+                  <div
+                    role={isOwner ? undefined : "button"}
+                    tabIndex={isOwner ? undefined : 0}
+                    onClick={() => {
+                      if (isOwner) return;
+                      setExpandedId((prev) => (prev === member.id ? null : member.id));
+                    }}
+                    className={`flex items-center justify-between gap-2 px-3 py-2 ${
+                      isOwner ? "" : "cursor-pointer"
+                    }`}
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm text-text truncate">
+                        {member.display_name ?? String(member.tg_id)}
+                      </p>
+                      <p className="text-xs text-text-soft">
+                        {isOwner ? "Власник" : "Менеджер"}
+                      </p>
                     </div>
-                  ) : (
-                    <button
-                      type="button"
-                      className="btn-danger-outline shrink-0"
-                      onClick={() => setConfirmRemoveId(member.id)}
-                    >
-                      Видалити
-                    </button>
-                  )
-                ) : null}
-              </li>
-            ))}
+                    {!isOwner ? (
+                      confirmRemoveId === member.id ? (
+                        <div
+                          className="flex gap-2 shrink-0"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button type="button" onClick={() => setConfirmRemoveId(null)}>
+                            Ні
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-danger"
+                            onClick={() => void handleRemoveMember(member.id)}
+                          >
+                            Так, видалити
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn-danger-outline shrink-0"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setConfirmRemoveId(member.id);
+                          }}
+                        >
+                          Видалити
+                        </button>
+                      )
+                    ) : null}
+                  </div>
+
+                  {!isOwner && isExpanded ? (
+                    <div className="flex flex-col gap-2 px-3 pb-3 pt-2 border-t border-[var(--line)]">
+                      {PERMISSION_FIELDS.map((field) => (
+                        <label
+                          key={field.key}
+                          className="flex items-center gap-2 text-sm text-text"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={member[field.key]}
+                            onChange={(e) =>
+                              void handlePermissionChange(member.id, field.key, e.target.checked)
+                            }
+                          />
+                          {field.label}
+                        </label>
+                      ))}
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })}
           </ul>
         </>
       )}

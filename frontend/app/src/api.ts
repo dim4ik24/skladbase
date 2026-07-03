@@ -8,6 +8,7 @@ import { getInitData } from "./telegram";
 import type {
   FinanceSummary,
   Invite,
+  PermissionsPatch,
   Photo,
   Plan,
   Product,
@@ -238,4 +239,14 @@ export function listMembers(): Promise<TeamMember[]> {
 
 export function removeMember(membershipId: number): Promise<void> {
   return request<void>(`/api/team/members/${membershipId}`, { method: "DELETE" });
+}
+
+export function updateMemberPermissions(
+  membershipId: number,
+  patch: PermissionsPatch,
+): Promise<TeamMember> {
+  return request<TeamMember>(`/api/team/members/${membershipId}/permissions`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
 }

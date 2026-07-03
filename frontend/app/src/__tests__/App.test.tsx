@@ -44,6 +44,7 @@ vi.mock("../api", () => ({
   revokeInvite: vi.fn(),
   listMembers: vi.fn(),
   removeMember: vi.fn(),
+  updateMemberPermissions: vi.fn(),
   setActiveShopId: vi.fn(),
 }));
 
@@ -175,6 +176,7 @@ beforeEach(() => {
   vi.mocked(api.revokeInvite).mockReset();
   vi.mocked(api.listMembers).mockReset().mockResolvedValue([]);
   vi.mocked(api.removeMember).mockReset();
+  vi.mocked(api.updateMemberPermissions).mockReset();
   vi.mocked(api.setActiveShopId).mockReset();
   document.documentElement.style.removeProperty("--accent-color");
   localStorage.clear();
@@ -1158,6 +1160,84 @@ describe("Team section (Settings, owner-only)", () => {
     expect(
       within(ownerRow as HTMLElement).queryByRole("button", { name: "Видалити" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("expands permission checkboxes on tap and updates one via PATCH", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.listMembers).mockResolvedValue([
+      {
+        id: 2, tg_id: 1002, display_name: "Менеджер Іван", role: "manager",
+        can_view_inventory: true, can_edit_products: true, can_manage_reservations: true,
+        can_manage_stock: true, can_view_finance: true, can_manage_billing: true,
+      },
+    ]);
+    vi.mocked(api.updateMemberPermissions).mockResolvedValue({
+      id: 2, tg_id: 1002, display_name: "Менеджер Іван", role: "manager",
+      can_view_inventory: true, can_edit_products: true, can_manage_reservations: true,
+      can_manage_stock: true, can_view_finance: false, can_manage_billing: true,
+    });
+
+    render(<App />);
+    await goToSettings();
+    const managerRow = (await screen.findByText("Менеджер Іван")).closest("li");
+    expect(managerRow).not.toBeNull();
+
+    expect(within(managerRow as HTMLElement).queryByText("Фінанси")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText("Менеджер Іван"));
+
+    const financeCheckbox = within(managerRow as HTMLElement).getByLabelText("Фінанси");
+    expect(financeCheckbox).toBeInTheDocument();
+
+    fireEvent.click(financeCheckbox);
+
+    await waitFor(() => {
+      expect(api.updateMemberPermissions).toHaveBeenCalledWith(2, { can_view_finance: false });
+    });
+  });
+
+  it("rolls back the checkbox when the permission PATCH fails", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.listMembers).mockResolvedValue([
+      {
+        id: 2, tg_id: 1002, display_name: "Менеджер Іван", role: "manager",
+        can_view_inventory: true, can_edit_products: true, can_manage_reservations: true,
+        can_manage_stock: true, can_view_finance: true, can_manage_billing: true,
+      },
+    ]);
+    vi.mocked(api.updateMemberPermissions).mockRejectedValue(new ApiError(500, "боляче"));
+
+    render(<App />);
+    await goToSettings();
+    fireEvent.click(await screen.findByText("Менеджер Іван"));
+
+    const financeCheckbox = screen.getByLabelText("Фінанси") as HTMLInputElement;
+    fireEvent.click(financeCheckbox);
+    expect(financeCheckbox.checked).toBe(false);
+
+    await waitFor(() => {
+      expect(financeCheckbox.checked).toBe(true);
+    });
+    expect(await screen.findByText("боляче")).toBeInTheDocument();
+  });
+
+  it("does not expand permissions for the owner's own row", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.listMembers).mockResolvedValue([
+      {
+        id: 1, tg_id: 1001, display_name: "Дмитро", role: "owner",
+        can_view_inventory: true, can_edit_products: true, can_manage_reservations: true,
+        can_manage_stock: true, can_view_finance: true, can_manage_billing: true,
+      },
+    ]);
+
+    render(<App />);
+    await goToSettings();
+    fireEvent.click(await screen.findByText("Дмитро"));
+
+    expect(screen.queryByText("Фінанси")).not.toBeInTheDocument();
   });
 });
 

@@ -304,3 +304,117 @@ async def test_manager_cannot_list_or_delete_members(client: AsyncClient) -> Non
         member = await s.scalar(select(Membership).where(Membership.tg_id == 3121))
     r = await client.delete(f"/api/team/members/{member.id}", headers={HEADER: manager_init})
     assert r.status_code == 403
+
+
+# --------------------------------------------------------------------------- #
+#  Дозволи (Стадія 3) — PATCH /members/{id}/permissions                       #
+# --------------------------------------------------------------------------- #
+@pytest.mark.asyncio
+async def test_owner_revokes_finance_permission_and_gate_takes_effect(
+    client: AsyncClient,
+) -> None:
+    owner_init, owner_me = await _bootstrap(client, 3130)
+    manager_init = await _make_manager(owner_me["shop_id"], 3131)
+
+    async with db.async_session() as s:
+        member = await s.scalar(select(Membership).where(Membership.tg_id == 3131))
+
+    r = await client.patch(
+        f"/api/team/members/{member.id}/permissions",
+        headers={HEADER: owner_init},
+        json={"can_view_finance": False},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["can_view_finance"] is False
+    # решта прапорів лишились True (частковий патч)
+    assert body["can_view_inventory"] is True
+    assert body["can_manage_billing"] is True
+
+    r = await client.get("/api/finance/summary", headers={HEADER: manager_init})
+    assert r.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_patch_permissions_on_owner_returns_409(client: AsyncClient) -> None:
+    owner_init, _owner_me = await _bootstrap(client, 3140)
+
+    r = await client.get("/api/team/members", headers={HEADER: owner_init})
+    owner_membership_id = next(m["id"] for m in r.json() if m["tg_id"] == 3140)
+
+    r = await client.patch(
+        f"/api/team/members/{owner_membership_id}/permissions",
+        headers={HEADER: owner_init},
+        json={"can_view_finance": False},
+    )
+    assert r.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_patch_permissions_wrong_shop_returns_404(client: AsyncClient) -> None:
+    owner_a_init, _owner_a_me = await _bootstrap(client, 3150)
+    _owner_b_init, owner_b_me = await _bootstrap(client, 3151, first_name="Б")
+    await _make_manager(owner_b_me["shop_id"], 3152)
+
+    async with db.async_session() as s:
+        member_b = await s.scalar(select(Membership).where(Membership.tg_id == 3152))
+
+    r = await client.patch(
+        f"/api/team/members/{member_b.id}/permissions",
+        headers={HEADER: owner_a_init},
+        json={"can_view_finance": False},
+    )
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_patch_permissions_missing_member_returns_404(client: AsyncClient) -> None:
+    owner_init, _owner_me = await _bootstrap(client, 3160)
+
+    r = await client.patch(
+        "/api/team/members/999999/permissions",
+        headers={HEADER: owner_init},
+        json={"can_view_finance": False},
+    )
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_manager_cannot_patch_permissions(client: AsyncClient) -> None:
+    _owner_init, owner_me = await _bootstrap(client, 3170)
+    manager_init = await _make_manager(owner_me["shop_id"], 3171)
+
+    async with db.async_session() as s:
+        member = await s.scalar(select(Membership).where(Membership.tg_id == 3171))
+
+    r = await client.patch(
+        f"/api/team/members/{member.id}/permissions",
+        headers={HEADER: manager_init},
+        json={"can_view_finance": False},
+    )
+    assert r.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_patch_permissions_partial_update_does_not_touch_other_fields(
+    client: AsyncClient,
+) -> None:
+    owner_init, owner_me = await _bootstrap(client, 3180)
+    await _make_manager(owner_me["shop_id"], 3181)
+
+    async with db.async_session() as s:
+        member = await s.scalar(select(Membership).where(Membership.tg_id == 3181))
+
+    r = await client.patch(
+        f"/api/team/members/{member.id}/permissions",
+        headers={HEADER: owner_init},
+        json={"can_manage_stock": False},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["can_manage_stock"] is False
+    for perm in (
+        "can_view_inventory", "can_edit_products", "can_manage_reservations",
+        "can_view_finance", "can_manage_billing",
+    ):
+        assert body[perm] is True

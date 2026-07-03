@@ -56,6 +56,18 @@ export interface TeamMember {
   can_manage_billing: boolean;
 }
 
+export type PermissionsPatch = Partial<
+  Pick<
+    TeamMember,
+    | "can_view_inventory"
+    | "can_edit_products"
+    | "can_manage_reservations"
+    | "can_manage_stock"
+    | "can_view_finance"
+    | "can_manage_billing"
+  >
+>;
+
 export interface Plan {
   code: string;
   name: string;

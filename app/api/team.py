@@ -49,6 +49,27 @@ class MemberOut(BaseModel):
     can_manage_billing: bool
 
 
+class PermissionsPatch(BaseModel):
+    can_view_inventory: bool | None = None
+    can_edit_products: bool | None = None
+    can_manage_reservations: bool | None = None
+    can_manage_stock: bool | None = None
+    can_view_finance: bool | None = None
+    can_manage_billing: bool | None = None
+
+
+def _to_member_out(m: Membership) -> MemberOut:
+    return MemberOut(
+        id=m.id, tg_id=m.tg_id, display_name=m.display_name, role=m.role.value,
+        can_view_inventory=m.can_view_inventory,
+        can_edit_products=m.can_edit_products,
+        can_manage_reservations=m.can_manage_reservations,
+        can_manage_stock=m.can_manage_stock,
+        can_view_finance=m.can_view_finance,
+        can_manage_billing=m.can_manage_billing,
+    )
+
+
 def _invite_url(token: str) -> str:
     return f"https://t.me/{settings.BOT_USERNAME}?startapp=invite_{token}"
 
@@ -128,18 +149,27 @@ async def list_members(
         )
     ).all()
 
-    return [
-        MemberOut(
-            id=m.id, tg_id=m.tg_id, display_name=m.display_name, role=m.role.value,
-            can_view_inventory=m.can_view_inventory,
-            can_edit_products=m.can_edit_products,
-            can_manage_reservations=m.can_manage_reservations,
-            can_manage_stock=m.can_manage_stock,
-            can_view_finance=m.can_view_finance,
-            can_manage_billing=m.can_manage_billing,
-        )
-        for m in members
-    ]
+    return [_to_member_out(m) for m in members]
+
+
+@router.patch("/members/{membership_id}/permissions", response_model=MemberOut)
+async def update_member_permissions(
+    membership_id: int,
+    payload: PermissionsPatch,
+    membership: Membership = Depends(require_owner),
+    session: AsyncSession = Depends(get_session),
+) -> MemberOut:
+    target = await session.get(Membership, membership_id)
+    if target is None or target.shop_id != membership.shop_id:
+        raise HTTPException(status_code=404, detail="учасника не знайдено")
+    if target.role == MemberRole.owner:
+        raise HTTPException(status_code=409, detail="дозволи owner'а не редагуються")
+
+    for field_name, value in payload.model_dump(exclude_unset=True).items():
+        setattr(target, field_name, value)
+
+    await session.commit()
+    return _to_member_out(target)
 
 
 @router.delete("/members/{membership_id}", status_code=204)
