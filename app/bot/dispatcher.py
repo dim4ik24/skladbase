@@ -21,12 +21,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.billing.providers import StarsProvider
+from app.bot.handlers import router as support_router
 from app.models import Membership, Plan, SubPeriod, SubProvider, Subscription
 from app.services.subscriptions import SubscriptionService
 
 logger = logging.getLogger(__name__)
 
 dp = Dispatcher()
+dp.include_router(support_router)
 
 
 @dp.pre_checkout_query()
