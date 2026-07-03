@@ -5,6 +5,10 @@
 @import "@fontsource/manrope/700.css";
 @import "@fontsource/dm-mono/400.css";
 @import "@fontsource/dm-mono/500.css";
+/* Назва магазину (display-акцент, GradientText/.shop-name) — 700/800 уже
+   бандлять кирилицю (cyrillic + cyrillic-ext @font-face блоки всередині). */
+@import "@fontsource/unbounded/700.css";
+@import "@fontsource/unbounded/800.css";
 
 /* ── Design tokens — єдине джерело правди ──────────────────────────────
    Семантичні токени. Tailwind @theme генерує utility-класи (bg-surface,
@@ -157,6 +161,13 @@ body {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+  /* Тривалість вище вже майже нульова, але inline animation-delay (stagger
+     через React index) лишається — без цього картки все одно "клацали" б
+     по черзі замість одночасної появи. */
+  .product-card,
+  .variant-tag-enter {
+    animation-delay: 0ms !important;
+  }
 }
 
 /* ── Layout ─────────────────────────────────────────────────────────── */
@@ -174,12 +185,12 @@ body {
 
 /* ── Tab switch transition ─────────────────────────────────────────────── */
 @keyframes screen-enter {
-  from { opacity: 0; transform: translateY(6px); }
+  from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
 .screen-enter {
-  animation: screen-enter 180ms ease-out;
+  animation: screen-enter 220ms ease-out;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -216,10 +227,10 @@ body {
 }
 
 .shop-name {
-  font-family: "Manrope", system-ui, sans-serif;
+  font-family: "Unbounded", ui-sans-serif, "Manrope", system-ui, sans-serif;
   font-size: 22px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-weight: 800;
+  letter-spacing: -0.01em;
   margin: 0;
   color: var(--text);
 }
@@ -477,6 +488,11 @@ body {
   padding: 4px 0;
 }
 
+@keyframes banner-slide-down {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 /* Base banner — glass */
 .banner {
   display: flex;
@@ -494,6 +510,13 @@ body {
   border: 1px solid var(--glass-border);
   box-shadow: var(--shadow-card);
   color: var(--text);
+  animation: banner-slide-down 220ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .banner {
+    animation: none;
+  }
 }
 
 /* Colored variants use tinted rgba backgrounds so backdrop-filter still peeks through */
@@ -632,6 +655,22 @@ body {
   position: relative; /* required for GSAP Flip absolute:true */
 }
 
+@keyframes card-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Dashboard metric cards (MetricCarousel) ───────────────────────────── */
+.metric-card {
+  border: 2px solid transparent;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.metric-card--selected {
+  border-color: var(--green);
+  box-shadow: var(--shadow-card), 0 0 0 3px rgba(52, 199, 89, 0.15);
+}
+
 /* ── Product card — glass ─────────────────────────────────────────────── */
 .product-card {
   background: var(--glass-bg);
@@ -642,6 +681,7 @@ body {
   padding: 14px;
   box-shadow: var(--shadow-card);
   transition: box-shadow 0.2s ease;
+  animation: card-enter 300ms ease-out backwards;
 }
 
 .product-card:hover {
@@ -951,6 +991,10 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.variant-tag-enter {
+  animation: card-enter 300ms ease-out backwards;
 }
 
 .variant-tag {
@@ -1728,6 +1772,11 @@ body {
   margin-bottom: 4px;
 }
 
+@keyframes prompt-slide-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 /* ── Free-plan: UpgradePrompt bottom sheet ───────────────────────────── */
 .upgrade-prompt {
   position: fixed;
@@ -1745,7 +1794,8 @@ body {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  animation: modal-fade-in 200ms ease-out;
+  /* Закріплено знизу — slide-UP (не -down), інакше рух в неправильний бік. */
+  animation: prompt-slide-up 220ms ease-out;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -5,6 +5,7 @@ interface ProductCardProps {
   product: Product;
   writable: boolean;
   isFrozen?: boolean;
+  index?: number;
   onEdit: (product: Product) => void;
 }
 
@@ -18,6 +19,7 @@ export function ProductCard({
   product,
   writable,
   isFrozen = false,
+  index = 0,
   onEdit,
 }: ProductCardProps) {
   const sortedPhotos = [...product.photos].sort((a, b) => a.position - b.position);
@@ -40,7 +42,10 @@ export function ProductCard({
   const totalAvailable = product.variants.reduce((s, v) => s + v.available, 0);
 
   return (
-    <article className={`product-card${isFrozen ? " product-card--frozen" : ""}`}>
+    <article
+      className={`product-card${isFrozen ? " product-card--frozen" : ""}`}
+      style={{ animationDelay: `${Math.min(index, 9) * 40}ms` }}
+    >
       <div className="product-photo">
         {coverUrl ? (
           <img src={coverUrl} alt={product.name} />

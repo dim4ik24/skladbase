@@ -256,12 +256,13 @@ export function SkladScreen({
         <p className="status-text">Нічого не знайдено</p>
       ) : (
         <div className="product-grid" ref={wrapperRef}>
-          {sortedProducts.map((product) => (
+          {sortedProducts.map((product, index) => (
             <div key={product.id} data-flip={product.id}>
               <ProductCard
                 product={product}
                 writable={writable}
                 isFrozen={product.is_frozen}
+                index={index}
                 onEdit={(p) => setModalProduct(p)}
               />
             </div>

@@ -998,6 +998,53 @@ describe("Tab navigation", () => {
     expect(screen.queryByLabelText("Пошук товарів")).not.toBeInTheDocument();
   });
 
+  it("double-tap on a stat card: 1st tap selects it, 2nd tap navigates to Склад", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+
+    render(<App />);
+    const card = await screen.findByRole("button", { name: "Товари" });
+    expect(card).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.click(card);
+    expect(card).toHaveAttribute("aria-pressed", "true");
+    expect(card).toHaveClass("metric-card--selected");
+    expect(screen.getByRole("tab", { name: "Дашборд" })).toHaveAttribute("aria-selected", "true");
+
+    fireEvent.click(card);
+    expect(screen.getByRole("tab", { name: "Склад" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("selecting a different stat card deselects the previous one", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+
+    render(<App />);
+    const productsCard = await screen.findByRole("button", { name: "Товари" });
+    const reservationsCard = screen.getByRole("button", { name: "Резерви" });
+
+    fireEvent.click(productsCard);
+    expect(productsCard).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(reservationsCard);
+    expect(productsCard).toHaveAttribute("aria-pressed", "false");
+    expect(reservationsCard).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("tapping outside a stat card deselects it", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+
+    render(<App />);
+    const card = await screen.findByRole("button", { name: "Товари" });
+
+    fireEvent.click(card);
+    expect(card).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.pointerDown(document.body);
+    expect(card).toHaveAttribute("aria-pressed", "false");
+  });
+
   it("switches to Склад tab and shows search input and catalog section", async () => {
     vi.mocked(api.getMe).mockResolvedValue(shopFixture);
     vi.mocked(api.getProducts).mockResolvedValue([makeProduct()]);

@@ -16,6 +16,7 @@ interface DashboardScreenProps {
   variantLabel: (variantId: number) => string;
   onRelease: (id: number) => Promise<void>;
   onFulfill: (id: number) => Promise<void>;
+  onNavigateToSklad: () => void;
   scrollContainerRef: RefObject<HTMLDivElement | null>;
 }
 
@@ -27,6 +28,7 @@ export function DashboardScreen({
   variantLabel,
   onRelease,
   onFulfill,
+  onNavigateToSklad,
   scrollContainerRef,
 }: DashboardScreenProps) {
   const [finance, setFinance] = useState<FinanceSummary | null>(null);
@@ -49,7 +51,7 @@ export function DashboardScreen({
 
   return (
     <>
-      {shop ? <MetricCarousel cards={metricCards} /> : null}
+      {shop ? <MetricCarousel cards={metricCards} onNavigate={onNavigateToSklad} /> : null}
 
       {finance ? (
         <div className="glass-card rounded-[20px] p-4 mb-4 shadow-[var(--shadow-card)]">

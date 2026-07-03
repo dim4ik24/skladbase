@@ -525,8 +525,12 @@ function EditForm({
       {tab === "variants" ? (
         <>
           <ul className="variant-tag-list">
-            {product.variants.map((variant) => (
-              <li key={variant.id}>
+            {product.variants.map((variant, index) => (
+              <li
+                key={variant.id}
+                className="variant-tag-enter"
+                style={{ animationDelay: `${Math.min(index, 9) * 40}ms` }}
+              >
                 <VariantTag
                   variant={variant}
                   axes={axes}

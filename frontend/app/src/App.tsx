@@ -536,6 +536,7 @@ export default function App() {
               variantLabel={variantLabel}
               onRelease={handleRelease}
               onFulfill={handleFulfill}
+              onNavigateToSklad={() => setActiveTab("sklad")}
               scrollContainerRef={scrollContainerRef}
             />
           ) : (
