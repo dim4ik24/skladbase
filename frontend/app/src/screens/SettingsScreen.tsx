@@ -10,6 +10,7 @@ interface SettingsScreenProps {
   onUpdateShopName: (name: string) => Promise<{ shop_name: string; logo_url: string | null }>;
   onUploadShopLogo: (file: File) => Promise<void>;
   onDeleteShopLogo: () => Promise<void>;
+  onDeleteShop: (confirmName: string) => Promise<void>;
 }
 
 const STATUS_LABELS: Record<string, { label: string; colorClass: string }> = {
@@ -158,12 +159,99 @@ function ShopProfileSection({
   );
 }
 
+function DangerZoneSection({
+  shop,
+  onDeleteShop,
+}: {
+  shop: Shop;
+  onDeleteShop: (confirmName: string) => Promise<void>;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function handleCancel() {
+    setExpanded(false);
+    setConfirmText("");
+    setError(null);
+  }
+
+  async function handleDelete() {
+    setError(null);
+    setDeleting(true);
+    try {
+      await onDeleteShop(confirmText);
+    } catch (err) {
+      setError(errorMessage(err, "Не вдалося видалити магазин"));
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <div
+      className="rounded-[20px] p-4 shadow-[var(--shadow-card)] border"
+      style={{ background: "var(--state-low)", borderColor: "rgba(192, 57, 43, 0.25)" }}
+    >
+      <h3 className="text-sm font-bold uppercase tracking-wide mb-3 text-[#c0392b]">
+        Небезпечна зона
+      </h3>
+
+      {!expanded ? (
+        <button type="button" className="btn-danger-outline" onClick={() => setExpanded(true)}>
+          Видалити магазин
+        </button>
+      ) : (
+        <div className="flex flex-col gap-3">
+          <p className="text-sm text-text">
+            Це видалить УСІ товари, фото, резерви та команду магазину «{shop.shop_name}».
+            Незворотньо. Якщо підписка активна — кошти не повертаються.
+          </p>
+
+          {error ? <p className="error-banner">{error}</p> : null}
+
+          <label className="form-field">
+            <span>Введіть назву магазину для підтвердження</span>
+            <input
+              type="text"
+              aria-label="Підтвердження назви магазину"
+              value={confirmText}
+              disabled={deleting}
+              onChange={(e) => setConfirmText(e.target.value)}
+            />
+          </label>
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={deleting}
+              onClick={handleCancel}
+              className="flex-1 rounded-xl px-3 py-2 text-sm font-semibold text-text-soft border border-[var(--line)] disabled:opacity-50"
+            >
+              Скасувати
+            </button>
+            <button
+              type="button"
+              className="btn-danger flex-1"
+              disabled={deleting || confirmText !== shop.shop_name}
+              onClick={() => void handleDelete()}
+            >
+              {deleting ? "Видаляємо…" : "Видалити назавжди"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function SettingsScreen({
   shop,
   onOpenPaywall,
   onUpdateShopName,
   onUploadShopLogo,
   onDeleteShopLogo,
+  onDeleteShop,
 }: SettingsScreenProps) {
   const statusInfo = shop?.status ? STATUS_LABELS[shop.status] : null;
   const planLabel = shop ? currentPlanLabel(shop) : "…";
@@ -258,6 +346,10 @@ export function SettingsScreen({
           </div>
         ))}
       </div>
+
+      {shop?.role === "owner" ? (
+        <DangerZoneSection shop={shop} onDeleteShop={onDeleteShop} />
+      ) : null}
     </div>
   );
 }

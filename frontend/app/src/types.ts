@@ -35,6 +35,10 @@ export interface Shop {
   active_shop_id: number;
 }
 
+export interface ShopCreateResult {
+  shop_id: number;
+}
+
 export interface Invite {
   id: number;
   token: string;

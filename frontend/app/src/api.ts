@@ -17,6 +17,7 @@ import type {
   Reservation,
   ReserveInput,
   Shop,
+  ShopCreateResult,
   TeamMember,
   Template,
   Variant,
@@ -187,6 +188,20 @@ export function clearDemos(): Promise<{ removed: number }> {
 
 export function updateShopProfile(name: string): Promise<{ shop_name: string; logo_url: string | null }> {
   return request("/api/shop", { method: "PATCH", body: JSON.stringify({ name }) });
+}
+
+export function createShop(name: string): Promise<ShopCreateResult> {
+  return request<ShopCreateResult>("/api/shops", {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
+}
+
+export function deleteShop(confirmName: string): Promise<void> {
+  return request<void>("/api/shop", {
+    method: "DELETE",
+    body: JSON.stringify({ confirm_name: confirmName }),
+  });
 }
 
 export function uploadShopLogo(file: File): Promise<{ logo_url: string }> {

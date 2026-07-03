@@ -30,6 +30,8 @@ vi.mock("../api", () => ({
   updateShopProfile: vi.fn(),
   uploadShopLogo: vi.fn(),
   deleteShopLogo: vi.fn(),
+  createShop: vi.fn(),
+  deleteShop: vi.fn(),
   reserve: vi.fn(),
   releaseReservation: vi.fn(),
   fulfillReservation: vi.fn(),
@@ -162,6 +164,8 @@ beforeEach(() => {
   vi.mocked(api.updateShopProfile).mockReset();
   vi.mocked(api.uploadShopLogo).mockReset();
   vi.mocked(api.deleteShopLogo).mockReset();
+  vi.mocked(api.createShop).mockReset();
+  vi.mocked(api.deleteShop).mockReset();
   vi.mocked(api.reserve).mockReset();
   vi.mocked(api.releaseReservation).mockReset();
   vi.mocked(api.fulfillReservation).mockReset();
@@ -1484,5 +1488,113 @@ describe("Variant CRUD in modal (tag → sheet)", () => {
       await screen.findByText("Неможливо видалити останній варіант"),
     ).toBeInTheDocument();
     expect(api.deleteVariant).toHaveBeenCalledWith(205);
+  });
+});
+
+describe("Onboarding (no_shop)", () => {
+  it("renders OnboardingScreen instead of the app shell on 404 no_shop", async () => {
+    vi.mocked(api.getMe).mockRejectedValue(new ApiError(404, "немає магазину"));
+
+    render(<App />);
+
+    expect(await screen.findByText("Ласкаво просимо в SkladBase")).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Склад" })).not.toBeInTheDocument();
+  });
+
+  it("empty name shows validation error and does not call createShop", async () => {
+    vi.mocked(api.getMe).mockRejectedValue(new ApiError(404, "немає магазину"));
+
+    render(<App />);
+    await screen.findByText("Ласкаво просимо в SkladBase");
+
+    fireEvent.click(screen.getByRole("button", { name: "Створити магазин" }));
+
+    expect(await screen.findByText("Вкажіть назву магазину")).toBeInTheDocument();
+    expect(api.createShop).not.toHaveBeenCalled();
+  });
+
+  it("creating a shop calls POST /api/shops then re-runs the init chain", async () => {
+    vi.mocked(api.getMe).mockRejectedValueOnce(new ApiError(404, "немає магазину"));
+    vi.mocked(api.createShop).mockResolvedValue({ shop_id: 5 });
+    vi.mocked(api.getMe).mockResolvedValue({
+      ...shopFixture,
+      shop_id: 5,
+      shops: [{ shop_id: 5, shop_name: "Новий магазин", logo_url: null, role: "owner" }],
+      active_shop_id: 5,
+    });
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+
+    render(<App />);
+    await screen.findByText("Ласкаво просимо в SkladBase");
+
+    fireEvent.change(screen.getByLabelText("Назва магазину"), {
+      target: { value: "Новий магазин" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Створити магазин" }));
+
+    await waitFor(() => {
+      expect(api.createShop).toHaveBeenCalledWith("Новий магазин");
+    });
+    expect(api.setActiveShopId).toHaveBeenCalledWith(5);
+    expect(await screen.findByText("Тестовий магазин")).toBeInTheDocument();
+    expect(screen.queryByText("Ласкаво просимо в SkladBase")).not.toBeInTheDocument();
+  });
+});
+
+describe("Danger zone (Settings, owner-only)", () => {
+  async function goToSettings() {
+    await screen.findByText("Тестовий магазин");
+    fireEvent.click(screen.getByRole("tab", { name: "Налаштування" }));
+  }
+
+  it("hides the danger zone for managers", async () => {
+    vi.mocked(api.getMe).mockResolvedValue({ ...shopFixture, role: "manager" });
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+
+    render(<App />);
+    await goToSettings();
+    await screen.findByText("Підписка");
+
+    expect(screen.queryByText("Небезпечна зона")).not.toBeInTheDocument();
+  });
+
+  it("keeps 'Видалити назавжди' disabled until the typed name matches exactly", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+
+    render(<App />);
+    await goToSettings();
+    fireEvent.click(await screen.findByRole("button", { name: "Видалити магазин" }));
+
+    const confirmInput = screen.getByLabelText("Підтвердження назви магазину");
+    const deleteButton = screen.getByRole("button", { name: "Видалити назавжди" });
+    expect(deleteButton).toBeDisabled();
+
+    fireEvent.change(confirmInput, { target: { value: "неправильно" } });
+    expect(deleteButton).toBeDisabled();
+
+    fireEvent.change(confirmInput, { target: { value: "Тестовий магазин" } });
+    expect(deleteButton).not.toBeDisabled();
+  });
+
+  it("deletes the shop and refetches — no other shops left -> OnboardingScreen", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.deleteShop).mockResolvedValue(undefined);
+
+    render(<App />);
+    await goToSettings();
+    fireEvent.click(await screen.findByRole("button", { name: "Видалити магазин" }));
+    fireEvent.change(screen.getByLabelText("Підтвердження назви магазину"), {
+      target: { value: "Тестовий магазин" },
+    });
+
+    vi.mocked(api.getMe).mockRejectedValueOnce(new ApiError(404, "немає магазину"));
+    fireEvent.click(screen.getByRole("button", { name: "Видалити назавжди" }));
+
+    await waitFor(() => {
+      expect(api.deleteShop).toHaveBeenCalledWith("Тестовий магазин");
+    });
+    expect(await screen.findByText("Ласкаво просимо в SkladBase")).toBeInTheDocument();
   });
 });

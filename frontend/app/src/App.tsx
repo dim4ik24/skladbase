@@ -12,6 +12,7 @@ import { TrialBanner } from "./components/TrialBanner";
 import { UpgradePrompt } from "./components/UpgradePrompt";
 import { errorMessage } from "./errors";
 import { DashboardScreen } from "./screens/DashboardScreen";
+import { OnboardingScreen } from "./screens/OnboardingScreen";
 import { SettingsScreen } from "./screens/SettingsScreen";
 import { SkladScreen } from "./screens/SkladScreen";
 import { effectivePlanCode, isLiveTrial } from "./lib/planStatus";
@@ -51,6 +52,14 @@ function persistShopId(id: number): void {
   }
 }
 
+function clearSavedShopId(): void {
+  try {
+    localStorage.removeItem(LAST_SHOP_KEY);
+  } catch {
+    // те саме — best-effort
+  }
+}
+
 export default function App() {
   const [shop, setShop] = useState<Shop | null>(null);
   const [shops, setShops] = useState<ShopSummary[]>([]);
@@ -60,6 +69,7 @@ export default function App() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [noShop, setNoShop] = useState(false);
   const [clearingDemos, setClearingDemos] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>("dashboard");
   const [showPaywall, setShowPaywall] = useState(false);
@@ -134,7 +144,11 @@ export default function App() {
         }
       } catch (err) {
         if (!mountedRef.current) return;
-        setError(errorMessage(err, "Не вдалося завантажити дані"));
+        if (err instanceof ApiError && err.status === 404) {
+          setNoShop(true);
+        } else {
+          setError(errorMessage(err, "Не вдалося завантажити дані"));
+        }
       } finally {
         if (mountedRef.current) setLoading(false);
       }
@@ -158,6 +172,33 @@ export default function App() {
       setError(errorMessage(err, "Не вдалося переключити магазин"));
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleCreateShop(name: string): Promise<void> {
+    const { shop_id } = await api.createShop(name);
+    api.setActiveShopId(shop_id);
+    const meResult = await api.getMe();
+    await loadAll(meResult);
+    setNoShop(false);
+  }
+
+  async function handleDeleteShop(confirmName: string): Promise<void> {
+    await api.deleteShop(confirmName);
+    clearSavedShopId();
+    api.setActiveShopId(null);
+    try {
+      const meResult = await api.getMe();
+      await loadAll(meResult);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) {
+        setShop(null);
+        setProducts([]);
+        setReservations([]);
+        setNoShop(true);
+      } else {
+        throw err;
+      }
     }
   }
 
@@ -440,6 +481,15 @@ export default function App() {
     },
   ];
 
+  if (noShop) {
+    return (
+      <>
+        <AtmosphereBackground />
+        <OnboardingScreen onCreateShop={handleCreateShop} />
+      </>
+    );
+  }
+
   return (
     <>
       <AtmosphereBackground />
@@ -545,6 +595,7 @@ export default function App() {
               onUpdateShopName={handleUpdateShopName}
               onUploadShopLogo={handleUploadShopLogo}
               onDeleteShopLogo={handleDeleteShopLogo}
+              onDeleteShop={handleDeleteShop}
             />
           )}
         </div>
