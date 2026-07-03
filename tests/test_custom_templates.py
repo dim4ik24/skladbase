@@ -46,6 +46,8 @@ def _hdr(tg_id: int) -> dict:
 
 
 async def _bootstrap(client: AsyncClient, tg_id: int) -> dict:
+    r = await client.post("/api/shops", headers=_hdr(tg_id), json={"name": f"Магазин {tg_id}"})
+    assert r.status_code == 201, r.text
     r = await client.get("/api/me", headers=_hdr(tg_id))
     assert r.status_code == 200
     return r.json()

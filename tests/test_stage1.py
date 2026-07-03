@@ -5,19 +5,19 @@ Criteria (ROADMAP.md, Стадія 1):
   1. Підроблений або протермінований initData -> 401
   2. Валідний initData -> резолвиться правильний shop_id
   3. manager отримує 403 на /api/finance/summary, owner -> 200
-  4. Новий магазин одразу має демо-товари і підписку у статусі trial (7 днів)
+
+  (Демо-каталог + 7-денний тріал нового магазину — тепер
+  tests/test_shop_lifecycle.py, POST /api/shops.)
 """
 from __future__ import annotations
 
-from datetime import UTC, timedelta
+from datetime import timedelta
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import select
 
 from app import db
-from app.models import MemberRole, Membership, Product, Subscription, SubStatus, utcnow
-from app.services.subscriptions import TRIAL_DAYS
+from app.models import MemberRole, Membership, utcnow
 from tests.conftest import make_init_data
 
 HEADER = "X-Telegram-Init-Data"
@@ -43,6 +43,11 @@ async def test_valid_init_data_resolves_correct_shop(client: AsyncClient) -> Non
     init_data_a = make_init_data(201, first_name="Аліса")
     init_data_b = make_init_data(202, first_name="Боб")
 
+    r = await client.post("/api/shops", headers={HEADER: init_data_a}, json={"name": "Магазин А"})
+    assert r.status_code == 201, r.text
+    r = await client.post("/api/shops", headers={HEADER: init_data_b}, json={"name": "Магазин Б"})
+    assert r.status_code == 201, r.text
+
     r_a = await client.get("/api/me", headers={HEADER: init_data_a})
     r_b = await client.get("/api/me", headers={HEADER: init_data_b})
 
@@ -61,6 +66,10 @@ async def test_finance_access_by_role(client: AsyncClient) -> None:
     Manager with default can_view_finance=True → 200 (same as owner).
     Granular 403 (can_view_finance=False) is in test_permissions_gates.py."""
     owner_init_data = make_init_data(301, first_name="Власник")
+    r = await client.post(
+        "/api/shops", headers={HEADER: owner_init_data}, json={"name": "Магазин Власника"}
+    )
+    assert r.status_code == 201, r.text
     r_owner = await client.get("/api/me", headers={HEADER: owner_init_data})
     shop_id = r_owner.json()["shop_id"]
 
@@ -84,30 +93,6 @@ async def test_finance_access_by_role(client: AsyncClient) -> None:
     r_owner_finance = await client.get("/api/finance/summary", headers={HEADER: owner_init_data})
     assert r_owner_finance.status_code == 200
 
-
-@pytest.mark.asyncio
-async def test_new_shop_gets_demo_catalog_and_seven_day_trial(client: AsyncClient) -> None:
-    init_data = make_init_data(401, first_name="Новий")
-    r = await client.get("/api/me", headers={HEADER: init_data})
-    shop_id = r.json()["shop_id"]
-
-    async with db.async_session() as session:
-        demo_products = (
-            await session.scalars(
-                select(Product).where(Product.shop_id == shop_id, Product.is_demo.is_(True))
-            )
-        ).all()
-        subscription = await session.scalar(
-            select(Subscription).where(Subscription.shop_id == shop_id)
-        )
-
-    assert len(demo_products) > 0
-    assert subscription is not None
-    assert subscription.status == SubStatus.trial
-    assert subscription.trial_ends_at is not None
-
-    trial_ends_at = subscription.trial_ends_at
-    if trial_ends_at.tzinfo is None:
-        trial_ends_at = trial_ends_at.replace(tzinfo=UTC)
-    expected_end = utcnow() + timedelta(days=TRIAL_DAYS)
-    assert abs((trial_ends_at - expected_end).total_seconds()) < 60
+# test_new_shop_gets_demo_catalog_and_seven_day_trial перенесено у
+# test_shop_lifecycle.py — тепер це природно тест POST /api/shops,
+# а не побічного ефекту GET /api/me (авто-bootstrap прибрано).

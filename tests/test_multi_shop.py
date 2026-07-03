@@ -32,6 +32,13 @@ async def _bootstrap(
     client: AsyncClient, tg_id: int, *, start_param: str | None = None, first_name: str = "Тест"
 ) -> tuple[str, dict]:
     init_data = make_init_data(tg_id, first_name=first_name, start_param=start_param)
+    if start_param is None:
+        # Без invite-токена: явне створення (авто-bootstrap прибрано).
+        # З токеном — join-гілка сама розрулить (existing/new-via-invite).
+        r = await client.post(
+            "/api/shops", headers={HEADER: init_data}, json={"name": f"Магазин {tg_id}"}
+        )
+        assert r.status_code == 201, r.text
     r = await client.get("/api/me", headers={HEADER: init_data})
     assert r.status_code == 200
     return init_data, r.json()

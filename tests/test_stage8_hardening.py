@@ -38,6 +38,8 @@ HEADER = "X-Telegram-Init-Data"
 
 async def _bootstrap(client: AsyncClient, tg_id: int, name: str = "Тест") -> tuple[str, int]:
     init_data = make_init_data(tg_id, first_name=name)
+    r = await client.post("/api/shops", headers={HEADER: init_data}, json={"name": name})
+    assert r.status_code == 201, r.text
     r = await client.get("/api/me", headers={HEADER: init_data})
     assert r.status_code == 200
     return init_data, r.json()["shop_id"]
@@ -217,17 +219,21 @@ async def test_payment_webhooks_rate_limited(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_bootstrap_path_rate_limited(client: AsyncClient) -> None:
-    from app.deps import _bootstrap_limiter
+async def test_shop_create_rate_limited(client: AsyncClient) -> None:
+    """Лімітер переїхав з bootstrap-шляху (deps.py) на POST /api/shops
+    (app/api/shop.py) разом із авто-bootstrap -> явне створення (shop lifecycle)."""
+    from app.api.shop import _shop_create_limiter
 
     statuses = []
     base_tg_id = 9_000_000
-    for i in range(_bootstrap_limiter.max_requests + 1):
+    for i in range(_shop_create_limiter.max_requests + 1):
         init_data = make_init_data(base_tg_id + i)
-        r = await client.get("/api/me", headers={HEADER: init_data})
+        r = await client.post(
+            "/api/shops", headers={HEADER: init_data}, json={"name": "Магазин"}
+        )
         statuses.append(r.status_code)
 
-    assert statuses[:-1] == [200] * _bootstrap_limiter.max_requests
+    assert statuses[:-1] == [201] * _shop_create_limiter.max_requests
     assert statuses[-1] == 429
 
 

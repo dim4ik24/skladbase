@@ -34,6 +34,8 @@ HEADER = "X-Telegram-Init-Data"
 
 async def _bootstrap(client: AsyncClient, tg_id: int, name: str = "Тест") -> tuple[str, int]:
     init_data = make_init_data(tg_id, first_name=name)
+    r = await client.post("/api/shops", headers={HEADER: init_data}, json={"name": name})
+    assert r.status_code == 201, r.text
     r = await client.get("/api/me", headers={HEADER: init_data})
     assert r.status_code == 200
     return init_data, r.json()["shop_id"]

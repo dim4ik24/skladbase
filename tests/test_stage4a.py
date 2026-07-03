@@ -37,6 +37,8 @@ async def _bootstrap_shop_with_api_key(
     client: AsyncClient, tg_id: int, name: str = "Тест"
 ) -> tuple[str, int, str]:
     init_data = make_init_data(tg_id, first_name=name)
+    r = await client.post("/api/shops", headers={HEADER: init_data}, json={"name": name})
+    assert r.status_code == 201, r.text
     r = await client.get("/api/me", headers={HEADER: init_data})
     assert r.status_code == 200
     shop_id = r.json()["shop_id"]

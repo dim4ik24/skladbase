@@ -1,37 +1,32 @@
 """
-Перший вхід нового tg_id у систему (фіча 1 з ROADMAP, Стадія 1) +
-приєднання по deep-link інвайту (Стадія 2а) + multi-shop (Стадія 3а):
+Приєднання по deep-link інвайту (Стадія 2а) + multi-shop (Стадія 3а):
 одна людина може мати Membership у кількох магазинах.
 
-Створює Shop + Membership(owner), гарантує наявність системних шаблонів і
-тарифів, засіює демо-каталог і стартує 7-денний тріал. Викликається лише
-з `deps.resolve_membership`, коли для tg_id з валідованого initData ще
-нема ЖОДНОГО Membership (bootstrap: перший вхід) АБО коли є валідний
-invite-токен (start_param) — тоді existing-юзер може приєднатись до ЩЕ
-ОДНОГО магазину, не втрачаючи наявні.
+Авто-створення магазину на першому вході ПРИБРАНО (shop lifecycle): якщо
+для tg_id нема ЖОДНОГО Membership і нема валідного invite-токена, `bootstrap_shop`
+повертає `(None, None)` — викликач (`deps.resolve_membership`) сам вирішує,
+що з цим робити (404 "немає магазину"). Явне створення нового магазину —
+`POST /api/shops` (app/api/shop.py, app/services/shops.py), окремий шлях,
+доступний БУДЬ-ЯКОМУ tg_id з валідним initData (multi-shop: можна створити
+ще один магазин, повторний виклик не дедуплікується).
 
 Якщо при вході переданий валідний invite-токен (з підписаного Telegram
-`start_param`, НІКОЛИ з довільного параметра клієнта) — замість нового
-магазину створюється Membership(manager) У МАГАЗИНІ ІНВАЙТУ. shop_id
-береться ТІЛЬКИ з Invite, знайденого в БД за токеном (CLAUDE.md,
-інваріант №1).
+`start_param`, НІКОЛИ з довільного параметра клієнта) — існуючий АБО новий
+(без власного магазину, але з валідним інвайтом) юзер отримує
+Membership(manager) У МАГАЗИНІ ІНВАЙТУ. shop_id береться ТІЛЬКИ з Invite,
+знайденого в БД за токеном (CLAUDE.md, інваріант №1).
 
 "Перший" Membership (коли фронт не передав X-Shop-Id, деталі — deps.py)
 визначається детерміновано: найменший id. Той самий порядок скрізь тут,
 щоб `resolve_membership` і `bootstrap_shop` завжди узгоджувались, яке
 членство "дефолтне".
 
-Ідемпотентність під конкурентним входом: кілька паралельних запитів з
-тим самим tg_id (типово кілька запитів TMA одразу при відкритті) можуть
-одночасно дійти сюди, не побачивши чужого ще не закомітченого Membership.
-Для нового магазину всі намагаються створити Shop з однаковим slug
-`shop-{tg_id}`; для приєднання по інвайту — усі намагаються вставити
+Ідемпотентність приєднання по інвайту під конкурентним входом: кілька
+паралельних запитів з тим самим tg_id можуть одночасно намагатись вставити
 Membership з тим самим (shop_id, tg_id) — саме ця пара унікальна
-(UniqueConstraint), НЕ голий tg_id (multi-shop). В обох випадках
-переможець гонки комітить, решта ловлять `IntegrityError` на
-unique-констрейнті при `flush()`, відкочуються і повертають вже
-створений переможцем Membership — той самий прийом, що
-`create_website_order` використовує для замовлень.
+(UniqueConstraint), НЕ голий tg_id (multi-shop). Переможець гонки комітить,
+решта ловлять `IntegrityError` на unique-констрейнті при `flush()`,
+відкочуються і повертають вже створений переможцем Membership.
 """
 from __future__ import annotations
 
@@ -41,8 +36,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Invite, MemberRole, Membership, Shop, ShopStatus
 from app.security.initdata import TelegramUser
-from app.seed import seed_demo_catalog, seed_plans, seed_system_templates
-from app.services.subscriptions import SubscriptionService
 
 _INVITE_PREFIX = "invite_"
 
@@ -139,7 +132,11 @@ async def _join_existing_member(
 
 async def bootstrap_shop(
     session: AsyncSession, user: TelegramUser, start_param: str | None = None
-) -> tuple[Membership, str | None]:
+) -> tuple[Membership | None, str | None]:
+    """- existing membership (можливо з invite-токеном) -> `_join_existing_member`.
+    - нема membership, є ВАЛІДНИЙ invite -> `_join_via_invite` (`joined`).
+    - нема membership, нема валідного invite -> `(None, None)` — викликач
+      (`resolve_membership`) сам вирішує, що з цим робити (404 no_shop)."""
     existing = await _find_membership(session, user.id)
     invite_token = parse_invite_token(start_param)
 
@@ -150,31 +147,4 @@ async def bootstrap_shop(
     if invite is not None:
         return await _join_via_invite(session, user, invite)
 
-    await seed_system_templates(session)
-    await seed_plans(session)
-
-    shop_name = f"Магазин {user.first_name}".strip() or "Мій магазин"
-    shop = Shop(owner_tg_id=user.id, name=shop_name, slug=f"shop-{user.id}")
-    membership = Membership(
-        shop=shop,
-        tg_id=user.id,
-        display_name=user.first_name or None,
-        role=MemberRole.owner,
-    )
-    session.add_all([shop, membership])
-
-    try:
-        await session.flush()
-    except IntegrityError:
-        await session.rollback()
-        existing = await _find_membership(session, user.id)
-        if existing is not None:
-            return existing, None
-        raise
-
-    await seed_demo_catalog(session, shop)
-    await SubscriptionService(session).start_trial(shop)
-
-    await session.commit()
-    invite_status = "invite_invalid" if invite_token is not None else None
-    return membership, invite_status
+    return None, None

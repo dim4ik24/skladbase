@@ -91,6 +91,8 @@ async def test_proxy_middleware_ignores_header_from_untrusted_peer() -> None:
 @pytest.mark.asyncio
 async def test_public_catalog_rate_limit_keys_by_forwarded_ip(client: AsyncClient) -> None:
     init_data = make_init_data(99001)
+    r = await client.post("/api/shops", headers={HEADER: init_data}, json={"name": "Магазин"})
+    assert r.status_code == 201, r.text
     r = await client.get("/api/me", headers={HEADER: init_data})
     assert r.status_code == 200
     shop_id = r.json()["shop_id"]

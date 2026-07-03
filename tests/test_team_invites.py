@@ -12,7 +12,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 
 from app import db
-from app.models import Invite, MemberRole, Membership, utcnow
+from app.models import Invite, MemberRole, Membership, Shop, utcnow
 from tests.conftest import make_init_data
 
 HEADER = "X-Telegram-Init-Data"
@@ -22,6 +22,13 @@ async def _bootstrap(
     client: AsyncClient, tg_id: int, *, start_param: str | None = None, first_name: str = "Тест"
 ) -> tuple[str, dict]:
     init_data = make_init_data(tg_id, first_name=first_name, start_param=start_param)
+    if start_param is None:
+        # Без invite-токена: явне створення (авто-bootstrap прибрано).
+        # З токеном — join-гілка сама розрулить (existing/new-via-invite).
+        r = await client.post(
+            "/api/shops", headers={HEADER: init_data}, json={"name": f"Магазин {tg_id}"}
+        )
+        assert r.status_code == 201, r.text
     r = await client.get("/api/me", headers={HEADER: init_data})
     assert r.status_code == 200
     return init_data, r.json()
@@ -104,7 +111,9 @@ async def test_list_invites_hides_revoked_and_expired(client: AsyncClient) -> No
 
 @pytest.mark.asyncio
 async def test_revoke_invite_then_token_no_longer_joins(client: AsyncClient) -> None:
-    init_data, me = await _bootstrap(client, 3020)
+    """Відкликаний токен для НОВОГО юзера — авто-bootstrap-у нема (shop lifecycle),
+    тож замість тихого створення власної крамниці -> 404 no_shop, магазин не виникає."""
+    init_data, _me = await _bootstrap(client, 3020)
     invite = await _create_invite(client, init_data)
 
     r = await client.delete(f"/api/team/invites/{invite['id']}", headers={HEADER: init_data})
@@ -112,11 +121,11 @@ async def test_revoke_invite_then_token_no_longer_joins(client: AsyncClient) -> 
 
     joiner_init = make_init_data(3021, start_param=f"invite_{invite['token']}")
     r = await client.get("/api/me", headers={HEADER: joiner_init})
-    assert r.status_code == 200
-    body = r.json()
+    assert r.status_code == 404
 
-    assert body["invite_status"] == "invite_invalid"
-    assert body["shop_id"] != me["shop_id"]  # своя нова крамниця, приєднання не відбулось
+    async with db.async_session() as session:
+        own_shops = (await session.scalars(select(Shop).where(Shop.owner_tg_id == 3021))).all()
+    assert own_shops == []
 
 
 @pytest.mark.asyncio
@@ -181,18 +190,19 @@ async def test_invite_is_reusable_by_multiple_users(client: AsyncClient) -> None
 
 
 @pytest.mark.asyncio
-async def test_join_with_expired_token_creates_own_shop(client: AsyncClient) -> None:
+async def test_join_with_expired_token_gets_no_shop(client: AsyncClient) -> None:
+    """Протермінований токен для НОВОГО юзера — те саме: 404 no_shop, а не
+    тиха власна крамниця (авто-bootstrap прибрано, shop lifecycle)."""
     _owner_init, owner_me = await _bootstrap(client, 3060)
     invite = await _insert_invite(owner_me["shop_id"], expires_delta=timedelta(hours=-1))
 
     joiner_init = make_init_data(3061, start_param=f"invite_{invite.token}")
     r = await client.get("/api/me", headers={HEADER: joiner_init})
-    assert r.status_code == 200
-    body = r.json()
+    assert r.status_code == 404
 
-    assert body["invite_status"] == "invite_invalid"
-    assert body["shop_id"] != owner_me["shop_id"]
-    assert body["role"] == "owner"
+    async with db.async_session() as session:
+        own_shops = (await session.scalars(select(Shop).where(Shop.owner_tg_id == 3061))).all()
+    assert own_shops == []
 
 
 @pytest.mark.asyncio
