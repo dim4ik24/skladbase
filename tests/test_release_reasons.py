@@ -19,7 +19,7 @@ from sqlalchemy import select
 
 from app import db
 from app.models import MovementType, Product, StockMovement, Variant
-from app.services.inventory import RELEASE_REASONS, WRITE_OFF_REASONS
+from app.services.inventory import NOT_PICKED_UP_REASONS, RELEASE_REASONS, WRITE_OFF_REASONS
 from tests.conftest import make_init_data
 
 HEADER = "X-Telegram-Init-Data"
@@ -154,5 +154,5 @@ def test_all_reason_literals_fit_stock_movement_reason_column() -> None:
     нові причини (фіча A: "did_not_pick_up" тощо), що не влізуть у колонку,
     впаде тут, а не мовчки на проді."""
     max_length = StockMovement.__table__.c.reason.type.length
-    for reason in (*RELEASE_REASONS, *WRITE_OFF_REASONS):
+    for reason in (*RELEASE_REASONS, *WRITE_OFF_REASONS, *NOT_PICKED_UP_REASONS):
         assert len(reason) <= max_length, f"{reason!r} ({len(reason)}) > {max_length}"

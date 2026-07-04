@@ -4,7 +4,16 @@ import { MetricCarousel } from "../components/MetricCarousel";
 import { ReservationsPanel } from "../components/ReservationsPanel";
 import { ScrollFloat } from "../components/ScrollFloat";
 import { Panel } from "../components/ui/Panel";
-import type { FinanceSummary, Product, ReleasePayload, Reservation, Shop, Variant } from "../types";
+import type {
+  FinanceSummary,
+  NotPickedUpPayload,
+  Product,
+  ReleasePayload,
+  Reservation,
+  ShipPayload,
+  Shop,
+  Variant,
+} from "../types";
 
 interface DashboardScreenProps {
   shop: Shop | null;
@@ -15,6 +24,10 @@ interface DashboardScreenProps {
   resolveReservationVariant: (variantId: number) => { variant: Variant; product: Product } | null;
   onRelease: (id: number, payload?: ReleasePayload) => Promise<void>;
   onFulfill: (id: number) => Promise<void>;
+  onShip: (id: number, payload: ShipPayload) => Promise<void>;
+  onUpdateTtn: (id: number, ttn: string) => Promise<void>;
+  onPickUp: (id: number) => Promise<void>;
+  onNotPickedUp: (id: number, payload: NotPickedUpPayload) => Promise<void>;
   onNavigateToSklad: () => void;
   scrollContainerRef: RefObject<HTMLDivElement | null>;
 }
@@ -28,6 +41,10 @@ export function DashboardScreen({
   resolveReservationVariant,
   onRelease,
   onFulfill,
+  onShip,
+  onUpdateTtn,
+  onPickUp,
+  onNotPickedUp,
   onNavigateToSklad,
   scrollContainerRef,
 }: DashboardScreenProps) {
@@ -81,6 +98,10 @@ export function DashboardScreen({
               resolveReservationVariant={resolveReservationVariant}
               onRelease={onRelease}
               onFulfill={onFulfill}
+              onShip={onShip}
+              onUpdateTtn={onUpdateTtn}
+              onPickUp={onPickUp}
+              onNotPickedUp={onNotPickedUp}
             />
           )}
         </div>

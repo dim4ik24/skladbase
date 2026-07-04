@@ -9,6 +9,7 @@ import type {
   AdjustPayload,
   FinanceSummary,
   Invite,
+  NotPickedUpPayload,
   PermissionsPatch,
   Photo,
   Plan,
@@ -19,6 +20,7 @@ import type {
   Reservation,
   ReserveInput,
   Shop,
+  ShipPayload,
   TeamMember,
   Template,
   Variant,
@@ -151,6 +153,34 @@ export function releaseReservation(id: number, payload?: ReleasePayload): Promis
 
 export function fulfillReservation(id: number): Promise<Reservation> {
   return request<Reservation>(`/api/reservations/${id}/fulfill`, { method: "POST" });
+}
+
+export function shipReservation(id: number, payload?: ShipPayload): Promise<Reservation> {
+  return request<Reservation>(`/api/reservations/${id}/ship`, {
+    method: "POST",
+    body: payload ? JSON.stringify(payload) : undefined,
+  });
+}
+
+export function updateReservationTtn(id: number, ttn: string): Promise<Reservation> {
+  return request<Reservation>(`/api/reservations/${id}/ttn`, {
+    method: "PATCH",
+    body: JSON.stringify({ ttn }),
+  });
+}
+
+export function pickUpReservation(id: number): Promise<Reservation> {
+  return request<Reservation>(`/api/reservations/${id}/pick-up`, { method: "POST" });
+}
+
+export function notPickedUpReservation(
+  id: number,
+  payload: NotPickedUpPayload,
+): Promise<Reservation> {
+  return request<Reservation>(`/api/reservations/${id}/not-picked-up`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export function getPlans(): Promise<Plan[]> {

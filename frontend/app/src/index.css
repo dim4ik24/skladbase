@@ -1448,6 +1448,22 @@ body {
   border-radius: 10px;
 }
 
+.reservation-ttn-tap {
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}
+
+.reservation-ttn-edit input {
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--text);
+  width: 100%;
+}
+
 /* ── Фінанси — рядки з роздільниками (не "все в кучі") ──────────────── */
 .finance-row {
   display: flex;

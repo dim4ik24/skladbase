@@ -138,9 +138,11 @@ function makeReservation(overrides: Partial<Reservation> = {}): Reservation {
     customer_note: null,
     source: "manual",
     status: "active",
+    ttn: null,
     expires_at: null,
     created_at: "2026-06-01T00:00:00Z",
     released_at: null,
+    shipped_at: null,
     ...overrides,
   };
 }

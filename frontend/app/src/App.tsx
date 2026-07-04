@@ -19,6 +19,7 @@ import { initTelegram, setAccentColor } from "./telegram";
 import type {
   AdjustPayload,
   FinanceSummary,
+  NotPickedUpPayload,
   Plan,
   Product,
   ProductInput,
@@ -27,6 +28,7 @@ import type {
   Reservation,
   ReserveInput,
   Shop,
+  ShipPayload,
   ShopSummary,
   TabId,
   Template,
@@ -337,16 +339,39 @@ export default function App() {
     }
   }
 
-  function applyReservationClosed(reservation: Reservation, kind: "release" | "fulfill") {
+  type ReservationCloseKind = "release" | "fulfill" | "pick_up" | "not_picked_up";
+
+  function applyReservationClosed(reservation: Reservation, kind: ReservationCloseKind) {
+    const variant = products
+      .flatMap((product) => product.variants)
+      .find((v) => v.id === reservation.variant_id);
+    if (variant) {
+      let reserved = variant.reserved;
+      let onHand = variant.on_hand;
+      if (kind === "release") {
+        reserved -= reservation.qty;
+      } else if (kind === "fulfill") {
+        reserved -= reservation.qty;
+        onHand -= reservation.qty;
+      } else if (kind === "not_picked_up") {
+        onHand += reservation.qty;
+      }
+      // pick_up: on_hand/reserved вже скориговані на ship() — тут не чіпаємо.
+      patchVariant(variant.id, { reserved, on_hand: onHand, available: onHand - reserved });
+    }
+    setReservations((prev) => prev.filter((r) => r.id !== reservation.id));
+  }
+
+  function applyReservationShipped(reservation: Reservation) {
     const variant = products
       .flatMap((product) => product.variants)
       .find((v) => v.id === reservation.variant_id);
     if (variant) {
       const reserved = variant.reserved - reservation.qty;
-      const onHand = kind === "fulfill" ? variant.on_hand - reservation.qty : variant.on_hand;
+      const onHand = variant.on_hand - reservation.qty;
       patchVariant(variant.id, { reserved, on_hand: onHand, available: onHand - reserved });
     }
-    setReservations((prev) => prev.filter((r) => r.id !== reservation.id));
+    setReservations((prev) => prev.map((r) => (r.id === reservation.id ? reservation : r)));
   }
 
   async function handleRelease(reservationId: number, payload?: ReleasePayload) {
@@ -369,6 +394,51 @@ export default function App() {
       void refetchFinance(shop?.role);
     } catch (err) {
       setError(errorMessage(err, "Не вдалося оформити продаж"));
+    }
+  }
+
+  async function handleShip(reservationId: number, payload: ShipPayload) {
+    try {
+      const reservation = await api.shipReservation(reservationId, payload);
+      applyReservationShipped(reservation);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 402) {
+        setUpgradePrompt({ message: err.detail });
+      } else {
+        throw err;
+      }
+    }
+  }
+
+  async function handleUpdateTtn(reservationId: number, ttn: string) {
+    try {
+      const reservation = await api.updateReservationTtn(reservationId, ttn);
+      setReservations((prev) => prev.map((r) => (r.id === reservation.id ? reservation : r)));
+    } catch (err) {
+      setError(errorMessage(err, "Не вдалося оновити ТТН"));
+    }
+  }
+
+  async function handlePickUp(reservationId: number) {
+    try {
+      const reservation = await api.pickUpReservation(reservationId);
+      applyReservationClosed(reservation, "pick_up");
+      void refetchFinance(shop?.role);
+    } catch (err) {
+      setError(errorMessage(err, "Не вдалося оформити продаж"));
+    }
+  }
+
+  async function handleNotPickedUp(reservationId: number, payload: NotPickedUpPayload) {
+    try {
+      const reservation = await api.notPickedUpReservation(reservationId, payload);
+      applyReservationClosed(reservation, "not_picked_up");
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 402) {
+        setUpgradePrompt({ message: err.detail });
+      } else {
+        throw err;
+      }
     }
   }
 
@@ -539,6 +609,10 @@ export default function App() {
               onReserve={handleReserve}
               onRelease={handleRelease}
               onFulfill={handleFulfill}
+              onShip={handleShip}
+              onUpdateTtn={handleUpdateTtn}
+              onPickUp={handlePickUp}
+              onNotPickedUp={handleNotPickedUp}
               onCreateProduct={handleCreateProduct}
               onUpdateProduct={handleUpdateProduct}
               onFrozenAction={handleFrozenAction}
@@ -567,6 +641,10 @@ export default function App() {
               resolveReservationVariant={resolveReservationVariant}
               onRelease={handleRelease}
               onFulfill={handleFulfill}
+              onShip={handleShip}
+              onUpdateTtn={handleUpdateTtn}
+              onPickUp={handlePickUp}
+              onNotPickedUp={handleNotPickedUp}
               onNavigateToSklad={() => setActiveTab("sklad")}
               scrollContainerRef={scrollContainerRef}
             />

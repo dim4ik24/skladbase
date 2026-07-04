@@ -80,6 +80,7 @@ class ReservationStatus(str, enum.Enum):
     active = "active"
     released = "released"        # знято (вручну або по expiry)
     fulfilled = "fulfilled"      # викуплено -> стало продажем
+    shipped = "shipped"          # відправлено (Нова пошта тощо) -> чекає pick_up/not_picked_up
 
 
 class ReservationSource(str, enum.Enum):
@@ -361,6 +362,9 @@ class Reservation(Base):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     released_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    ttn: Mapped[str | None] = mapped_column(String(40))  # накладна Нової пошти тощо, опційна
+    shipped_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class StockMovement(Base):

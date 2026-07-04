@@ -54,6 +54,19 @@ class ReleaseIn(BaseModel):
     comment: str | None = None
 
 
+class ShipIn(BaseModel):
+    ttn: str | None = None
+
+
+class UpdateTtnIn(BaseModel):
+    ttn: str
+
+
+class NotPickedUpIn(BaseModel):
+    reason: Literal["did_not_pick_up", "refused", "other"]
+    comment: str | None = None
+
+
 class ReservationOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -65,9 +78,11 @@ class ReservationOut(BaseModel):
     customer_note: str | None
     source: ReservationSource
     status: ReservationStatus
+    ttn: str | None
     expires_at: datetime | None
     created_at: datetime
     released_at: datetime | None
+    shipped_at: datetime | None
 
 
 # --------------------------------------------------------------------------- #
@@ -187,8 +202,76 @@ async def fulfill_reservation(
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
+@router.post("/reservations/{reservation_id}/ship", response_model=ReservationOut)
+async def ship_reservation(
+    reservation_id: int,
+    payload: ShipIn | None = None,
+    membership: Membership = require_permission_writable("can_manage_reservations"),
+    session: AsyncSession = Depends(get_session),
+) -> Reservation:
+    try:
+        return await inventory.ship(
+            session,
+            shop_id=membership.shop_id,
+            reservation_id=reservation_id,
+            ttn=payload.ttn if payload else None,
+        )
+    except InventoryError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+
+@router.patch("/reservations/{reservation_id}/ttn", response_model=ReservationOut)
+async def update_reservation_ttn(
+    reservation_id: int,
+    payload: UpdateTtnIn,
+    membership: Membership = require_permission_writable("can_manage_reservations"),
+    session: AsyncSession = Depends(get_session),
+) -> Reservation:
+    try:
+        return await inventory.update_ttn(
+            session, shop_id=membership.shop_id, reservation_id=reservation_id, ttn=payload.ttn
+        )
+    except InventoryError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+
+@router.post("/reservations/{reservation_id}/pick-up", response_model=ReservationOut)
+async def pick_up_reservation(
+    reservation_id: int,
+    membership: Membership = require_permission_writable("can_manage_reservations"),
+    session: AsyncSession = Depends(get_session),
+) -> Reservation:
+    """Клієнт забрав відправлення — продаж (списує on_hand, дохід)."""
+    try:
+        return await inventory.pick_up(
+            session, shop_id=membership.shop_id, reservation_id=reservation_id
+        )
+    except InventoryError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+
+@router.post("/reservations/{reservation_id}/not-picked-up", response_model=ReservationOut)
+async def not_picked_up_reservation(
+    reservation_id: int,
+    payload: NotPickedUpIn,
+    membership: Membership = require_permission_writable("can_manage_reservations"),
+    session: AsyncSession = Depends(get_session),
+) -> Reservation:
+    """Клієнт не забрав відправлення — товар повертається на склад, без доходу."""
+    try:
+        return await inventory.not_picked_up(
+            session,
+            shop_id=membership.shop_id,
+            reservation_id=reservation_id,
+            reason=payload.reason,
+            comment=payload.comment,
+        )
+    except InventoryError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+
 @router.get("/reservations", response_model=list[ReservationOut])
-async def list_active_reservations(
+async def list_reservations(
     membership: Membership = require_permission("can_view_inventory"),
     session: AsyncSession = Depends(get_session),
 ) -> list[Reservation]:
@@ -197,7 +280,9 @@ async def list_active_reservations(
             select(Reservation)
             .where(
                 Reservation.shop_id == membership.shop_id,
-                Reservation.status == ReservationStatus.active,
+                Reservation.status.in_(
+                    (ReservationStatus.active, ReservationStatus.shipped)
+                ),
             )
             .order_by(Reservation.created_at.desc())
         )

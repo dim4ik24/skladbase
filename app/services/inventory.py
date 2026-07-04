@@ -45,6 +45,7 @@ _T = TypeVar("_T")
 
 WRITE_OFF_REASONS = ("sold", "defect", "correction", "other")
 RELEASE_REASONS = ("customer_changed_mind", "unresponsive", "mistaken_reservation", "other")
+NOT_PICKED_UP_REASONS = ("did_not_pick_up", "refused", "other")
 
 
 class InventoryError(Exception):
@@ -222,6 +223,32 @@ async def release(
     return await _finalize(session, reservation, commit=commit)
 
 
+async def _finalize_sale(
+    session: AsyncSession,
+    *,
+    shop_id: int,
+    reservation: Reservation,
+    variant: Variant,
+    commit: bool,
+) -> Reservation:
+    """Спільний хвіст fulfill()/pick_up(): фіксує продаж і дохід. On_hand/reserved
+    уже скориговані викликачем (fulfill — напряму з active; pick_up — раніше,
+    на ship(), бо товар фізично поїхав ще тоді) — тут лише статус і sale-рух."""
+    reservation.status = ReservationStatus.fulfilled
+
+    _record_movement(
+        session,
+        shop_id=shop_id,
+        variant_id=variant.id,
+        type_=MovementType.sale,
+        delta=-reservation.qty,
+        order_id=reservation.order_id,
+        price_at=variant.price,
+    )
+
+    return await _finalize(session, reservation, commit=commit)
+
+
 async def fulfill(
     session: AsyncSession,
     *,
@@ -229,6 +256,7 @@ async def fulfill(
     reservation_id: int,
     commit: bool = True,
 ) -> Reservation:
+    """Прямий продаж раніше відкладеного резерву (без відправки, зустріч/самовивіз)."""
     reservation = await _locked_reservation(session, shop_id, reservation_id)
     if reservation.status != ReservationStatus.active:
         raise InventoryError(HTTPStatus.CONFLICT, "Резерв не активний")
@@ -241,16 +269,113 @@ async def fulfill(
     variant.on_hand -= reservation.qty
     variant.reserved -= reservation.qty
 
-    reservation.status = ReservationStatus.fulfilled
+    return await _finalize_sale(session, shop_id=shop_id, reservation=reservation, variant=variant, commit=commit)
+
+
+async def ship(
+    session: AsyncSession,
+    *,
+    shop_id: int,
+    reservation_id: int,
+    ttn: str | None = None,
+    commit: bool = True,
+) -> Reservation:
+    """Відправка резерву (Нова пошта тощо). Товар фізично покидає магазин —
+    on_hand і reserved знімаються ОБОМА одразу (інакше available зайво
+    занижується: earmark більше нікому не потрібен, бо одиниця вже їде до
+    конкретного клієнта). ТТН опційний — продавець може вписати пізніше
+    через update_ttn(). Без stock-руху: сума on_hand+reserved не змінюється,
+    змінюється лише статус/локація товару."""
+    reservation = await _locked_reservation(session, shop_id, reservation_id)
+    if reservation.status != ReservationStatus.active:
+        raise InventoryError(HTTPStatus.CONFLICT, "Резерв не активний")
+
+    variant = await _locked_variant(session, shop_id, reservation.variant_id)
+    variant.on_hand -= reservation.qty
+    variant.reserved -= reservation.qty
+
+    reservation.status = ReservationStatus.shipped
+    reservation.shipped_at = utcnow()
+    reservation.ttn = ttn
+
+    return await _finalize(session, reservation, commit=commit)
+
+
+async def update_ttn(
+    session: AsyncSession,
+    *,
+    shop_id: int,
+    reservation_id: int,
+    ttn: str,
+    commit: bool = True,
+) -> Reservation:
+    """Правка ТТН на вже відправленому резерві (продавець вписав її пізніше)."""
+    reservation = await _locked_reservation(session, shop_id, reservation_id)
+    if reservation.status != ReservationStatus.shipped:
+        raise InventoryError(HTTPStatus.CONFLICT, "Резерв не відправлено")
+
+    reservation.ttn = ttn
+    return await _finalize(session, reservation, commit=commit)
+
+
+async def pick_up(
+    session: AsyncSession,
+    *,
+    shop_id: int,
+    reservation_id: int,
+    commit: bool = True,
+) -> Reservation:
+    """Клієнт забрав відправлення. On_hand/reserved вже скориговані на ship() —
+    тут лише фіксація продажу/доходу (спільна з fulfill логіка)."""
+    reservation = await _locked_reservation(session, shop_id, reservation_id)
+    if reservation.status != ReservationStatus.shipped:
+        raise InventoryError(HTTPStatus.CONFLICT, "Резерв не відправлено")
+
+    variant = await _locked_variant(session, shop_id, reservation.variant_id)
+
+    return await _finalize_sale(session, shop_id=shop_id, reservation=reservation, variant=variant, commit=commit)
+
+
+async def not_picked_up(
+    session: AsyncSession,
+    *,
+    shop_id: int,
+    reservation_id: int,
+    reason: str,
+    comment: str | None = None,
+    commit: bool = True,
+) -> Reservation:
+    """Клієнт не забрав відправлення — товар повертається на склад. Доходу
+    не було (fulfill/pick_up ще не викликались), тож нема що віднімати:
+    рух type=ret з price_at=None (не впливає на revenue у finance_summary).
+    Reserved далі не чіпаємо — earmark уже знято на ship()."""
+    if reason not in NOT_PICKED_UP_REASONS:
+        raise InventoryError(HTTPStatus.UNPROCESSABLE_ENTITY, f"Невідома причина: {reason}")
+    if reason == "other" and not comment:
+        raise InventoryError(
+            HTTPStatus.UNPROCESSABLE_ENTITY, "Для причини 'other' коментар обов'язковий"
+        )
+
+    reservation = await _locked_reservation(session, shop_id, reservation_id)
+    if reservation.status != ReservationStatus.shipped:
+        raise InventoryError(HTTPStatus.CONFLICT, "Резерв не відправлено")
+
+    variant = await _locked_variant(session, shop_id, reservation.variant_id)
+    variant.on_hand += reservation.qty
+
+    reservation.status = ReservationStatus.released
+    reservation.released_at = utcnow()
 
     _record_movement(
         session,
         shop_id=shop_id,
         variant_id=variant.id,
-        type_=MovementType.sale,
-        delta=-reservation.qty,
+        type_=MovementType.ret,
+        delta=reservation.qty,
         order_id=reservation.order_id,
-        price_at=variant.price,
+        reason=reason,
+        comment=comment,
+        price_at=None,
     )
 
     return await _finalize(session, reservation, commit=commit)

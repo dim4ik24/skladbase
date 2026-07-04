@@ -9,12 +9,14 @@ import { ScrollFloat } from "../components/ScrollFloat";
 import { Panel } from "../components/ui/Panel";
 import type {
   AdjustPayload,
+  NotPickedUpPayload,
   Product,
   ProductInput,
   ProductPatch,
   ReleasePayload,
   Reservation,
   ReserveInput,
+  ShipPayload,
   Template,
   Variant,
 } from "../types";
@@ -46,6 +48,10 @@ interface SkladScreenProps {
   onReserve: (variantId: number, payload: ReserveInput) => Promise<void>;
   onRelease: (id: number, payload?: ReleasePayload) => Promise<void>;
   onFulfill: (id: number) => Promise<void>;
+  onShip: (id: number, payload: ShipPayload) => Promise<void>;
+  onUpdateTtn: (id: number, ttn: string) => Promise<void>;
+  onPickUp: (id: number) => Promise<void>;
+  onNotPickedUp: (id: number, payload: NotPickedUpPayload) => Promise<void>;
   onCreateProduct: (payload: ProductInput) => Promise<Product>;
   onUpdateProduct: (productId: number, patch: ProductPatch) => Promise<void>;
   onFrozenAction: () => void;
@@ -77,6 +83,10 @@ export function SkladScreen({
   onReserve,
   onRelease,
   onFulfill,
+  onShip,
+  onUpdateTtn,
+  onPickUp,
+  onNotPickedUp,
   onCreateProduct,
   onUpdateProduct,
   onFrozenAction,
@@ -244,6 +254,10 @@ export function SkladScreen({
               resolveReservationVariant={resolveReservationVariant}
               onRelease={onRelease}
               onFulfill={onFulfill}
+              onShip={onShip}
+              onUpdateTtn={onUpdateTtn}
+              onPickUp={onPickUp}
+              onNotPickedUp={onNotPickedUp}
             />
           </div>
         </Panel>

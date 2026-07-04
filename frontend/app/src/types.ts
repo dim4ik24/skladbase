@@ -165,7 +165,7 @@ export interface ProductPatch {
   archived?: boolean;
 }
 
-export type ReservationStatus = "active" | "released" | "fulfilled";
+export type ReservationStatus = "active" | "released" | "fulfilled" | "shipped";
 
 export interface Reservation {
   id: number;
@@ -176,9 +176,11 @@ export interface Reservation {
   customer_note: string | null;
   source: string;
   status: ReservationStatus;
+  ttn: string | null;
   expires_at: string | null;
   created_at: string;
   released_at: string | null;
+  shipped_at: string | null;
 }
 
 export interface ReserveInput {
@@ -210,6 +212,17 @@ export type ReleaseReason =
 
 export interface ReleasePayload {
   reason: ReleaseReason;
+  comment?: string;
+}
+
+export interface ShipPayload {
+  ttn?: string;
+}
+
+export type NotPickedUpReason = "did_not_pick_up" | "refused" | "other";
+
+export interface NotPickedUpPayload {
+  reason: NotPickedUpReason;
   comment?: string;
 }
 
