@@ -4,7 +4,7 @@ import type { FormEvent } from "react";
 import { useReducedMotion } from "motion/react";
 import { ApiError } from "../api";
 import { errorMessage } from "../errors";
-import type { Product, ProductInput, ProductPatch, ReserveInput, Template, TemplateField, Variant, VariantAddPayload, VariantInput, VariantPatchPayload } from "../types";
+import type { AdjustPayload, Product, ProductInput, ProductPatch, ReserveInput, Template, TemplateField, Variant, VariantAddPayload, VariantInput, VariantPatchPayload } from "../types";
 import { Panel } from "./ui/Panel";
 import { ProductPhotoGallery } from "./ProductPhotoGallery";
 import { TemplateBuilderModal } from "./TemplateBuilderModal";
@@ -23,7 +23,7 @@ interface ProductModalProps {
   onUploadProductPhoto: (productId: number, file: File) => Promise<void>;
   onDeleteProductPhoto: (productId: number, photoId: number) => Promise<void>;
   onRestock: (variantId: number, qty: number) => void;
-  onAdjust: (variantId: number, newOnHand: number) => void;
+  onAdjust: (variantId: number, payload: AdjustPayload) => Promise<void>;
   onUploadPhoto: (variantId: number, file: File) => Promise<void>;
   onReserve: (variantId: number, payload: ReserveInput) => Promise<void>;
   onPatchVariant: (variantId: number, patch: VariantPatchPayload) => Promise<void>;
@@ -425,7 +425,7 @@ interface EditFormProps {
   onUploadProductPhoto: (productId: number, file: File) => Promise<void>;
   onDeleteProductPhoto: (productId: number, photoId: number) => Promise<void>;
   onRestock: (variantId: number, qty: number) => void;
-  onAdjust: (variantId: number, newOnHand: number) => void;
+  onAdjust: (variantId: number, payload: AdjustPayload) => Promise<void>;
   onUploadPhoto: (variantId: number, file: File) => Promise<void>;
   onReserve: (variantId: number, payload: ReserveInput) => Promise<void>;
   onPatchVariant: (variantId: number, patch: VariantPatchPayload) => Promise<void>;

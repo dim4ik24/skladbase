@@ -8,6 +8,7 @@ import { ReservationsPanel } from "../components/ReservationsPanel";
 import { ScrollFloat } from "../components/ScrollFloat";
 import { Panel } from "../components/ui/Panel";
 import type {
+  AdjustPayload,
   Product,
   ProductInput,
   ProductPatch,
@@ -38,7 +39,7 @@ interface SkladScreenProps {
   activeCount: number;
   variantLabel: (variantId: number) => string;
   onRestock: (variantId: number, qty: number) => Promise<void>;
-  onAdjust: (variantId: number, newOnHand: number) => Promise<void>;
+  onAdjust: (variantId: number, payload: AdjustPayload) => Promise<void>;
   onUploadPhoto: (variantId: number, file: File) => Promise<void>;
   onReserve: (variantId: number, payload: ReserveInput) => Promise<void>;
   onRelease: (id: number) => Promise<void>;

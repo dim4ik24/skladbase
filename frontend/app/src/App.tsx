@@ -17,6 +17,7 @@ import { SkladScreen } from "./screens/SkladScreen";
 import { effectivePlanCode, isLiveTrial } from "./lib/planStatus";
 import { initTelegram, setAccentColor } from "./telegram";
 import type {
+  AdjustPayload,
   Plan,
   Product,
   ProductInput,
@@ -201,14 +202,14 @@ export default function App() {
     }
   }
 
-  async function handleAdjust(variantId: number, newOnHand: number) {
+  async function handleAdjust(variantId: number, payload: AdjustPayload) {
     try {
-      applyVariantUpdate(await api.adjust(variantId, newOnHand));
+      applyVariantUpdate(await api.adjust(variantId, payload));
     } catch (err) {
       if (err instanceof ApiError && err.status === 402) {
         setUpgradePrompt({ message: err.detail });
       } else {
-        setError(errorMessage(err, "Не вдалося оновити залишок"));
+        throw err;
       }
     }
   }

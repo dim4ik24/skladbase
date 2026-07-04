@@ -910,6 +910,44 @@ body {
   gap: 8px;
 }
 
+/* Write-off form — same inset style as reserve-form */
+.write-off-form {
+  margin-top: 8px;
+  padding: 10px;
+  border-radius: 12px;
+  background: var(--bg);
+  border: 1.5px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.write-off-reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.write-off-reason-chip {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1.5px solid var(--line);
+  background: var(--surface);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.write-off-reason-chip--active {
+  border-color: var(--accent-color, #ff8800);
+  background: var(--accent-color, #ff8800);
+  color: #fff;
+  font-weight: 600;
+}
+
+.field-invalid {
+  border-color: #c0392b !important;
+}
+
 /* ── Variant edit form ───────────────────────────────────────────────── */
 .variant-edit-form {
   margin-top: 8px;

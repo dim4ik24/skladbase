@@ -66,6 +66,21 @@ export function DashboardScreen({
               })}
             </span>
           </div>
+          <div className="flex items-center justify-between mt-1">
+            <span className="text-sm text-text-soft">Продажів</span>
+            <span className="font-mono-price text-base font-semibold text-text">
+              {finance.sales_count}
+            </span>
+          </div>
+          <div className="flex items-center justify-between mt-1">
+            <span className="text-sm text-text-soft">Одиниць продано</span>
+            <span className="font-mono-price text-base font-semibold text-text">
+              {finance.units_sold}
+            </span>
+          </div>
+          <p className="text-xs text-text-soft mt-2">
+            Дохід рахується з продажів (швидке списання «Продано» та виконані резерви)
+          </p>
         </div>
       ) : null}
 

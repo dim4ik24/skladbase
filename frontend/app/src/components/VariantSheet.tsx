@@ -3,8 +3,9 @@ import { createPortal } from "react-dom";
 import type { ChangeEvent } from "react";
 import { errorMessage } from "../errors";
 import { chipLetter, resolveChipColor } from "../lib/variantColor";
-import type { ReserveInput, TemplateField, Variant, VariantPatchPayload } from "../types";
+import type { AdjustPayload, ReserveInput, TemplateField, Variant, VariantPatchPayload } from "../types";
 import { ReserveForm } from "./ReserveForm";
+import { WriteOffForm } from "./WriteOffForm";
 
 interface VariantSheetProps {
   variant: Variant;
@@ -12,7 +13,7 @@ interface VariantSheetProps {
   isFrozen?: boolean;
   onFrozenAction?: () => void;
   onRestock: (variantId: number, qty: number) => void;
-  onAdjust: (variantId: number, newOnHand: number) => void;
+  onAdjust: (variantId: number, payload: AdjustPayload) => Promise<void>;
   onUploadPhoto: (variantId: number, file: File) => Promise<void>;
   onReserve: (variantId: number, payload: ReserveInput) => Promise<void>;
   onPatchVariant: (variantId: number, patch: VariantPatchPayload) => Promise<void>;
@@ -51,6 +52,9 @@ export function VariantSheet({
 
   // Reserve
   const [showReserveForm, setShowReserveForm] = useState(false);
+
+  // Write-off (списання з причиною)
+  const [showWriteOffForm, setShowWriteOffForm] = useState(false);
 
   // Photo upload
   const [photoUploading, setPhotoUploading] = useState(false);
@@ -113,6 +117,11 @@ export function VariantSheet({
   async function handleReserveSubmit(variantId: number, payload: ReserveInput) {
     await onReserve(variantId, payload);
     setShowReserveForm(false);
+  }
+
+  async function handleWriteOffSubmit(variantId: number, payload: AdjustPayload) {
+    await onAdjust(variantId, payload);
+    setShowWriteOffForm(false);
   }
 
   const sheet = (
@@ -193,7 +202,7 @@ export function VariantSheet({
             disabled={variant.on_hand <= 0}
             onClick={() => {
               if (isFrozen) { onFrozenAction?.(); return; }
-              onAdjust(variant.id, variant.on_hand - 1);
+              setShowWriteOffForm((prev) => !prev);
             }}
           >
             −
@@ -214,6 +223,14 @@ export function VariantSheet({
             +
           </button>
         </div>
+        {showWriteOffForm ? (
+          <WriteOffForm
+            variantId={variant.id}
+            maxQty={variant.available}
+            onSubmit={handleWriteOffSubmit}
+            onCancel={() => setShowWriteOffForm(false)}
+          />
+        ) : null}
 
         {/* ── Reserve ── */}
         <button

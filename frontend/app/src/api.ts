@@ -6,6 +6,7 @@
  */
 import { getInitData } from "./telegram";
 import type {
+  AdjustPayload,
   FinanceSummary,
   Invite,
   PermissionsPatch,
@@ -95,10 +96,10 @@ export function restock(variantId: number, qty: number): Promise<Variant> {
   });
 }
 
-export function adjust(variantId: number, newOnHand: number): Promise<Variant> {
+export function adjust(variantId: number, payload: AdjustPayload): Promise<Variant> {
   return request<Variant>(`/api/variants/${variantId}/adjust`, {
     method: "POST",
-    body: JSON.stringify({ new_on_hand: newOnHand }),
+    body: JSON.stringify(payload),
   });
 }
 

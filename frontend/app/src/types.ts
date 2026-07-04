@@ -190,6 +190,16 @@ export interface ReserveInput {
 export interface FinanceSummary {
   shop_id: number;
   revenue_uah: string;
+  sales_count: number;
+  units_sold: number;
+}
+
+export type WriteOffReason = "sold" | "defect" | "correction" | "other";
+
+export interface AdjustPayload {
+  qty: number;
+  reason: WriteOffReason;
+  comment?: string;
 }
 
 export type TabId = "sklad" | "dashboard" | "settings";

@@ -167,7 +167,9 @@ beforeEach(() => {
   vi.mocked(api.fulfillReservation).mockReset();
   vi.mocked(api.checkoutStars).mockReset();
   vi.mocked(api.clearDemos).mockReset();
-  vi.mocked(api.getFinanceSummary).mockReset().mockResolvedValue({ shop_id: 1, revenue_uah: "0.00" });
+  vi.mocked(api.getFinanceSummary)
+    .mockReset()
+    .mockResolvedValue({ shop_id: 1, revenue_uah: "0.00", sales_count: 0, units_sold: 0 });
   vi.mocked(api.patchVariant).mockReset();
   vi.mocked(api.addVariant).mockReset();
   vi.mocked(api.deleteVariant).mockReset();
@@ -319,11 +321,10 @@ describe("App catalog screen", () => {
     expect(api.restock).toHaveBeenCalledWith(41, 1);
   });
 
-  it("minus button calls adjust with on_hand-1 and updates the displayed stock", async () => {
+  it("minus button opens a write-off dialog instead of adjusting immediately", async () => {
     vi.mocked(api.getMe).mockResolvedValue(shopFixture);
     const variant = makeVariant({ id: 42, sku: "SKU-42", on_hand: 5, available: 5 });
     vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ variants: [variant] })]);
-    vi.mocked(api.adjust).mockResolvedValue({ ...variant, on_hand: 4, available: 4 });
 
     render(<App />);
     await goToSklad();
@@ -334,10 +335,67 @@ describe("App catalog screen", () => {
     await openSheet("M");
     fireEvent.click(screen.getByLabelText("Зменшити залишок: SKU-42"));
 
-    await waitFor(() => {
-      expect(screen.getByTestId("available-42")).toHaveTextContent("4 шт.");
+    expect(screen.getByText("Кількість (доступно 5)")).toBeInTheDocument();
+    expect(screen.getByText("💰 Продано")).toBeInTheDocument();
+    expect(api.adjust).not.toHaveBeenCalled();
+  });
+
+  it("write-off dialog: sold reason calls adjust with {qty, reason} and updates stock", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    const variant = makeVariant({ id: 42, sku: "SKU-42", on_hand: 5, available: 5 });
+    vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ variants: [variant] })]);
+    vi.mocked(api.adjust).mockResolvedValue({ ...variant, on_hand: 3, available: 3 });
+
+    render(<App />);
+    await goToSklad();
+    await screen.findByText("Футболка");
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
+    await screen.findByTestId("available-42");
+
+    await openSheet("M");
+    fireEvent.click(screen.getByLabelText("Зменшити залишок: SKU-42"));
+
+    fireEvent.change(screen.getByLabelText("Кількість (доступно 5)"), {
+      target: { value: "2" },
     });
-    expect(api.adjust).toHaveBeenCalledWith(42, 4);
+    fireEvent.click(screen.getByText("💰 Продано"));
+    fireEvent.click(screen.getByText("Списати"));
+
+    await waitFor(() => {
+      expect(api.adjust).toHaveBeenCalledWith(42, {
+        qty: 2,
+        reason: "sold",
+        comment: undefined,
+      });
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("available-42")).toHaveTextContent("3 шт.");
+    });
+  });
+
+  it("write-off dialog: 'other' reason without a comment is rejected client-side", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    const variant = makeVariant({ id: 42, sku: "SKU-42", on_hand: 5, available: 5 });
+    vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ variants: [variant] })]);
+
+    render(<App />);
+    await goToSklad();
+    await screen.findByText("Футболка");
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
+    await screen.findByTestId("available-42");
+
+    await openSheet("M");
+    fireEvent.click(screen.getByLabelText("Зменшити залишок: SKU-42"));
+
+    fireEvent.click(screen.getByText("❓ Інше"));
+    expect(screen.getByText("Коментар (обов'язково)")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Списати"));
+
+    expect(screen.getByLabelText("Коментар (обов'язково)")).toHaveAttribute(
+      "aria-invalid",
+      "true",
+    );
+    expect(api.adjust).not.toHaveBeenCalled();
   });
 
   it("minus button is disabled when on_hand is already zero", async () => {
@@ -1545,5 +1603,51 @@ describe("Variant CRUD in modal (tag → sheet)", () => {
       await screen.findByText("Неможливо видалити останній варіант"),
     ).toBeInTheDocument();
     expect(api.deleteVariant).toHaveBeenCalledWith(205);
+  });
+
+  it("write-off dialog: 409 (more than available) shows inline error banner", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    const variant = makeVariant({ id: 206, sku: "SKU-206", on_hand: 5, available: 5 });
+    vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ variants: [variant] })]);
+    vi.mocked(api.adjust).mockRejectedValue(
+      new ApiError(409, "Недостатньо доступного залишку"),
+    );
+
+    render(<App />);
+    await goToSklad();
+    await screen.findByText("Футболка");
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
+    await screen.findByTestId("available-206");
+
+    await openSheet("M");
+    fireEvent.click(screen.getByLabelText("Зменшити залишок: SKU-206"));
+
+    fireEvent.change(screen.getByLabelText("Кількість (доступно 5)"), {
+      target: { value: "3" },
+    });
+    fireEvent.click(screen.getByText("💰 Продано"));
+    fireEvent.click(screen.getByText("Списати"));
+
+    expect(await screen.findByText("Недостатньо доступного залишку")).toBeInTheDocument();
+  });
+});
+
+describe("Finance summary (Dashboard)", () => {
+  it("renders revenue, sales count and units sold from the finance summary", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.getFinanceSummary).mockResolvedValue({
+      shop_id: 1,
+      revenue_uah: "450.00",
+      sales_count: 2,
+      units_sold: 3,
+    });
+
+    render(<App />);
+
+    expect(await screen.findByText("Продажів")).toBeInTheDocument();
+    expect(screen.getByText("2")).toBeInTheDocument();
+    expect(screen.getByText("Одиниць продано")).toBeInTheDocument();
+    expect(screen.getByText("3")).toBeInTheDocument();
   });
 });
