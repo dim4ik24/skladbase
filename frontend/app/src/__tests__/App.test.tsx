@@ -756,8 +756,7 @@ describe("Reservations", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Резерви (1)" }));
-    expect(screen.getByText("2 шт.")).toBeInTheDocument();
-    expect(screen.getByText("Сукня (M)")).toBeInTheDocument();
+    expect(screen.getByText("M · 2 шт. × 450 ₴ = 900 ₴")).toBeInTheDocument();
   });
 
   it("release calls the endpoint and restores availability", async () => {
@@ -818,6 +817,48 @@ describe("Reservations", () => {
       "true",
     );
     expect(api.releaseReservation).not.toHaveBeenCalled();
+  });
+
+  it("'Зняти' opens a bottom sheet (portal), not an inline dialog inside the card", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    const variant = makeVariant({ id: 73, sku: "SKU-73", on_hand: 5, reserved: 2, available: 3 });
+    vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ variants: [variant] })]);
+    const reservation = makeReservation({ id: 302, variant_id: 73, qty: 2 });
+    vi.mocked(api.getReservations).mockResolvedValue([reservation]);
+
+    render(<App />);
+    await goToSklad();
+    await screen.findByText("Футболка");
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
+    await screen.findByTestId("available-73");
+
+    fireEvent.click(screen.getByRole("button", { name: "Резерви (1)" }));
+    const cardButton = screen.getByRole("button", { name: "Зняти" });
+    const card = cardButton.closest("li") as HTMLElement;
+    fireEvent.click(cardButton);
+
+    const dialog = screen.getByRole("dialog", { name: /Зняти резерв/ });
+    expect(dialog).toBeInTheDocument();
+    // Портал (createPortal у document.body) — sheet НЕ вкладений у саму бирку,
+    // на відміну від старого інлайн-ReleaseForm, який розсипався поверх карток.
+    expect(card.contains(dialog)).toBe(false);
+    expect(screen.getByText("Клієнт передумав")).toBeInTheDocument();
+  });
+
+  it("reservation card falls back to '#variant_id' when products haven't loaded/resolved", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    const reservation = makeReservation({ id: 303, variant_id: 999, qty: 4 });
+    vi.mocked(api.getReservations).mockResolvedValue([reservation]);
+
+    render(<App />);
+    await goToSklad();
+    await screen.findByText("Тестовий магазин");
+
+    fireEvent.click(screen.getByRole("button", { name: "Резерви (1)" }));
+
+    expect(screen.getByText("Варіант #999")).toBeInTheDocument();
+    expect(screen.getByText("4 шт.")).toBeInTheDocument();
   });
 
   it("fulfill calls the endpoint and deducts on_hand", async () => {
@@ -908,13 +949,14 @@ describe("Reservations", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Резерви (1)" }));
 
-    const title = screen.getByText("Сукня (XL / Рожевий)");
-    expect(title).toBeInTheDocument();
-    const card = title.closest("li");
+    const row2 = screen.getByText("XL / Рожевий · 3 шт. × 450 ₴ = 1350 ₴");
+    expect(row2).toBeInTheDocument();
+    const card = row2.closest("li");
     expect(card).not.toBeNull();
+    expect(within(card as HTMLElement).getByText("Сукня")).toBeInTheDocument();
     const photo = (card as HTMLElement).querySelector("img");
     expect(photo).toHaveAttribute("src", "https://example.com/photo.jpg");
-    expect(within(card as HTMLElement).getByText(/3 шт\..*Оксана, \+380501112233/)).toBeInTheDocument();
+    expect(within(card as HTMLElement).getByText("Оксана, +380501112233")).toBeInTheDocument();
   });
 });
 

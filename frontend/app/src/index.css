@@ -1229,6 +1229,15 @@ body {
   white-space: nowrap;
 }
 
+/* Заголовок release-sheet довший ("Зняти резерв: Назва (осі, N шт.)") —
+   переносимо замість обрізання в еліпсис, як у variant-sheet. */
+.release-sheet-title {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  font-size: 16px;
+}
+
 .sheet-close {
   width: 32px;
   height: 32px;
@@ -1422,8 +1431,21 @@ body {
 }
 
 .reservation-card-actions {
+  /* Стовпчиком і компактно: два повнорозмірні modal-actions-кнопки в ряд
+     (по 10px 20px паддінгу кожна) на вузькому екрані з'їдали майже всю
+     ширину рядка й тиснули .reservation-card-center (flex:1, min-width:0)
+     до 0px — текст був у DOM, але візуально зникав (інцидент "порожня
+     бирка"). Стовпчик + менший паддінг лишають center гарантоване місце. */
   flex-shrink: 0;
+  flex-direction: column;
   margin-top: 0;
+  gap: 4px;
+}
+
+.reservation-card-actions button {
+  padding: 6px 14px;
+  font-size: 12px;
+  border-radius: 10px;
 }
 
 /* ── Фінанси — рядки з роздільниками (не "все в кучі") ──────────────── */
