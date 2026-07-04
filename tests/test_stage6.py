@@ -277,9 +277,11 @@ async def test_low_stock_scan_debounced_and_resets_after_restock() -> None:
         assert variant is not None
         assert variant.low_stock_notified_at is None
 
-    # знову впав нижче порога -> сповіщає вдруге
+    # знову впав нижче порога -> сповіщає вдруге (12 -> 2, той самий поріг 3)
     async with db.async_session() as session:
-        await inventory.adjust(session, shop_id=shop_id, variant_id=variant_id, new_on_hand=2)
+        await inventory.write_off(
+            session, shop_id=shop_id, variant_id=variant_id, qty=10, reason="correction"
+        )
 
     async with db.async_session() as session:
         count3 = await tasks.low_stock_scan(session, stub)

@@ -82,7 +82,9 @@ async def test_restock_increases_on_hand_and_returns_variant(client: AsyncClient
 
 
 @pytest.mark.asyncio
-async def test_adjust_below_reserved_is_rejected(client: AsyncClient) -> None:
+async def test_write_off_more_than_available_is_rejected(client: AsyncClient) -> None:
+    """on_hand=10, reserved=4 -> available=6. Списати 8 (> available) -> 409,
+    заброньоване не чіпаємо (write_off ніколи не списує reserved)."""
     init_data, shop_id = await _bootstrap(client, 9002)
     variant_id = await _add_variant(shop_id, on_hand=10)
 
@@ -93,7 +95,7 @@ async def test_adjust_below_reserved_is_rejected(client: AsyncClient) -> None:
 
     r_adjust = await client.post(
         f"/api/variants/{variant_id}/adjust",
-        json={"new_on_hand": 2, "reason": "інвентаризація"},
+        json={"qty": 8, "reason": "defect"},
         headers={HEADER: init_data},
     )
     assert r_adjust.status_code == 409
@@ -105,13 +107,13 @@ async def test_adjust_below_reserved_is_rejected(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_adjust_sets_on_hand_when_above_reserved(client: AsyncClient) -> None:
+async def test_write_off_within_available_reduces_on_hand(client: AsyncClient) -> None:
     init_data, shop_id = await _bootstrap(client, 9003)
     variant_id = await _add_variant(shop_id, on_hand=10)
 
     r = await client.post(
         f"/api/variants/{variant_id}/adjust",
-        json={"new_on_hand": 6, "reason": "інвентаризація"},
+        json={"qty": 4, "reason": "defect"},
         headers={HEADER: init_data},
     )
     assert r.status_code == 200, r.text
@@ -223,7 +225,9 @@ async def test_cross_shop_variant_and_reservation_return_404(client: AsyncClient
     assert r_restock.status_code == 404
 
     r_adjust = await client.post(
-        f"/api/variants/{variant_a}/adjust", json={"new_on_hand": 1}, headers={HEADER: init_b}
+        f"/api/variants/{variant_a}/adjust",
+        json={"qty": 1, "reason": "sold"},
+        headers={HEADER: init_b},
     )
     assert r_adjust.status_code == 404
 
@@ -272,7 +276,9 @@ async def test_expired_subscription_is_free_plan_mutations_allowed_within_limit(
     assert r_restock.status_code == 200  # expired = free, не заморожений (≤ 20 товарів)
 
     r_adjust = await client.post(
-        f"/api/variants/{variant_id}/adjust", json={"new_on_hand": 1}, headers={HEADER: init_data}
+        f"/api/variants/{variant_id}/adjust",
+        json={"qty": 1, "reason": "sold"},
+        headers={HEADER: init_data},
     )
     assert r_adjust.status_code == 200
 

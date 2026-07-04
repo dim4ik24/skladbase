@@ -12,9 +12,10 @@ SkladBase — REST API складу (Стадія 6b): ручні операці
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,8 +38,9 @@ class RestockIn(BaseModel):
 
 
 class AdjustIn(BaseModel):
-    new_on_hand: int
-    reason: str | None = None
+    qty: int = Field(gt=0)
+    reason: Literal["sold", "defect", "correction", "other"]
+    comment: str | None = None
 
 
 class ReserveIn(BaseModel):
@@ -107,12 +109,13 @@ async def adjust_variant(
 ) -> Variant:
     await _enforce_variant_product_writable(variant_id, membership.shop_id, session)
     try:
-        return await inventory.adjust(
+        return await inventory.write_off(
             session,
             shop_id=membership.shop_id,
             variant_id=variant_id,
-            new_on_hand=payload.new_on_hand,
+            qty=payload.qty,
             reason=payload.reason,
+            comment=payload.comment,
         )
     except InventoryError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc

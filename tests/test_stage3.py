@@ -290,5 +290,7 @@ async def test_invariants_hold_after_sequence_of_operations() -> None:
     await _assert_invariants()
 
     async with db.async_session() as session:
-        await inventory.adjust(session, shop_id=shop_id, variant_id=variant_id, new_on_hand=1)
+        await inventory.write_off(
+            session, shop_id=shop_id, variant_id=variant_id, qty=8, reason="correction"
+        )
     await _assert_invariants()

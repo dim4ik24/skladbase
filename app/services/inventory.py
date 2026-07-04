@@ -24,6 +24,7 @@ locking під конкурентним навантаженням.
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 from http import HTTPStatus
 from typing import TypeVar
 
@@ -41,6 +42,8 @@ from app.models import (
 )
 
 _T = TypeVar("_T")
+
+WRITE_OFF_REASONS = ("sold", "defect", "correction", "other")
 
 
 class InventoryError(Exception):
@@ -84,6 +87,9 @@ def _record_movement(
     type_: MovementType,
     delta: int,
     order_id: int | None = None,
+    reason: str | None = None,
+    comment: str | None = None,
+    price_at: Decimal | None = None,
 ) -> None:
     if delta == 0:
         return
@@ -94,6 +100,9 @@ def _record_movement(
             order_id=order_id,
             type=type_,
             delta=delta,
+            reason=reason,
+            comment=comment,
+            price_at=price_at,
         )
     )
 
@@ -226,6 +235,7 @@ async def fulfill(
         type_=MovementType.sale,
         delta=-reservation.qty,
         order_id=reservation.order_id,
+        price_at=variant.price,
     )
 
     return await _finalize(session, reservation, commit=commit)
@@ -261,6 +271,7 @@ async def sell_direct(
         type_=MovementType.sale,
         delta=-qty,
         order_id=order_id,
+        price_at=variant.price,
     )
 
     return await _finalize(session, variant, commit=commit)
@@ -294,38 +305,58 @@ async def restock(
     return await _finalize(session, variant, commit=commit)
 
 
-async def adjust(
+async def write_off(
     session: AsyncSession,
     *,
     shop_id: int,
     variant_id: int,
-    new_on_hand: int,
-    reason: str | None = None,
+    qty: int,
+    reason: str,
+    comment: str | None = None,
     commit: bool = True,
 ) -> Variant:
-    """Ручна корекція залишку. `reason` приймається для контексту викликача,
-    але не персистується — у `StockMovement` немає відповідного поля
-    (models.py — існуючий файл, не переписуємо його без потреби)."""
-    if new_on_hand < 0:
-        raise InventoryError(HTTPStatus.BAD_REQUEST, "on_hand не може бути від'ємним")
+    """Списання `qty` одиниць із причиною. Замінює колишній `adjust`
+    (встановлення АБСОЛЮТНОГО on_hand) — інший контракт, тому інша назва:
+    тут завжди СПИСУЄМО кількість, ніколи не встановлюємо число напряму.
 
-    variant = await _locked_variant(session, shop_id, variant_id)
-    if new_on_hand < variant.reserved:
+    `reason="sold"` — це реальний продаж повз резерв (прямий облік доходу,
+    `type=sale` + `price_at`); `defect`/`correction`/`other` — списання без
+    грошового ефекту (`type=adjustment`, `price_at=None`). `other` вимагає
+    `comment` — без причини "інше" незрозуміло, що сталось за фактом.
+    """
+    _require_positive_qty(qty)
+    if reason not in WRITE_OFF_REASONS:
+        raise InventoryError(HTTPStatus.UNPROCESSABLE_ENTITY, f"Невідома причина: {reason}")
+    if reason == "other" and not comment:
         raise InventoryError(
-            HTTPStatus.CONFLICT,
-            f"Новий залишок ({new_on_hand}) менший за зарезервований ({variant.reserved})",
+            HTTPStatus.UNPROCESSABLE_ENTITY, "Для причини 'other' коментар обов'язковий"
         )
 
-    delta = new_on_hand - variant.on_hand
-    variant.on_hand = new_on_hand
-    _maybe_reset_low_stock_flag(variant)
+    variant = await _locked_variant(session, shop_id, variant_id)
+    if qty > variant.available:
+        raise InventoryError(
+            HTTPStatus.CONFLICT,
+            f"Недостатньо доступного залишку: доступно {variant.available}, потрібно списати {qty}",
+        )
+
+    variant.on_hand -= qty
+
+    if reason == "sold":
+        type_ = MovementType.sale
+        price_at = variant.price
+    else:
+        type_ = MovementType.adjustment
+        price_at = None
 
     _record_movement(
         session,
         shop_id=shop_id,
         variant_id=variant_id,
-        type_=MovementType.adjustment,
-        delta=delta,
+        type_=type_,
+        delta=-qty,
+        reason=reason,
+        comment=comment,
+        price_at=price_at,
     )
 
     return await _finalize(session, variant, commit=commit)

@@ -364,7 +364,13 @@ class Reservation(Base):
 
 
 class StockMovement(Base):
-    """Журнал руху складу. Дає 'що продалось за тиждень' майже безкоштовно."""
+    """Журнал руху складу. Дає 'що продалось за тиждень' майже безкоштовно.
+
+    Той самий журнал — джерело доходу (finance_summary): sale-рухи з
+    price_at агрегуються в дохід, ret (поки не пишеться жодним кодом,
+    фіча A) віднімається. reason/comment — лише для type=adjustment
+    (списання з причиною); type=sale з fulfill()/write_off(sold) теж
+    отримує price_at, але БЕЗ reason (це нормальний продаж, не списання)."""
     __tablename__ = "stock_movements"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -373,6 +379,9 @@ class StockMovement(Base):
     order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id", ondelete="SET NULL"))
     type: Mapped[MovementType] = mapped_column(SAEnum(MovementType))
     delta: Mapped[int] = mapped_column(Integer)   # знакове: -3 продаж, +10 поповнення
+    reason: Mapped[str | None] = mapped_column(String(20))  # sold/defect/correction/other — лише списання
+    comment: Mapped[str | None] = mapped_column(Text)
+    price_at: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))  # ціна за од. на момент руху (sale/ret)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
 
 

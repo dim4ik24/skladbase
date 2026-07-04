@@ -311,7 +311,7 @@ async def test_frozen_adjust_returns_402(client: AsyncClient) -> None:
 
     r = await client.post(
         f"/api/variants/{v.id}/adjust",
-        json={"new_on_hand": 10},
+        json={"qty": 1, "reason": "sold"},
         headers=_hdr(1016),
     )
     assert r.status_code == 402, r.text

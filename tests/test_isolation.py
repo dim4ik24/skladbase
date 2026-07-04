@@ -188,7 +188,9 @@ async def test_inventory_mutation_isolation(client: AsyncClient) -> None:
     assert r_restock.status_code == 404
 
     r_adjust = await client.post(
-        f"/api/variants/{variant_a}/adjust", json={"new_on_hand": 0}, headers={HEADER: init_b}
+        f"/api/variants/{variant_a}/adjust",
+        json={"qty": 1, "reason": "sold"},
+        headers={HEADER: init_b},
     )
     assert r_adjust.status_code == 404
 
