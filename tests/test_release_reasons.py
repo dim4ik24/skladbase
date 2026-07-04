@@ -19,6 +19,7 @@ from sqlalchemy import select
 
 from app import db
 from app.models import MovementType, Product, StockMovement, Variant
+from app.services.inventory import RELEASE_REASONS, WRITE_OFF_REASONS
 from tests.conftest import make_init_data
 
 HEADER = "X-Telegram-Init-Data"
@@ -143,3 +144,15 @@ async def test_release_other_with_comment_succeeds(client: AsyncClient) -> None:
     movement = await _last_release_movement(variant_id)
     assert movement.reason == "other"
     assert movement.comment == "клієнт заблокував бота"
+
+
+def test_all_reason_literals_fit_stock_movement_reason_column() -> None:
+    """SQLite не enforce'ить VARCHAR-довжину — INSERT з довшим reason мовчки
+    пройде і тут, і в тестах, а на Postgres поверне 500 (StringDataRightTruncation),
+    як сталось у проді з "customer_changed_mind" (21 симв.) на String(20). Цей
+    тест ловить регресію на рівні Python: якщо колонку звузять або з'являться
+    нові причини (фіча A: "did_not_pick_up" тощо), що не влізуть у колонку,
+    впаде тут, а не мовчки на проді."""
+    max_length = StockMovement.__table__.c.reason.type.length
+    for reason in (*RELEASE_REASONS, *WRITE_OFF_REASONS):
+        assert len(reason) <= max_length, f"{reason!r} ({len(reason)}) > {max_length}"
