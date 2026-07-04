@@ -18,10 +18,12 @@ import { effectivePlanCode, isLiveTrial } from "./lib/planStatus";
 import { initTelegram, setAccentColor } from "./telegram";
 import type {
   AdjustPayload,
+  FinanceSummary,
   Plan,
   Product,
   ProductInput,
   ProductPatch,
+  ReleasePayload,
   Reservation,
   ReserveInput,
   Shop,
@@ -32,6 +34,13 @@ import type {
   VariantAddPayload,
   VariantPatchPayload,
 } from "./types";
+
+const EMPTY_FINANCE: FinanceSummary = {
+  shop_id: 0,
+  revenue_uah: "0.00",
+  sales_count: 0,
+  units_sold: 0,
+};
 
 const LAST_SHOP_KEY = "skladbase:activeShopId";
 
@@ -59,6 +68,7 @@ export default function App() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
+  const [finance, setFinance] = useState<FinanceSummary>(EMPTY_FINANCE);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [clearingDemos, setClearingDemos] = useState(false);
@@ -70,6 +80,19 @@ export default function App() {
   );
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const mountedRef = useRef(true);
+
+  // Дохід рахується зі StockMovement (продажі), тож будь-яка дія, що створює
+  // sale-рух (adjust з причиною "sold", fulfill резерву), лишає Фінанси-
+  // картку застарілою, якщо не рефетчити явно — вона більше НЕ підписана на
+  // жоден інший стан (products/reservations), лише на власний виклик API.
+  async function refetchFinance(role: string | undefined) {
+    if (role !== "owner") return;
+    try {
+      setFinance(await api.getFinanceSummary());
+    } catch (err) {
+      console.error("[App] finance fetch failed:", err);
+    }
+  }
 
   // Повний рефетч під ВЖЕ встановлений api.setActiveShopId() — той самий
   // ланцюг, що й на старті (init нижче), переюзаний і для switchShop().
@@ -92,6 +115,7 @@ export default function App() {
       setInviteBanner({ status: meResult.invite_status, shopName: meResult.shop_name });
     }
     persistShopId(meResult.active_shop_id);
+    void refetchFinance(meResult.role);
   }
 
   useEffect(() => {
@@ -205,6 +229,7 @@ export default function App() {
   async function handleAdjust(variantId: number, payload: AdjustPayload) {
     try {
       applyVariantUpdate(await api.adjust(variantId, payload));
+      void refetchFinance(shop?.role);
     } catch (err) {
       if (err instanceof ApiError && err.status === 402) {
         setUpgradePrompt({ message: err.detail });
@@ -324,12 +349,16 @@ export default function App() {
     setReservations((prev) => prev.filter((r) => r.id !== reservation.id));
   }
 
-  async function handleRelease(reservationId: number) {
+  async function handleRelease(reservationId: number, payload?: ReleasePayload) {
     try {
-      const reservation = await api.releaseReservation(reservationId);
+      const reservation = await api.releaseReservation(reservationId, payload);
       applyReservationClosed(reservation, "release");
     } catch (err) {
-      setError(errorMessage(err, "Не вдалося знять резерв"));
+      if (err instanceof ApiError && err.status === 402) {
+        setUpgradePrompt({ message: err.detail });
+      } else {
+        throw err;
+      }
     }
   }
 
@@ -337,6 +366,7 @@ export default function App() {
     try {
       const reservation = await api.fulfillReservation(reservationId);
       applyReservationClosed(reservation, "fulfill");
+      void refetchFinance(shop?.role);
     } catch (err) {
       setError(errorMessage(err, "Не вдалося оформити продаж"));
     }
@@ -354,15 +384,14 @@ export default function App() {
     }
   }
 
-  function variantLabel(variantId: number): string {
+  function resolveReservationVariant(
+    variantId: number,
+  ): { variant: Variant; product: Product } | null {
     for (const product of products) {
       const variant = product.variants.find((v) => v.id === variantId);
-      if (variant) {
-        const axis = Object.values(variant.axis_values).join(" / ");
-        return axis ? `${product.name} (${axis})` : product.name;
-      }
+      if (variant) return { variant, product };
     }
-    return `Варіант #${variantId}`;
+    return null;
   }
 
   async function handlePatchVariant(variantId: number, payload: VariantPatchPayload) {
@@ -503,7 +532,7 @@ export default function App() {
               atLimit={atLimit}
               maxProducts={maxProducts}
               activeCount={activeCount}
-              variantLabel={variantLabel}
+              resolveReservationVariant={resolveReservationVariant}
               onRestock={handleRestock}
               onAdjust={handleAdjust}
               onUploadPhoto={handleUploadPhoto}
@@ -532,9 +561,10 @@ export default function App() {
             <DashboardScreen
               shop={shop}
               loading={loading}
+              finance={finance}
               metricCards={metricCards}
               reservations={reservations}
-              variantLabel={variantLabel}
+              resolveReservationVariant={resolveReservationVariant}
               onRelease={handleRelease}
               onFulfill={handleFulfill}
               onNavigateToSklad={() => setActiveTab("sklad")}

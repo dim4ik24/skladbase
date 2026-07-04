@@ -1,20 +1,19 @@
-import { useEffect, useState } from "react";
 import type { RefObject } from "react";
-import * as api from "../api";
 import type { MetricCardData } from "../components/MetricCarousel";
 import { MetricCarousel } from "../components/MetricCarousel";
 import { ReservationsPanel } from "../components/ReservationsPanel";
 import { ScrollFloat } from "../components/ScrollFloat";
 import { Panel } from "../components/ui/Panel";
-import type { FinanceSummary, Reservation, Shop } from "../types";
+import type { FinanceSummary, Product, ReleasePayload, Reservation, Shop, Variant } from "../types";
 
 interface DashboardScreenProps {
   shop: Shop | null;
   loading: boolean;
+  finance: FinanceSummary;
   metricCards: MetricCardData[];
   reservations: Reservation[];
-  variantLabel: (variantId: number) => string;
-  onRelease: (id: number) => Promise<void>;
+  resolveReservationVariant: (variantId: number) => { variant: Variant; product: Product } | null;
+  onRelease: (id: number, payload?: ReleasePayload) => Promise<void>;
   onFulfill: (id: number) => Promise<void>;
   onNavigateToSklad: () => void;
   scrollContainerRef: RefObject<HTMLDivElement | null>;
@@ -23,66 +22,47 @@ interface DashboardScreenProps {
 export function DashboardScreen({
   shop,
   loading,
+  finance,
   metricCards,
   reservations,
-  variantLabel,
+  resolveReservationVariant,
   onRelease,
   onFulfill,
   onNavigateToSklad,
   scrollContainerRef,
 }: DashboardScreenProps) {
-  const [finance, setFinance] = useState<FinanceSummary | null>(null);
-
-  useEffect(() => {
-    if (shop?.role !== "owner") return;
-    let cancelled = false;
-    api
-      .getFinanceSummary()
-      .then((data) => {
-        if (!cancelled) setFinance(data);
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) console.error("[DashboardScreen] finance fetch failed:", err);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [shop?.role]);
-
   return (
     <>
       {shop ? <MetricCarousel cards={metricCards} onNavigate={onNavigateToSklad} /> : null}
 
-      {finance ? (
-        <div className="glass-card rounded-[20px] p-4 mb-4 shadow-[var(--shadow-card)]">
-          <h2 className="section-title mb-2">Фінанси</h2>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-text-soft">Дохід</span>
-            <span className="font-mono-price text-base font-semibold text-text">
-              {Number(finance.revenue_uah).toLocaleString("uk-UA", {
-                style: "currency",
-                currency: "UAH",
-                maximumFractionDigits: 2,
-              })}
-            </span>
-          </div>
-          <div className="flex items-center justify-between mt-1">
-            <span className="text-sm text-text-soft">Продажів</span>
-            <span className="font-mono-price text-base font-semibold text-text">
-              {finance.sales_count}
-            </span>
-          </div>
-          <div className="flex items-center justify-between mt-1">
-            <span className="text-sm text-text-soft">Одиниць продано</span>
-            <span className="font-mono-price text-base font-semibold text-text">
-              {finance.units_sold}
-            </span>
-          </div>
-          <p className="text-xs text-text-soft mt-2">
-            Дохід рахується з продажів (швидке списання «Продано» та виконані резерви)
-          </p>
+      <div className="glass-card rounded-[20px] p-4 mb-4 shadow-[var(--shadow-card)]">
+        <h2 className="section-title mb-2">Фінанси</h2>
+        <div className="finance-row">
+          <span className="text-sm text-text-soft">Дохід</span>
+          <span className="font-mono-price text-base font-semibold text-text">
+            {Number(finance.revenue_uah || "0").toLocaleString("uk-UA", {
+              style: "currency",
+              currency: "UAH",
+              maximumFractionDigits: 2,
+            })}
+          </span>
         </div>
-      ) : null}
+        <div className="finance-row">
+          <span className="text-sm text-text-soft">Продажів</span>
+          <span className="font-mono-price text-base font-semibold text-text">
+            {finance.sales_count || 0}
+          </span>
+        </div>
+        <div className="finance-row finance-row--last">
+          <span className="text-sm text-text-soft">Одиниць продано</span>
+          <span className="font-mono-price text-base font-semibold text-text">
+            {finance.units_sold || 0}
+          </span>
+        </div>
+        <p className="text-xs text-text-soft mt-2">
+          Дохід рахується з продажів (швидке списання «Продано» та виконані резерви)
+        </p>
+      </div>
 
       <Panel as="section" className="reservations-section p-0">
         <ScrollFloat
@@ -98,7 +78,7 @@ export function DashboardScreen({
           ) : (
             <ReservationsPanel
               reservations={reservations}
-              variantLabel={variantLabel}
+              resolveReservationVariant={resolveReservationVariant}
               onRelease={onRelease}
               onFulfill={onFulfill}
             />

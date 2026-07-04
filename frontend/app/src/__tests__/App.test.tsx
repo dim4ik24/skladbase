@@ -398,6 +398,31 @@ describe("App catalog screen", () => {
     expect(api.adjust).not.toHaveBeenCalled();
   });
 
+  it("adjust success refetches the finance summary (Дохід не лишається застарілим)", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    const variant = makeVariant({ id: 44, sku: "SKU-44", on_hand: 5, available: 5 });
+    vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ variants: [variant] })]);
+    vi.mocked(api.adjust).mockResolvedValue({ ...variant, on_hand: 4, available: 4 });
+    vi.mocked(api.getFinanceSummary)
+      .mockResolvedValueOnce({ shop_id: 1, revenue_uah: "0.00", sales_count: 0, units_sold: 0 })
+      .mockResolvedValueOnce({ shop_id: 1, revenue_uah: "150.00", sales_count: 1, units_sold: 1 });
+
+    render(<App />);
+    await goToSklad();
+    await screen.findByText("Футболка");
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
+    await screen.findByTestId("available-44");
+
+    await openSheet("M");
+    fireEvent.click(screen.getByLabelText("Зменшити залишок: SKU-44"));
+    fireEvent.click(screen.getByText("💰 Продано"));
+    fireEvent.click(screen.getByText("Списати"));
+
+    await waitFor(() => {
+      expect(api.getFinanceSummary).toHaveBeenCalledTimes(2);
+    });
+  });
+
   it("minus button is disabled when on_hand is already zero", async () => {
     vi.mocked(api.getMe).mockResolvedValue(shopFixture);
     const variant = makeVariant({ id: 43, sku: "SKU-43", on_hand: 0, available: 0 });
@@ -755,14 +780,44 @@ describe("Reservations", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Резерви (1)" }));
     fireEvent.click(screen.getByRole("button", { name: "Зняти" }));
+    fireEvent.click(screen.getByText("Клієнт передумав"));
+    fireEvent.click(screen.getByRole("button", { name: "Підтвердити" }));
 
     await waitFor(() => {
-      expect(api.releaseReservation).toHaveBeenCalledWith(300);
+      expect(api.releaseReservation).toHaveBeenCalledWith(300, {
+        reason: "customer_changed_mind",
+        comment: undefined,
+      });
     });
     await waitFor(() => {
       expect(screen.getByTestId("available-71")).toHaveTextContent("5 шт.");
     });
     expect(screen.getByText("Активних резервів немає")).toBeInTheDocument();
+  });
+
+  it("release dialog: 'other' reason without a comment is rejected client-side", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    const variant = makeVariant({ id: 72, sku: "SKU-72", on_hand: 5, reserved: 2, available: 3 });
+    vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ variants: [variant] })]);
+    const reservation = makeReservation({ id: 301, variant_id: 72, qty: 2 });
+    vi.mocked(api.getReservations).mockResolvedValue([reservation]);
+
+    render(<App />);
+    await goToSklad();
+    await screen.findByText("Футболка");
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
+    await screen.findByTestId("available-72");
+
+    fireEvent.click(screen.getByRole("button", { name: "Резерви (1)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Зняти" }));
+    fireEvent.click(screen.getByText("❓ Інше"));
+    fireEvent.click(screen.getByRole("button", { name: "Підтвердити" }));
+
+    expect(screen.getByLabelText("Коментар (обов'язково)")).toHaveAttribute(
+      "aria-invalid",
+      "true",
+    );
+    expect(api.releaseReservation).not.toHaveBeenCalled();
   });
 
   it("fulfill calls the endpoint and deducts on_hand", async () => {
@@ -793,6 +848,73 @@ describe("Reservations", () => {
       expect(screen.getByTestId("available-81")).toHaveTextContent("3 шт.");
     });
     expect(screen.getByText("Активних резервів немає")).toBeInTheDocument();
+  });
+
+  it("fulfill success refetches the finance summary (Дохід не лишається застарілим)", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    const variant = makeVariant({ id: 82, sku: "SKU-82", on_hand: 5, reserved: 2, available: 3 });
+    vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ variants: [variant] })]);
+    const reservation = makeReservation({ id: 401, variant_id: 82, qty: 2 });
+    vi.mocked(api.getReservations).mockResolvedValue([reservation]);
+    vi.mocked(api.fulfillReservation).mockResolvedValue({
+      ...reservation,
+      status: "fulfilled",
+    });
+    vi.mocked(api.getFinanceSummary)
+      .mockResolvedValueOnce({ shop_id: 1, revenue_uah: "0.00", sales_count: 0, units_sold: 0 })
+      .mockResolvedValueOnce({ shop_id: 1, revenue_uah: "400.00", sales_count: 1, units_sold: 2 });
+
+    render(<App />);
+    await goToSklad();
+    await screen.findByText("Футболка");
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
+    await screen.findByTestId("available-82");
+
+    fireEvent.click(screen.getByRole("button", { name: "Резерви (1)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Продано" }));
+
+    await waitFor(() => {
+      expect(api.fulfillReservation).toHaveBeenCalledWith(401);
+    });
+    await waitFor(() => {
+      expect(api.getFinanceSummary).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it("reservation card renders variant photo and axis label", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    const variant = makeVariant({
+      id: 83,
+      sku: "SKU-83",
+      axis_values: { size: "XL", color: "Рожевий" },
+      photo_url: "https://example.com/photo.jpg",
+    });
+    vi.mocked(api.getProducts).mockResolvedValue([
+      makeProduct({ name: "Сукня", variants: [variant] }),
+    ]);
+    const reservation = makeReservation({
+      id: 402,
+      variant_id: 83,
+      qty: 3,
+      customer_note: "Оксана, +380501112233",
+    });
+    vi.mocked(api.getReservations).mockResolvedValue([reservation]);
+
+    render(<App />);
+    await goToSklad();
+    await screen.findByText("Сукня");
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Сукня"));
+    await screen.findByTestId("available-83");
+
+    fireEvent.click(screen.getByRole("button", { name: "Резерви (1)" }));
+
+    const title = screen.getByText("Сукня (XL / Рожевий)");
+    expect(title).toBeInTheDocument();
+    const card = title.closest("li");
+    expect(card).not.toBeNull();
+    const photo = (card as HTMLElement).querySelector("img");
+    expect(photo).toHaveAttribute("src", "https://example.com/photo.jpg");
+    expect(within(card as HTMLElement).getByText(/3 шт\..*Оксана, \+380501112233/)).toBeInTheDocument();
   });
 });
 

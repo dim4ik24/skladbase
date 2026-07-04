@@ -49,6 +49,11 @@ class ReserveIn(BaseModel):
     expires_at: datetime | None = None
 
 
+class ReleaseIn(BaseModel):
+    reason: Literal["customer_changed_mind", "unresponsive", "mistaken_reservation", "other"] | None = None
+    comment: str | None = None
+
+
 class ReservationOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -151,12 +156,17 @@ async def reserve_variant(
 @router.post("/reservations/{reservation_id}/release", response_model=ReservationOut)
 async def release_reservation(
     reservation_id: int,
+    payload: ReleaseIn | None = None,
     membership: Membership = require_permission_writable("can_manage_reservations"),
     session: AsyncSession = Depends(get_session),
 ) -> Reservation:
     try:
         return await inventory.release(
-            session, shop_id=membership.shop_id, reservation_id=reservation_id
+            session,
+            shop_id=membership.shop_id,
+            reservation_id=reservation_id,
+            reason=payload.reason if payload else None,
+            comment=payload.comment if payload else None,
         )
     except InventoryError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc

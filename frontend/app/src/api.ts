@@ -15,6 +15,7 @@ import type {
   Product,
   ProductInput,
   ProductPatch,
+  ReleasePayload,
   Reservation,
   ReserveInput,
   Shop,
@@ -141,8 +142,11 @@ export function getReservations(): Promise<Reservation[]> {
   return request<Reservation[]>("/api/reservations");
 }
 
-export function releaseReservation(id: number): Promise<Reservation> {
-  return request<Reservation>(`/api/reservations/${id}/release`, { method: "POST" });
+export function releaseReservation(id: number, payload?: ReleasePayload): Promise<Reservation> {
+  return request<Reservation>(`/api/reservations/${id}/release`, {
+    method: "POST",
+    body: payload ? JSON.stringify(payload) : undefined,
+  });
 }
 
 export function fulfillReservation(id: number): Promise<Reservation> {

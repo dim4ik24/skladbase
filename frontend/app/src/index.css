@@ -1367,27 +1367,76 @@ body {
   gap: 8px;
 }
 
-.reservation-row {
+/* ── Reservation card — birka pattern (як variant-tag) ──────────────── */
+.reservation-card {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 13px;
+  gap: 12px;
   padding: 10px 12px;
-  border-radius: 12px;
+  border-radius: 14px;
   background: var(--bg);
   color: var(--text);
 }
 
-.reservation-info {
+.reservation-card-chip {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  object-fit: cover;
+}
+
+.reservation-card-chip--neutral {
+  background: var(--pastel-lavender);
+}
+
+.reservation-card-center {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
-.reservation-variant {
+.reservation-card-title {
   font-weight: 600;
+  font-size: 14px;
   color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.reservation-card-meta {
+  font-size: 12px;
+  color: var(--text-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.reservation-card-actions {
+  flex-shrink: 0;
+  margin-top: 0;
+}
+
+/* ── Фінанси — рядки з роздільниками (не "все в кучі") ──────────────── */
+.finance-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.finance-row--last {
+  border-bottom: none;
 }
 
 /* ── Modal ───────────────────────────────────────────────────────────── */

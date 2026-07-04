@@ -12,9 +12,11 @@ import type {
   Product,
   ProductInput,
   ProductPatch,
+  ReleasePayload,
   Reservation,
   ReserveInput,
   Template,
+  Variant,
 } from "../types";
 
 gsap.registerPlugin(Flip);
@@ -37,12 +39,12 @@ interface SkladScreenProps {
   atLimit: boolean;
   maxProducts: number | null;
   activeCount: number;
-  variantLabel: (variantId: number) => string;
+  resolveReservationVariant: (variantId: number) => { variant: Variant; product: Product } | null;
   onRestock: (variantId: number, qty: number) => Promise<void>;
   onAdjust: (variantId: number, payload: AdjustPayload) => Promise<void>;
   onUploadPhoto: (variantId: number, file: File) => Promise<void>;
   onReserve: (variantId: number, payload: ReserveInput) => Promise<void>;
-  onRelease: (id: number) => Promise<void>;
+  onRelease: (id: number, payload?: ReleasePayload) => Promise<void>;
   onFulfill: (id: number) => Promise<void>;
   onCreateProduct: (payload: ProductInput) => Promise<Product>;
   onUpdateProduct: (productId: number, patch: ProductPatch) => Promise<void>;
@@ -68,7 +70,7 @@ export function SkladScreen({
   atLimit,
   maxProducts,
   activeCount,
-  variantLabel,
+  resolveReservationVariant,
   onRestock,
   onAdjust,
   onUploadPhoto,
@@ -239,7 +241,7 @@ export function SkladScreen({
           <div className="px-4 pb-4">
             <ReservationsPanel
               reservations={reservations}
-              variantLabel={variantLabel}
+              resolveReservationVariant={resolveReservationVariant}
               onRelease={onRelease}
               onFulfill={onFulfill}
             />

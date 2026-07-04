@@ -44,6 +44,7 @@ from app.models import (
 _T = TypeVar("_T")
 
 WRITE_OFF_REASONS = ("sold", "defect", "correction", "other")
+RELEASE_REASONS = ("customer_changed_mind", "unresponsive", "mistaken_reservation", "other")
 
 
 class InventoryError(Exception):
@@ -183,8 +184,20 @@ async def release(
     *,
     shop_id: int,
     reservation_id: int,
+    reason: str | None = None,
+    comment: str | None = None,
     commit: bool = True,
 ) -> Reservation:
+    """Зняття резерву. `reason` опційний — авто-зняття (протермінований резерв
+    у `tasks.py`, скасування замовлення в `orders.py`) викликають без причини;
+    причина потрібна лише коли менеджер знімає резерв вручну через діалог."""
+    if reason is not None and reason not in RELEASE_REASONS:
+        raise InventoryError(HTTPStatus.UNPROCESSABLE_ENTITY, f"Невідома причина: {reason}")
+    if reason == "other" and not comment:
+        raise InventoryError(
+            HTTPStatus.UNPROCESSABLE_ENTITY, "Для причини 'other' коментар обов'язковий"
+        )
+
     reservation = await _locked_reservation(session, shop_id, reservation_id)
     if reservation.status != ReservationStatus.active:
         raise InventoryError(HTTPStatus.CONFLICT, "Резерв не активний")
@@ -202,6 +215,8 @@ async def release(
         type_=MovementType.release,
         delta=-reservation.qty,
         order_id=reservation.order_id,
+        reason=reason,
+        comment=comment,
     )
 
     return await _finalize(session, reservation, commit=commit)

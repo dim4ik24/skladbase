@@ -202,4 +202,15 @@ export interface AdjustPayload {
   comment?: string;
 }
 
+export type ReleaseReason =
+  | "customer_changed_mind"
+  | "unresponsive"
+  | "mistaken_reservation"
+  | "other";
+
+export interface ReleasePayload {
+  reason: ReleaseReason;
+  comment?: string;
+}
+
 export type TabId = "sklad" | "dashboard" | "settings";
