@@ -231,4 +231,48 @@ export interface NpKeyStatus {
   connected: boolean;
 }
 
+export interface NpCity {
+  ref: string;
+  name: string;
+}
+
+export interface NpWarehouse {
+  ref: string;
+  name: string;
+}
+
+export interface NpSenderProfile {
+  city_ref: string | null;
+  city_name: string | null;
+  warehouse_ref: string | null;
+  warehouse_name: string | null;
+  phone: string | null;
+  name: string | null;
+}
+
+export interface NpSenderPayload {
+  city_ref: string;
+  city_name: string;
+  warehouse_ref: string;
+  warehouse_name: string;
+  phone: string;
+  name: string;
+}
+
+export interface CreateTtnPayload {
+  recipient_name: string;
+  recipient_phone: string;
+  recipient_city_ref: string;
+  recipient_warehouse_ref: string;
+  weight?: number;
+  cod?: boolean;
+  cod_amount?: string;
+  description?: string;
+}
+
+export interface CreateTtnResult {
+  ttn: string;
+  delivery_cost: string;
+}
+
 export type TabId = "sklad" | "dashboard" | "settings";

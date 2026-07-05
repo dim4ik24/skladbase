@@ -3,6 +3,8 @@ import { NotPickedUpSheet } from "./NotPickedUpSheet";
 import { ReleaseSheet } from "./ReleaseSheet";
 import { ShipSheet } from "./ShipSheet";
 import type {
+  CreateTtnPayload,
+  CreateTtnResult,
   NotPickedUpPayload,
   Product,
   ReleasePayload,
@@ -20,6 +22,8 @@ interface ReservationsPanelProps {
   onUpdateTtn: (reservationId: number, ttn: string) => Promise<void>;
   onPickUp: (reservationId: number) => Promise<void>;
   onNotPickedUp: (reservationId: number, payload: NotPickedUpPayload) => Promise<void>;
+  onCreateTtn: (reservationId: number, payload: CreateTtnPayload) => Promise<CreateTtnResult>;
+  onNavigateToSettings: () => void;
 }
 
 function formatCompactDate(iso: string): string {
@@ -44,6 +48,8 @@ export function ReservationsPanel({
   onUpdateTtn,
   onPickUp,
   onNotPickedUp,
+  onCreateTtn,
+  onNavigateToSettings,
 }: ReservationsPanelProps) {
   const [releasingId, setReleasingId] = useState<number | null>(null);
   const [shippingId, setShippingId] = useState<number | null>(null);
@@ -81,6 +87,17 @@ export function ReservationsPanel({
   const releasingReservation = reservations.find((r) => r.id === releasingId) ?? null;
   const shippingReservation = reservations.find((r) => r.id === shippingId) ?? null;
   const notPickedUpReservation = reservations.find((r) => r.id === notPickedUpId) ?? null;
+
+  function resolveShipDefaults(reservation: Reservation): {
+    productName: string;
+    defaultCodAmount: number;
+  } {
+    const resolved = resolveReservationVariant(reservation.variant_id);
+    return {
+      productName: resolved?.product.name ?? `Варіант #${reservation.variant_id}`,
+      defaultCodAmount: resolved ? Number(resolved.variant.price) * reservation.qty : 0,
+    };
+  }
 
   function resolveTitle(reservation: Reservation): string {
     const resolved = resolveReservationVariant(reservation.variant_id);
@@ -215,7 +232,10 @@ export function ReservationsPanel({
         <ShipSheet
           reservationId={shippingReservation.id}
           title={resolveTitle(shippingReservation)}
+          {...resolveShipDefaults(shippingReservation)}
           onSubmit={handleShipSubmit}
+          onCreateTtn={onCreateTtn}
+          onNavigateToSettings={onNavigateToSettings}
           onClose={() => setShippingId(null)}
         />
       ) : null}

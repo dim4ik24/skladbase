@@ -49,6 +49,15 @@ vi.mock("../api", () => ({
   getNpStatus: vi.fn(),
   putNpKey: vi.fn(),
   deleteNpKey: vi.fn(),
+  shipReservation: vi.fn(),
+  updateReservationTtn: vi.fn(),
+  pickUpReservation: vi.fn(),
+  notPickedUpReservation: vi.fn(),
+  searchNpCities: vi.fn(),
+  getNpWarehouses: vi.fn(),
+  getNpSender: vi.fn(),
+  putNpSender: vi.fn(),
+  createTtn: vi.fn(),
 }));
 
 import * as api from "../api";
@@ -189,6 +198,22 @@ beforeEach(() => {
   vi.mocked(api.getNpStatus).mockReset().mockResolvedValue({ connected: false });
   vi.mocked(api.putNpKey).mockReset();
   vi.mocked(api.deleteNpKey).mockReset();
+  vi.mocked(api.shipReservation).mockReset();
+  vi.mocked(api.updateReservationTtn).mockReset();
+  vi.mocked(api.pickUpReservation).mockReset();
+  vi.mocked(api.notPickedUpReservation).mockReset();
+  vi.mocked(api.searchNpCities).mockReset();
+  vi.mocked(api.getNpWarehouses).mockReset();
+  vi.mocked(api.getNpSender).mockReset().mockResolvedValue({
+    city_ref: null,
+    city_name: null,
+    warehouse_ref: null,
+    warehouse_name: null,
+    phone: null,
+    name: null,
+  });
+  vi.mocked(api.putNpSender).mockReset();
+  vi.mocked(api.createTtn).mockReset();
   document.documentElement.style.removeProperty("--accent-color");
   localStorage.clear();
 });
@@ -1938,5 +1963,223 @@ describe("Finance summary (Dashboard)", () => {
     expect(screen.getByText("2")).toBeInTheDocument();
     expect(screen.getByText("Одиниць продано")).toBeInTheDocument();
     expect(screen.getByText("3")).toBeInTheDocument();
+  });
+});
+
+describe("Nova Poshta sender profile (Settings, owner-only)", () => {
+  async function goToSettings() {
+    await screen.findByText("Тестовий магазин");
+    fireEvent.click(screen.getByRole("tab", { name: "Налаштування" }));
+  }
+
+  it("is shown only once the NP key is connected", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.getNpStatus).mockResolvedValue({ connected: false });
+
+    render(<App />);
+    await goToSettings();
+    await screen.findByText("Нова Пошта");
+
+    expect(screen.queryByText("Дані відправника")).not.toBeInTheDocument();
+  });
+
+  it("searches a city with a debounce, picks a warehouse and saves the sender profile", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.getNpStatus).mockResolvedValue({ connected: true });
+    vi.mocked(api.searchNpCities).mockResolvedValue([{ ref: "city-ref-1", name: "Київ" }]);
+    vi.mocked(api.getNpWarehouses).mockResolvedValue([{ ref: "wh-ref-1", name: "Відділення №1" }]);
+    vi.mocked(api.putNpSender).mockResolvedValue({
+      city_ref: "city-ref-1",
+      city_name: "Київ",
+      warehouse_ref: "wh-ref-1",
+      warehouse_name: "Відділення №1",
+      phone: "380501112233",
+      name: "ФОП Іваненко",
+    });
+
+    render(<App />);
+    await goToSettings();
+    await screen.findByText("Дані відправника");
+
+    fireEvent.change(screen.getByLabelText("ПІБ / ФОП"), { target: { value: "ФОП Іваненко" } });
+    fireEvent.change(screen.getByLabelText("Телефон"), { target: { value: "380501112233" } });
+
+    fireEvent.change(screen.getByLabelText("Місто"), { target: { value: "Ки" } });
+    expect(api.searchNpCities).not.toHaveBeenCalled(); // дебаунс — не одразу
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    expect(api.searchNpCities).toHaveBeenCalledWith("Ки");
+    fireEvent.click(await screen.findByText("Київ"));
+
+    fireEvent.focus(screen.getByLabelText("Відділення"));
+    fireEvent.click(await screen.findByText("Відділення №1"));
+
+    // "Зберегти" неоднозначне на цьому екрані (є ще й у профілі магазину) —
+    // звужуємо пошук до самої секції відправника.
+    const senderSection = screen.getByText("Дані відправника").closest(".np-sender-section");
+    fireEvent.click(within(senderSection as HTMLElement).getByRole("button", { name: "Зберегти" }));
+
+    await waitFor(() => {
+      expect(api.putNpSender).toHaveBeenCalledWith({
+        city_ref: "city-ref-1",
+        city_name: "Київ",
+        warehouse_ref: "wh-ref-1",
+        warehouse_name: "Відділення №1",
+        phone: "380501112233",
+        name: "ФОП Іваненко",
+      });
+    });
+    expect(await screen.findByText("Відправник налаштований ✅")).toBeInTheDocument();
+  });
+});
+
+describe("ShipSheet — automatic TTN creation", () => {
+  function mockShipReadyShop() {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    const variant = makeVariant({
+      id: 501,
+      sku: "SKU-501",
+      on_hand: 5,
+      reserved: 2,
+      available: 3,
+      price: "300.00",
+    });
+    vi.mocked(api.getProducts).mockResolvedValue([
+      makeProduct({ name: "Кросівки", variants: [variant] }),
+    ]);
+    vi.mocked(api.getReservations).mockResolvedValue([
+      makeReservation({ id: 900, variant_id: 501, qty: 2 }),
+    ]);
+  }
+
+  async function openAutoShipForm() {
+    render(<App />);
+    await goToSklad();
+    await screen.findByText("Кросівки");
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Кросівки"));
+    await screen.findByTestId("available-501");
+
+    fireEvent.click(screen.getByRole("button", { name: "Резерви (1)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Відправлено" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Створити ТТН автоматично" }));
+  }
+
+  async function fillRecipientForm() {
+    await screen.findByLabelText("ПІБ одержувача");
+    fireEvent.change(screen.getByLabelText("ПІБ одержувача"), {
+      target: { value: "Петро Сидоренко" },
+    });
+    fireEvent.change(screen.getByLabelText("Телефон одержувача"), {
+      target: { value: "380671112233" },
+    });
+
+    fireEvent.change(screen.getByLabelText("Місто"), { target: { value: "Льв" } });
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    fireEvent.click(await screen.findByText("Львів"));
+
+    fireEvent.focus(screen.getByLabelText("Відділення"));
+    fireEvent.click(await screen.findByText("Відділення №5"));
+  }
+
+  function mockRecipientLookups() {
+    vi.mocked(api.getNpSender).mockResolvedValue({
+      city_ref: "sender-city",
+      city_name: "Київ",
+      warehouse_ref: "sender-wh",
+      warehouse_name: "Відділення №1",
+      phone: "380501112233",
+      name: "ФОП Іваненко",
+    });
+    vi.mocked(api.searchNpCities).mockResolvedValue([{ ref: "rec-city", name: "Львів" }]);
+    vi.mocked(api.getNpWarehouses).mockResolvedValue([{ ref: "rec-wh", name: "Відділення №5" }]);
+  }
+
+  it("shows a hint and a settings-navigation button when sender is not configured", async () => {
+    mockShipReadyShop();
+    vi.mocked(api.getNpSender).mockResolvedValue({
+      city_ref: null,
+      city_name: null,
+      warehouse_ref: null,
+      warehouse_name: null,
+      phone: null,
+      name: null,
+    });
+
+    await openAutoShipForm();
+
+    expect(
+      await screen.findByText("Заповніть дані відправника в Налаштуваннях"),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Перейти в Налаштування" }));
+    expect(screen.getByRole("tab", { name: "Налаштування" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  });
+
+  it("submits create-ttn with weight/description defaults, cod unchecked -> no cod_amount", async () => {
+    mockShipReadyShop();
+    mockRecipientLookups();
+    vi.mocked(api.createTtn).mockResolvedValue({ ttn: "20450000000123", delivery_cost: "80.00" });
+
+    await openAutoShipForm();
+    await fillRecipientForm();
+
+    fireEvent.click(screen.getByRole("button", { name: "Створити накладну" }));
+
+    await waitFor(() => {
+      expect(api.createTtn).toHaveBeenCalledWith(900, {
+        recipient_name: "Петро Сидоренко",
+        recipient_phone: "380671112233",
+        recipient_city_ref: "rec-city",
+        recipient_warehouse_ref: "rec-wh",
+        weight: 0.5,
+        cod: false,
+        cod_amount: undefined,
+        description: "Кросівки",
+      });
+    });
+
+    expect(
+      await screen.findByText("ТТН 20450000000123 створено, доставка ~80.00 грн"),
+    ).toBeInTheDocument();
+  });
+
+  it("cod checkbox defaults cod_amount to the reservation total (price * qty)", async () => {
+    mockShipReadyShop();
+    mockRecipientLookups();
+    vi.mocked(api.createTtn).mockResolvedValue({ ttn: "20450000000124", delivery_cost: "80.00" });
+
+    await openAutoShipForm();
+    await fillRecipientForm();
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Накладений платіж" }));
+    fireEvent.click(screen.getByRole("button", { name: "Створити накладну" }));
+
+    await waitFor(() => {
+      expect(api.createTtn).toHaveBeenCalledWith(
+        900,
+        expect.objectContaining({ cod: true, cod_amount: "600.00" }), // 300 * 2
+      );
+    });
+  });
+
+  it("shows the НП error text as an inline banner on 422", async () => {
+    mockShipReadyShop();
+    mockRecipientLookups();
+    vi.mocked(api.createTtn).mockRejectedValue(
+      new ApiError(422, "НП: невірний формат телефону одержувача"),
+    );
+
+    await openAutoShipForm();
+    await fillRecipientForm();
+
+    fireEvent.click(screen.getByRole("button", { name: "Створити накладну" }));
+
+    expect(
+      await screen.findByText("НП: невірний формат телефону одержувача"),
+    ).toBeInTheDocument();
   });
 });

@@ -9,6 +9,8 @@ import { ScrollFloat } from "../components/ScrollFloat";
 import { Panel } from "../components/ui/Panel";
 import type {
   AdjustPayload,
+  CreateTtnPayload,
+  CreateTtnResult,
   NotPickedUpPayload,
   Product,
   ProductInput,
@@ -52,6 +54,8 @@ interface SkladScreenProps {
   onUpdateTtn: (id: number, ttn: string) => Promise<void>;
   onPickUp: (id: number) => Promise<void>;
   onNotPickedUp: (id: number, payload: NotPickedUpPayload) => Promise<void>;
+  onCreateTtn: (id: number, payload: CreateTtnPayload) => Promise<CreateTtnResult>;
+  onNavigateToSettings: () => void;
   onCreateProduct: (payload: ProductInput) => Promise<Product>;
   onUpdateProduct: (productId: number, patch: ProductPatch) => Promise<void>;
   onFrozenAction: () => void;
@@ -87,6 +91,8 @@ export function SkladScreen({
   onUpdateTtn,
   onPickUp,
   onNotPickedUp,
+  onCreateTtn,
+  onNavigateToSettings,
   onCreateProduct,
   onUpdateProduct,
   onFrozenAction,
@@ -258,6 +264,8 @@ export function SkladScreen({
               onUpdateTtn={onUpdateTtn}
               onPickUp={onPickUp}
               onNotPickedUp={onNotPickedUp}
+              onCreateTtn={onCreateTtn}
+              onNavigateToSettings={onNavigateToSettings}
             />
           </div>
         </Panel>

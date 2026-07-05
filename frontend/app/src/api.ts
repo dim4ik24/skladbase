@@ -7,10 +7,16 @@
 import { getInitData } from "./telegram";
 import type {
   AdjustPayload,
+  CreateTtnPayload,
+  CreateTtnResult,
   FinanceSummary,
   Invite,
   NotPickedUpPayload,
+  NpCity,
   NpKeyStatus,
+  NpSenderPayload,
+  NpSenderProfile,
+  NpWarehouse,
   PermissionsPatch,
   Photo,
   Plan,
@@ -248,6 +254,35 @@ export function putNpKey(apiKey: string): Promise<NpKeyStatus> {
 
 export function deleteNpKey(): Promise<void> {
   return request<void>("/api/shop/np-key", { method: "DELETE" });
+}
+
+export function searchNpCities(query: string): Promise<NpCity[]> {
+  return request<NpCity[]>(`/api/np/cities?q=${encodeURIComponent(query)}`);
+}
+
+export function getNpWarehouses(cityRef: string): Promise<NpWarehouse[]> {
+  return request<NpWarehouse[]>(`/api/np/warehouses?city_ref=${encodeURIComponent(cityRef)}`);
+}
+
+export function getNpSender(): Promise<NpSenderProfile> {
+  return request<NpSenderProfile>("/api/shop/np-sender");
+}
+
+export function putNpSender(payload: NpSenderPayload): Promise<NpSenderProfile> {
+  return request<NpSenderProfile>("/api/shop/np-sender", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function createTtn(
+  reservationId: number,
+  payload: CreateTtnPayload,
+): Promise<CreateTtnResult> {
+  return request<CreateTtnResult>(`/api/reservations/${reservationId}/create-ttn`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export function getFinanceSummary(): Promise<FinanceSummary> {

@@ -171,6 +171,14 @@ class Shop(Base):
     # --- Нова Пошта: трекінг відправлень (Фіча B1) ---
     np_api_key_encrypted: Mapped[str | None] = mapped_column(String(500))  # AES-256-GCM, plaintext не зберігаємо
 
+    # --- Нова Пошта: дані відправника для створення накладних (Фіча B3) ---
+    np_sender_city_ref: Mapped[str | None] = mapped_column(String(50))    # Ref міста НП (UUID)
+    np_sender_city_name: Mapped[str | None] = mapped_column(String(120))  # для UI, не йде в запит НП
+    np_sender_warehouse_ref: Mapped[str | None] = mapped_column(String(50))
+    np_sender_warehouse_name: Mapped[str | None] = mapped_column(String(200))
+    np_sender_phone: Mapped[str | None] = mapped_column(String(20))
+    np_sender_name: Mapped[str | None] = mapped_column(String(160))  # ПІБ/ФОП відправника
+
     status: Mapped[ShopStatus] = mapped_column(SAEnum(ShopStatus), default=ShopStatus.active)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 

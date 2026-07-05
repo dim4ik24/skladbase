@@ -5,6 +5,8 @@ import { ReservationsPanel } from "../components/ReservationsPanel";
 import { ScrollFloat } from "../components/ScrollFloat";
 import { Panel } from "../components/ui/Panel";
 import type {
+  CreateTtnPayload,
+  CreateTtnResult,
   FinanceSummary,
   NotPickedUpPayload,
   Product,
@@ -28,6 +30,8 @@ interface DashboardScreenProps {
   onUpdateTtn: (id: number, ttn: string) => Promise<void>;
   onPickUp: (id: number) => Promise<void>;
   onNotPickedUp: (id: number, payload: NotPickedUpPayload) => Promise<void>;
+  onCreateTtn: (id: number, payload: CreateTtnPayload) => Promise<CreateTtnResult>;
+  onNavigateToSettings: () => void;
   onNavigateToSklad: () => void;
   scrollContainerRef: RefObject<HTMLDivElement | null>;
 }
@@ -45,6 +49,8 @@ export function DashboardScreen({
   onUpdateTtn,
   onPickUp,
   onNotPickedUp,
+  onCreateTtn,
+  onNavigateToSettings,
   onNavigateToSklad,
   scrollContainerRef,
 }: DashboardScreenProps) {
@@ -102,6 +108,8 @@ export function DashboardScreen({
               onUpdateTtn={onUpdateTtn}
               onPickUp={onPickUp}
               onNotPickedUp={onNotPickedUp}
+              onCreateTtn={onCreateTtn}
+              onNavigateToSettings={onNavigateToSettings}
             />
           )}
         </div>

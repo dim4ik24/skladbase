@@ -948,6 +948,51 @@ body {
   border-color: #c0392b !important;
 }
 
+/* ── ShipSheet — перемикач manual/auto ТТН ───────────────────────────── */
+.ship-mode-toggle {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.ship-mode-btn {
+  flex: 1;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1.5px solid var(--line);
+  background: var(--surface);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+}
+
+.ship-mode-btn--active {
+  border-color: var(--green);
+  background: var(--green);
+  color: #fff;
+}
+
+.ship-sender-hint {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--bg);
+  border: 1.5px solid var(--line);
+  font-size: 13px;
+  color: var(--text-soft);
+  margin-bottom: 10px;
+}
+
+.ship-success-message {
+  padding: 16px 0;
+  text-align: center;
+  font-weight: 600;
+  color: var(--green-deep);
+}
+
 /* ── Variant edit form ───────────────────────────────────────────────── */
 .variant-edit-form {
   margin-top: 8px;
@@ -1710,6 +1755,55 @@ body {
   border-top: 1.5px solid var(--line);
   padding-top: 8px;
   margin-bottom: 8px;
+}
+
+/* ── Нова Пошта — city/warehouse autocomplete (портал, тому фіксовані top/left/width інлайн) ── */
+.np-picker {
+  position: relative;
+}
+
+.np-picker-error {
+  padding: 2px 0;
+}
+
+.np-picker-dropdown {
+  position: fixed;
+  z-index: 300;
+  margin: 4px 0 0;
+  padding: 4px;
+  list-style: none;
+  max-height: 220px;
+  overflow-y: auto;
+  border-radius: 12px;
+  border: 1.5px solid var(--line);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.np-picker-option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.np-picker-option:hover {
+  background: var(--bg);
+}
+
+.np-picker-option--status {
+  color: var(--text-soft);
+  cursor: default;
+}
+
+.np-picker-option--status:hover {
+  background: none;
 }
 
 .variant-builder-row {

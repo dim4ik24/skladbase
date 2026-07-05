@@ -18,6 +18,8 @@ import { effectivePlanCode, isLiveTrial } from "./lib/planStatus";
 import { initTelegram, setAccentColor } from "./telegram";
 import type {
   AdjustPayload,
+  CreateTtnPayload,
+  CreateTtnResult,
   FinanceSummary,
   NotPickedUpPayload,
   Plan,
@@ -442,6 +444,31 @@ export default function App() {
     }
   }
 
+  // create-ttn повертає лише {ttn, delivery_cost} (ShipSheet показує успіх),
+  // не оновлений Reservation — стан (on_hand/reserved/status/ttn) підтягуємо
+  // повним рефетчем products+reservations замість дублювання ship()-математики
+  // на фронті (рідкісна дія, зайвий round-trip тут не критичний).
+  async function handleCreateTtn(
+    reservationId: number,
+    payload: CreateTtnPayload,
+  ): Promise<CreateTtnResult> {
+    try {
+      const result = await api.createTtn(reservationId, payload);
+      const [freshProducts, freshReservations] = await Promise.all([
+        api.getProducts(),
+        api.getReservations(),
+      ]);
+      setProducts(freshProducts);
+      setReservations(freshReservations);
+      return result;
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 402) {
+        setUpgradePrompt({ message: err.detail });
+      }
+      throw err;
+    }
+  }
+
   async function handleClearDemos() {
     setClearingDemos(true);
     try {
@@ -613,6 +640,8 @@ export default function App() {
               onUpdateTtn={handleUpdateTtn}
               onPickUp={handlePickUp}
               onNotPickedUp={handleNotPickedUp}
+              onCreateTtn={handleCreateTtn}
+              onNavigateToSettings={() => setActiveTab("settings")}
               onCreateProduct={handleCreateProduct}
               onUpdateProduct={handleUpdateProduct}
               onFrozenAction={handleFrozenAction}
@@ -645,6 +674,8 @@ export default function App() {
               onUpdateTtn={handleUpdateTtn}
               onPickUp={handlePickUp}
               onNotPickedUp={handleNotPickedUp}
+              onCreateTtn={handleCreateTtn}
+              onNavigateToSettings={() => setActiveTab("settings")}
               onNavigateToSklad={() => setActiveTab("sklad")}
               scrollContainerRef={scrollContainerRef}
             />
