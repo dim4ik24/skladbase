@@ -388,12 +388,14 @@ async def test_scheduler_registers_expected_jobs_with_intervals() -> None:
     jobs = {job.id: job for job in scheduler.get_jobs()}
 
     assert set(jobs) == {
+        "np_tracking",
         "release_expired_reservations",
         "low_stock_scan",
         "charge_due_card_subscriptions",
         "expire_subscriptions",
         "send_renewal_reminders",
     }
+    assert jobs["np_tracking"].trigger.interval == timedelta(minutes=10)
     assert jobs["release_expired_reservations"].trigger.interval == timedelta(hours=1)
     assert jobs["low_stock_scan"].trigger.interval == timedelta(hours=1)
     assert jobs["charge_due_card_subscriptions"].trigger.interval == timedelta(hours=6)

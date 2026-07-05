@@ -3,6 +3,7 @@ SkladBase — щоденні/щохвилинні крон-задачі.
 
 Запуск: APScheduler або окремий воркер. Усі функції приймають AsyncSession.
 Рекомендований розклад:
+  every 10m -> np_tracking
   every 1h  -> release_expired_reservations
   every 1h  -> low_stock_scan
   every 6h  -> charge_due_card_subscriptions
@@ -12,8 +13,10 @@ SkladBase — щоденні/щохвилинні крон-задачі.
 """
 from __future__ import annotations
 
+import logging
 from collections.abc import Awaitable, Callable
 from datetime import timedelta
+from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,9 +36,16 @@ from app.models import (
     ensure_aware_utc,
     utcnow,
 )
+from app.security.crypto import CryptoError, decrypt
+from app.services import inventory
+from app.services.inventory import InventoryError
+from app.services.novaposhta import PICKED_CODES, RETURNED_CODES, NovaPoshtaError
 from app.services.subscriptions import SubscriptionService
 
+logger = logging.getLogger(__name__)
+
 Notifier = Callable[[int, str], Awaitable[None]]
+NpTrackFn = Callable[[str, list[str]], Awaitable[list[dict]]]
 
 
 # --------------------------------------------------------------------------- #
@@ -166,6 +176,100 @@ async def release_expired_reservations(session: AsyncSession) -> int:
         r.released_at = now
     await session.commit()
     return len(resvs)
+
+
+async def _np_display_name(session: AsyncSession, variant_id: int) -> tuple[str, Variant | None]:
+    variant = await session.get(Variant, variant_id)
+    if variant is None:
+        return f"Варіант #{variant_id}", None
+    product = await session.get(Product, variant.product_id)
+    name = product.name if product else f"Варіант #{variant_id}"
+    return name, variant
+
+
+async def np_tracking(session: AsyncSession, notify: Notifier, track: NpTrackFn) -> int:
+    """Фіча B1: пуш-трекінг shipped-резервів через Нова Пошта.
+
+    Для кожного магазину з підключеним ключем — усі shipped-резерви з ttn
+    батчем у track(); PICKED_CODES -> pick_up (дохід, як і ручний "Забрав");
+    RETURNED_CODES -> not_picked_up(reason="refused") (товар назад на склад,
+    без доходу); інакший код -> зберігаємо текст статусу в np_status (UI B2).
+
+    Стійкість: поганий ключ чи мережевий збій одного магазину не валить цикл
+    (try/except на магазин); резерв, уже оброблений вручну паралельно (409
+    від pick_up/not_picked_up) — тихо пропускаємо (try/except на резерв)."""
+    processed = 0
+    shops = (await session.scalars(
+        select(Shop).where(Shop.np_api_key_encrypted.is_not(None))
+    )).all()
+
+    for shop in shops:
+        try:
+            assert shop.np_api_key_encrypted is not None
+            api_key = decrypt(shop.np_api_key_encrypted)
+
+            reservations = (await session.scalars(
+                select(Reservation).where(
+                    Reservation.shop_id == shop.id,
+                    Reservation.status == ReservationStatus.shipped,
+                    Reservation.ttn.is_not(None),
+                )
+            )).all()
+            by_ttn = {r.ttn: r for r in reservations if r.ttn}
+            if not by_ttn:
+                continue
+
+            results = await track(api_key, list(by_ttn.keys()))
+        except (CryptoError, NovaPoshtaError):
+            logger.warning("np_tracking: магазин %s пропущено", shop.id, exc_info=True)
+            continue
+
+        for result in results:
+            number = result.get("Number")
+            if not isinstance(number, str):
+                continue
+            reservation = by_ttn.get(number)
+            if reservation is None:
+                continue
+            try:
+                code = int(result["StatusCode"])
+            except (KeyError, TypeError, ValueError):
+                continue
+
+            try:
+                if code in PICKED_CODES:
+                    updated = await inventory.pick_up(
+                        session, shop_id=shop.id, reservation_id=reservation.id
+                    )
+                    name, variant = await _np_display_name(session, updated.variant_id)
+                    amount = (variant.price * updated.qty) if variant else Decimal("0")
+                    await notify(
+                        shop.owner_tg_id,
+                        f"📦 Посилку {reservation.ttn} отримано — {name}, "
+                        f"+{amount.quantize(Decimal('0.01'))} ₴",
+                    )
+                    processed += 1
+                elif code in RETURNED_CODES:
+                    updated = await inventory.not_picked_up(
+                        session, shop_id=shop.id, reservation_id=reservation.id, reason="refused"
+                    )
+                    name, _ = await _np_display_name(session, updated.variant_id)
+                    await notify(
+                        shop.owner_tg_id,
+                        f"↩️ Посилку {reservation.ttn} не забрали — {name} повернуто на склад",
+                    )
+                    processed += 1
+                else:
+                    reservation.np_status = result.get("Status")
+                    await session.commit()
+            except InventoryError:
+                # Уже оброблено вручну (pick_up/not_picked_up/release) паралельно з кроном.
+                logger.warning(
+                    "np_tracking: резерв %s вже оброблено, скіп", reservation.id, exc_info=True
+                )
+                continue
+
+    return processed
 
 
 async def low_stock_scan(session: AsyncSession, notify: Notifier) -> int:

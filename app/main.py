@@ -13,6 +13,7 @@ from app.api import (
     finance,
     inventory,
     me,
+    np,
     orders,
     payment_webhooks,
     public,
@@ -68,6 +69,7 @@ app.include_router(billing.router)
 app.include_router(telegram.router)
 app.include_router(payment_webhooks.router)
 app.include_router(inventory.router)
+app.include_router(np.router)
 
 
 @app.get("/health")

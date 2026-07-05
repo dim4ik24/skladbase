@@ -168,6 +168,9 @@ class Shop(Base):
     webhook_url: Mapped[str | None] = mapped_column(String(500))
     webhook_secret_encrypted: Mapped[str | None] = mapped_column(String(500))  # AES-256-GCM
 
+    # --- Нова Пошта: трекінг відправлень (Фіча B1) ---
+    np_api_key_encrypted: Mapped[str | None] = mapped_column(String(500))  # AES-256-GCM, plaintext не зберігаємо
+
     status: Mapped[ShopStatus] = mapped_column(SAEnum(ShopStatus), default=ShopStatus.active)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
@@ -365,6 +368,7 @@ class Reservation(Base):
 
     ttn: Mapped[str | None] = mapped_column(String(40))  # накладна Нової пошти тощо, опційна
     shipped_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    np_status: Mapped[str | None] = mapped_column(String(120))  # останній текст статусу з трекінгу НП (фіча B1/B2)
 
 
 class StockMovement(Base):
