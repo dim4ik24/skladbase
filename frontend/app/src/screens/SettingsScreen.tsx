@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { currentPlanLabel } from "../lib/planStatus";
 import { errorMessage } from "../errors";
+import { NpKeySection } from "../components/NpKeySection";
 import { TeamSection } from "../components/TeamSection";
 import type { Shop } from "../types";
 
@@ -239,6 +240,8 @@ export function SettingsScreen({
       ) : null}
 
       {shop?.role === "owner" ? <TeamSection /> : null}
+
+      {shop?.role === "owner" ? <NpKeySection /> : null}
 
       <div className="glass-card rounded-[20px] overflow-hidden shadow-[var(--shadow-card)]">
         <h3 className="text-sm font-bold text-text-soft uppercase tracking-wide px-4 pt-4 mb-1">

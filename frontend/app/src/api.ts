@@ -10,6 +10,7 @@ import type {
   FinanceSummary,
   Invite,
   NotPickedUpPayload,
+  NpKeyStatus,
   PermissionsPatch,
   Photo,
   Plan,
@@ -232,6 +233,21 @@ export function uploadShopLogo(file: File): Promise<{ logo_url: string }> {
 
 export function deleteShopLogo(): Promise<void> {
   return request<void>("/api/shop/logo", { method: "DELETE" });
+}
+
+export function getNpStatus(): Promise<NpKeyStatus> {
+  return request<NpKeyStatus>("/api/shop/np-key");
+}
+
+export function putNpKey(apiKey: string): Promise<NpKeyStatus> {
+  return request<NpKeyStatus>("/api/shop/np-key", {
+    method: "PUT",
+    body: JSON.stringify({ api_key: apiKey }),
+  });
+}
+
+export function deleteNpKey(): Promise<void> {
+  return request<void>("/api/shop/np-key", { method: "DELETE" });
 }
 
 export function getFinanceSummary(): Promise<FinanceSummary> {

@@ -177,6 +177,7 @@ export interface Reservation {
   source: string;
   status: ReservationStatus;
   ttn: string | null;
+  np_status: string | null;
   expires_at: string | null;
   created_at: string;
   released_at: string | null;
@@ -224,6 +225,10 @@ export type NotPickedUpReason = "did_not_pick_up" | "refused" | "other";
 export interface NotPickedUpPayload {
   reason: NotPickedUpReason;
   comment?: string;
+}
+
+export interface NpKeyStatus {
+  connected: boolean;
 }
 
 export type TabId = "sklad" | "dashboard" | "settings";

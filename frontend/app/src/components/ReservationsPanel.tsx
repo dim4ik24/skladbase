@@ -168,6 +168,9 @@ export function ReservationsPanel({
                     </span>
                   )
                 ) : null}
+                {isShipped && reservation.np_status ? (
+                  <span className="reservation-card-meta">📍 {reservation.np_status}</span>
+                ) : null}
               </div>
 
               <div className="modal-actions reservation-card-actions">

@@ -46,6 +46,9 @@ vi.mock("../api", () => ({
   removeMember: vi.fn(),
   updateMemberPermissions: vi.fn(),
   setActiveShopId: vi.fn(),
+  getNpStatus: vi.fn(),
+  putNpKey: vi.fn(),
+  deleteNpKey: vi.fn(),
 }));
 
 import * as api from "../api";
@@ -139,6 +142,7 @@ function makeReservation(overrides: Partial<Reservation> = {}): Reservation {
     source: "manual",
     status: "active",
     ttn: null,
+    np_status: null,
     expires_at: null,
     created_at: "2026-06-01T00:00:00Z",
     released_at: null,
@@ -182,6 +186,9 @@ beforeEach(() => {
   vi.mocked(api.removeMember).mockReset();
   vi.mocked(api.updateMemberPermissions).mockReset();
   vi.mocked(api.setActiveShopId).mockReset();
+  vi.mocked(api.getNpStatus).mockReset().mockResolvedValue({ connected: false });
+  vi.mocked(api.putNpKey).mockReset();
+  vi.mocked(api.deleteNpKey).mockReset();
   document.documentElement.style.removeProperty("--accent-color");
   localStorage.clear();
 });
@@ -960,6 +967,33 @@ describe("Reservations", () => {
     expect(photo).toHaveAttribute("src", "https://example.com/photo.jpg");
     expect(within(card as HTMLElement).getByText("Оксана, +380501112233")).toBeInTheDocument();
   });
+
+  it("shipped reservation card shows the np_status tracking line", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    const variant = makeVariant({ id: 84, sku: "SKU-84" });
+    vi.mocked(api.getProducts).mockResolvedValue([
+      makeProduct({ name: "Кросівки", variants: [variant] }),
+    ]);
+    const reservation = makeReservation({
+      id: 403,
+      variant_id: 84,
+      qty: 1,
+      status: "shipped",
+      ttn: "20450000000009",
+      np_status: "Прибув у відділення",
+    });
+    vi.mocked(api.getReservations).mockResolvedValue([reservation]);
+
+    render(<App />);
+    await goToSklad();
+    await screen.findByText("Кросівки");
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Кросівки"));
+    await screen.findByTestId("available-84");
+
+    fireEvent.click(screen.getByRole("button", { name: "Резерви (1)" }));
+
+    expect(screen.getByText("📍 Прибув у відділення")).toBeInTheDocument();
+  });
 });
 
 describe("Trial banner", () => {
@@ -1523,6 +1557,95 @@ describe("Team section (Settings, owner-only)", () => {
     fireEvent.click(await screen.findByText("Дмитро"));
 
     expect(screen.queryByText("Фінанси")).not.toBeInTheDocument();
+  });
+});
+
+describe("Nova Poshta key section (Settings, owner-only)", () => {
+  async function goToSettings() {
+    await screen.findByText("Тестовий магазин");
+    fireEvent.click(screen.getByRole("tab", { name: "Налаштування" }));
+  }
+
+  it("is visible for owner", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+
+    render(<App />);
+    await goToSettings();
+
+    expect(await screen.findByText("Нова Пошта")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Підключити" })).toBeInTheDocument();
+  });
+
+  it("is hidden for manager", async () => {
+    vi.mocked(api.getMe).mockResolvedValue({ ...shopFixture, role: "manager" });
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+
+    render(<App />);
+    await goToSettings();
+
+    await screen.findByText("Підписка");
+    expect(screen.queryByText("Нова Пошта")).not.toBeInTheDocument();
+  });
+
+  it("connects a valid key and shows the connected badge", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.putNpKey).mockResolvedValue({ connected: true });
+
+    render(<App />);
+    await goToSettings();
+    await screen.findByText("Нова Пошта");
+
+    fireEvent.change(screen.getByLabelText("API-ключ"), {
+      target: { value: "np-live-key-123" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Підключити" }));
+
+    await waitFor(() => {
+      expect(api.putNpKey).toHaveBeenCalledWith("np-live-key-123");
+    });
+    expect(await screen.findByText("Підключено ✅")).toBeInTheDocument();
+    expect(
+      screen.getByText("Статуси відправлень оновлюються автоматично кожні 10 хв"),
+    ).toBeInTheDocument();
+  });
+
+  it("shows an inline error when the key fails validation (422)", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.putNpKey).mockRejectedValue(
+      new api.ApiError(422, "Ключ не пройшов перевірку"),
+    );
+
+    render(<App />);
+    await goToSettings();
+    await screen.findByText("Нова Пошта");
+
+    fireEvent.change(screen.getByLabelText("API-ключ"), { target: { value: "bad-key" } });
+    fireEvent.click(screen.getByRole("button", { name: "Підключити" }));
+
+    expect(await screen.findByText("Ключ не пройшов перевірку")).toBeInTheDocument();
+    expect(screen.queryByText("Підключено ✅")).not.toBeInTheDocument();
+  });
+
+  it("shows the disconnect flow when already connected", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.getNpStatus).mockResolvedValue({ connected: true });
+    vi.mocked(api.deleteNpKey).mockResolvedValue(undefined);
+
+    render(<App />);
+    await goToSettings();
+
+    expect(await screen.findByText("Підключено ✅")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Відключити" }));
+    fireEvent.click(screen.getByRole("button", { name: "Так, відключити" }));
+
+    await waitFor(() => {
+      expect(api.deleteNpKey).toHaveBeenCalled();
+    });
+    expect(await screen.findByRole("button", { name: "Підключити" })).toBeInTheDocument();
   });
 });
 
