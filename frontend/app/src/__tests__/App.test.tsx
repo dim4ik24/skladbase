@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
-import type { Plan, Product, Reservation, Shop, Template, Variant } from "../types";
+import type { FinanceSummary, Plan, Product, Reservation, Shop, Template, Variant } from "../types";
 
 vi.mock("../api", () => ({
   ApiError: class ApiError extends Error {
@@ -140,6 +140,22 @@ function makeProduct(overrides: Partial<Product> = {}): Product {
   };
 }
 
+function makeFinance(overrides: Partial<FinanceSummary> = {}): FinanceSummary {
+  return {
+    shop_id: 1,
+    revenue_uah: "0.00",
+    sales_count: 0,
+    units_sold: 0,
+    returns_uah: "0.00",
+    returns_count: 0,
+    chart: [],
+    top_products: [],
+    release_reasons: [],
+    return_reasons: [],
+    ...overrides,
+  };
+}
+
 function makeReservation(overrides: Partial<Reservation> = {}): Reservation {
   return {
     id: 100,
@@ -182,9 +198,7 @@ beforeEach(() => {
   vi.mocked(api.fulfillReservation).mockReset();
   vi.mocked(api.checkoutStars).mockReset();
   vi.mocked(api.clearDemos).mockReset();
-  vi.mocked(api.getFinanceSummary)
-    .mockReset()
-    .mockResolvedValue({ shop_id: 1, revenue_uah: "0.00", sales_count: 0, units_sold: 0 });
+  vi.mocked(api.getFinanceSummary).mockReset().mockResolvedValue(makeFinance());
   vi.mocked(api.patchVariant).mockReset();
   vi.mocked(api.addVariant).mockReset();
   vi.mocked(api.deleteVariant).mockReset();
@@ -438,8 +452,8 @@ describe("App catalog screen", () => {
     vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ variants: [variant] })]);
     vi.mocked(api.adjust).mockResolvedValue({ ...variant, on_hand: 4, available: 4 });
     vi.mocked(api.getFinanceSummary)
-      .mockResolvedValueOnce({ shop_id: 1, revenue_uah: "0.00", sales_count: 0, units_sold: 0 })
-      .mockResolvedValueOnce({ shop_id: 1, revenue_uah: "150.00", sales_count: 1, units_sold: 1 });
+      .mockResolvedValueOnce(makeFinance())
+      .mockResolvedValueOnce(makeFinance({ revenue_uah: "150.00", sales_count: 1, units_sold: 1 }));
 
     render(<App />);
     await goToSklad();
@@ -936,8 +950,8 @@ describe("Reservations", () => {
       status: "fulfilled",
     });
     vi.mocked(api.getFinanceSummary)
-      .mockResolvedValueOnce({ shop_id: 1, revenue_uah: "0.00", sales_count: 0, units_sold: 0 })
-      .mockResolvedValueOnce({ shop_id: 1, revenue_uah: "400.00", sales_count: 1, units_sold: 2 });
+      .mockResolvedValueOnce(makeFinance())
+      .mockResolvedValueOnce(makeFinance({ revenue_uah: "400.00", sales_count: 1, units_sold: 2 }));
 
     render(<App />);
     await goToSklad();
@@ -1950,19 +1964,103 @@ describe("Finance summary (Dashboard)", () => {
   it("renders revenue, sales count and units sold from the finance summary", async () => {
     vi.mocked(api.getMe).mockResolvedValue(shopFixture);
     vi.mocked(api.getProducts).mockResolvedValue([]);
-    vi.mocked(api.getFinanceSummary).mockResolvedValue({
-      shop_id: 1,
-      revenue_uah: "450.00",
-      sales_count: 2,
-      units_sold: 3,
-    });
+    vi.mocked(api.getFinanceSummary).mockResolvedValue(
+      makeFinance({ revenue_uah: "450.00", sales_count: 2, units_sold: 3 }),
+    );
 
     render(<App />);
 
-    expect(await screen.findByText("Продажів")).toBeInTheDocument();
-    expect(screen.getByText("2")).toBeInTheDocument();
-    expect(screen.getByText("Одиниць продано")).toBeInTheDocument();
-    expect(screen.getByText("3")).toBeInTheDocument();
+    expect(await screen.findByText("Дохід")).toBeInTheDocument();
+    expect(screen.getByText("2 · 3")).toBeInTheDocument();
+  });
+
+  it("shows the empty-period message instead of bare zeros when there are no sales", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.getFinanceSummary).mockResolvedValue(makeFinance());
+
+    render(<App />);
+
+    expect(await screen.findByText("Немає продажів за цей період")).toBeInTheDocument();
+    expect(screen.queryByText("Дохід")).not.toBeInTheDocument();
+  });
+
+  it("switching the period chip refetches the summary with the chosen period", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.getFinanceSummary).mockResolvedValue(makeFinance());
+
+    render(<App />);
+    await screen.findByText("Фінанси");
+
+    fireEvent.click(screen.getByRole("button", { name: "Тиждень" }));
+
+    await waitFor(() => {
+      expect(api.getFinanceSummary).toHaveBeenLastCalledWith("week");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Рік" }));
+    await waitFor(() => {
+      expect(api.getFinanceSummary).toHaveBeenLastCalledWith("year");
+    });
+  });
+
+  it("renders revenue bars for each day in the chart", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    const today = new Date().toISOString().slice(0, 10);
+    vi.mocked(api.getFinanceSummary).mockResolvedValue(
+      makeFinance({
+        revenue_uah: "100.00",
+        sales_count: 1,
+        units_sold: 1,
+        chart: [{ date: today, revenue: "100.00" }],
+      }),
+    );
+
+    render(<App />);
+
+    expect(await screen.findByRole("img", { name: "Графік доходу за період" })).toBeInTheDocument();
+    const bars = document.querySelectorAll(".revenue-chart-bar");
+    expect(bars.length).toBeGreaterThan(0);
+  });
+
+  it("renders the top products list sorted by revenue", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.getFinanceSummary).mockResolvedValue(
+      makeFinance({
+        revenue_uah: "700.00",
+        sales_count: 2,
+        units_sold: 4,
+        top_products: [
+          { product_id: 1, name: "Кепка", revenue_uah: "500.00", units: 1 },
+          { product_id: 2, name: "Футболка", revenue_uah: "200.00", units: 3 },
+        ],
+      }),
+    );
+
+    render(<App />);
+
+    expect(await screen.findByText("Топ товарів")).toBeInTheDocument();
+    expect(screen.getByText("Кепка")).toBeInTheDocument();
+    expect(screen.getByText("Футболка")).toBeInTheDocument();
+  });
+
+  it("renders release/return reasons with human-readable labels, only when present", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.getFinanceSummary).mockResolvedValue(
+      makeFinance({
+        release_reasons: [{ reason: "customer_changed_mind", count: 2 }],
+      }),
+    );
+
+    render(<App />);
+
+    expect(await screen.findByText("Зняття резервів")).toBeInTheDocument();
+    expect(screen.getByText("Клієнт передумав — 2")).toBeInTheDocument();
+    expect(screen.queryByText("Повернення")).not.toBeInTheDocument();
   });
 });
 
@@ -2001,7 +2099,9 @@ describe("Nova Poshta sender profile (Settings, owner-only)", () => {
 
     render(<App />);
     await goToSettings();
-    await screen.findByText("Дані відправника");
+    // "Дані відправника" рендериться одразу, поля форми — лише після того,
+    // як SenderSection сама довантажить getNpSender() (власний loading-стан).
+    await screen.findByLabelText("ПІБ / ФОП");
 
     fireEvent.change(screen.getByLabelText("ПІБ / ФОП"), { target: { value: "ФОП Іваненко" } });
     fireEvent.change(screen.getByLabelText("Телефон"), { target: { value: "380501112233" } });

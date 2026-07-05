@@ -9,6 +9,7 @@ import type {
   AdjustPayload,
   CreateTtnPayload,
   CreateTtnResult,
+  FinancePeriod,
   FinanceSummary,
   Invite,
   NotPickedUpPayload,
@@ -285,8 +286,8 @@ export function createTtn(
   });
 }
 
-export function getFinanceSummary(): Promise<FinanceSummary> {
-  return request<FinanceSummary>("/api/finance/summary");
+export function getFinanceSummary(period: FinancePeriod = "all"): Promise<FinanceSummary> {
+  return request<FinanceSummary>(`/api/finance/summary?period=${period}`);
 }
 
 export function patchVariant(variantId: number, payload: VariantPatchPayload): Promise<Variant> {
