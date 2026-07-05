@@ -1,15 +1,22 @@
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { createPortal } from "react-dom";
 import type { FormEvent } from "react";
 import { useReducedMotion } from "motion/react";
 import { ApiError } from "../api";
 import { errorMessage } from "../errors";
+import { lazyWithRetry } from "../lib/lazyWithRetry";
 import type { AdjustPayload, Product, ProductInput, ProductPatch, ReserveInput, Template, TemplateField, Variant, VariantAddPayload, VariantInput, VariantPatchPayload } from "../types";
+import { LazyOverlayFallback, LazySheetFallback } from "./LazyFallback";
 import { Panel } from "./ui/Panel";
 import { ProductPhotoGallery } from "./ProductPhotoGallery";
-import { TemplateBuilderModal } from "./TemplateBuilderModal";
 import { VariantTag } from "./VariantTag";
-import { VariantSheet } from "./VariantSheet";
+
+const TemplateBuilderModal = lazyWithRetry(() =>
+  import("./TemplateBuilderModal").then((m) => ({ default: m.TemplateBuilderModal })),
+);
+const VariantSheet = lazyWithRetry(() =>
+  import("./VariantSheet").then((m) => ({ default: m.VariantSheet })),
+);
 
 interface ProductModalProps {
   product: Product | null;
@@ -402,10 +409,12 @@ function CreateForm({
 
       {showBuilder
         ? createPortal(
-            <TemplateBuilderModal
-              onSave={handleBuilderSave}
-              onClose={() => setShowBuilder(false)}
-            />,
+            <Suspense fallback={<LazyOverlayFallback />}>
+              <TemplateBuilderModal
+                onSave={handleBuilderSave}
+                onClose={() => setShowBuilder(false)}
+              />
+            </Suspense>,
             document.body,
           )
         : null}
@@ -549,19 +558,21 @@ function EditForm({
           </button>
 
           {activeVariantId !== null && activeVariant !== undefined ? (
-            <VariantSheet
-              variant={activeVariant}
-              axes={axes}
-              isFrozen={product.is_frozen}
-              onFrozenAction={onFrozenAction}
-              onRestock={onRestock}
-              onAdjust={onAdjust}
-              onUploadPhoto={onUploadPhoto}
-              onReserve={onReserve}
-              onPatchVariant={onPatchVariant}
-              onDeleteVariant={onDeleteVariant}
-              onClose={() => setActiveVariantId(null)}
-            />
+            <Suspense fallback={<LazySheetFallback />}>
+              <VariantSheet
+                variant={activeVariant}
+                axes={axes}
+                isFrozen={product.is_frozen}
+                onFrozenAction={onFrozenAction}
+                onRestock={onRestock}
+                onAdjust={onAdjust}
+                onUploadPhoto={onUploadPhoto}
+                onReserve={onReserve}
+                onPatchVariant={onPatchVariant}
+                onDeleteVariant={onDeleteVariant}
+                onClose={() => setActiveVariantId(null)}
+              />
+            </Suspense>
           ) : null}
         </>
       ) : tab === "info" ? (

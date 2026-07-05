@@ -1,12 +1,13 @@
 import gsap from "gsap";
 import { Flip } from "gsap/Flip";
-import { useLayoutEffect, useRef, useState } from "react";
+import { Suspense, useLayoutEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
+import { LazyOverlayFallback } from "../components/LazyFallback";
 import { ProductCard } from "../components/ProductCard";
-import { ProductModal } from "../components/ProductModal";
 import { ReservationsPanel } from "../components/ReservationsPanel";
 import { ScrollFloat } from "../components/ScrollFloat";
 import { Panel } from "../components/ui/Panel";
+import { lazyWithRetry } from "../lib/lazyWithRetry";
 import type {
   AdjustPayload,
   NotPickedUpPayload,
@@ -22,6 +23,10 @@ import type {
 } from "../types";
 
 gsap.registerPlugin(Flip);
+
+const ProductModal = lazyWithRetry(() =>
+  import("../components/ProductModal").then((m) => ({ default: m.ProductModal })),
+);
 
 type SortField = "name" | "price" | "stock" | "date";
 
@@ -288,27 +293,29 @@ export function SkladScreen({
       )}
 
       {modalProduct !== null ? (
-        <ProductModal
-          product={modalProduct === "create" ? null : modalProduct}
-          products={products}
-          templates={templates}
-          photosAllowed={photosAllowed}
-          isOwner={isOwner}
-          onTemplateAdded={onTemplateAdded}
-          onCreateProduct={onCreateProduct}
-          onUpdateProduct={onUpdateProduct}
-          onUploadProductPhoto={onUploadProductPhoto}
-          onDeleteProductPhoto={onDeleteProductPhoto}
-          onRestock={onRestock}
-          onAdjust={onAdjust}
-          onUploadPhoto={onUploadPhoto}
-          onReserve={onReserve}
-          onPatchVariant={onPatchVariant}
-          onAddVariant={onAddVariant}
-          onDeleteVariant={onDeleteVariant}
-          onFrozenAction={onFrozenAction}
-          onClose={() => setModalProduct(null)}
-        />
+        <Suspense fallback={<LazyOverlayFallback />}>
+          <ProductModal
+            product={modalProduct === "create" ? null : modalProduct}
+            products={products}
+            templates={templates}
+            photosAllowed={photosAllowed}
+            isOwner={isOwner}
+            onTemplateAdded={onTemplateAdded}
+            onCreateProduct={onCreateProduct}
+            onUpdateProduct={onUpdateProduct}
+            onUploadProductPhoto={onUploadProductPhoto}
+            onDeleteProductPhoto={onDeleteProductPhoto}
+            onRestock={onRestock}
+            onAdjust={onAdjust}
+            onUploadPhoto={onUploadPhoto}
+            onReserve={onReserve}
+            onPatchVariant={onPatchVariant}
+            onAddVariant={onAddVariant}
+            onDeleteVariant={onDeleteVariant}
+            onFrozenAction={onFrozenAction}
+            onClose={() => setModalProduct(null)}
+          />
+        </Suspense>
       ) : null}
     </>
   );

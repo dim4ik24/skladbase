@@ -1,20 +1,20 @@
 import { Ban, BookmarkCheck, Package, TriangleAlert } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import * as api from "./api";
 import { ApiError } from "./api";
 import { AtmosphereBackground } from "./components/background/AtmosphereBackground";
 import { BottomTabBar } from "./components/BottomTabBar";
 import { DemoBanner } from "./components/DemoBanner";
 import { Header } from "./components/Header";
+import { LazyInlineFallback, LazyOverlayFallback } from "./components/LazyFallback";
 import type { MetricCardData } from "./components/MetricCarousel";
-import { SubscriptionPaywall } from "./components/SubscriptionPaywall";
 import { TrialBanner } from "./components/TrialBanner";
-import { UpgradePrompt } from "./components/UpgradePrompt";
 import { errorMessage } from "./errors";
 import { DashboardScreen } from "./screens/DashboardScreen";
 import { SettingsScreen } from "./screens/SettingsScreen";
 import { SkladScreen } from "./screens/SkladScreen";
 import { effectivePlanCode, isLiveTrial } from "./lib/planStatus";
+import { lazyWithRetry } from "./lib/lazyWithRetry";
 import { initTelegram, setAccentColor } from "./telegram";
 import type {
   AdjustPayload,
@@ -36,6 +36,13 @@ import type {
   VariantAddPayload,
   VariantPatchPayload,
 } from "./types";
+
+const SubscriptionPaywall = lazyWithRetry(() =>
+  import("./components/SubscriptionPaywall").then((m) => ({ default: m.SubscriptionPaywall })),
+);
+const UpgradePrompt = lazyWithRetry(() =>
+  import("./components/UpgradePrompt").then((m) => ({ default: m.UpgradePrompt })),
+);
 
 const EMPTY_FINANCE: FinanceSummary = {
   shop_id: 0,
@@ -663,21 +670,25 @@ export default function App() {
       <BottomTabBar active={activeTab} onChange={setActiveTab} />
 
       {upgradePrompt ? (
-        <UpgradePrompt
-          message={upgradePrompt.message}
-          onOpenPaywall={() => setShowPaywall(true)}
-          onClose={() => setUpgradePrompt(null)}
-        />
+        <Suspense fallback={<LazyInlineFallback />}>
+          <UpgradePrompt
+            message={upgradePrompt.message}
+            onOpenPaywall={() => setShowPaywall(true)}
+            onClose={() => setUpgradePrompt(null)}
+          />
+        </Suspense>
       ) : null}
 
       {showPaywall && shop ? (
-        <SubscriptionPaywall
-          plans={plans}
-          role={shop.role}
-          currentPlanCode={effectivePlanCode(shop)}
-          onCheckout={api.checkoutStars}
-          onDismiss={() => setShowPaywall(false)}
-        />
+        <Suspense fallback={<LazyOverlayFallback />}>
+          <SubscriptionPaywall
+            plans={plans}
+            role={shop.role}
+            currentPlanCode={effectivePlanCode(shop)}
+            onCheckout={api.checkoutStars}
+            onDismiss={() => setShowPaywall(false)}
+          />
+        </Suspense>
       ) : null}
     </>
   );
