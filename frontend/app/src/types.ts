@@ -190,11 +190,36 @@ export interface ReserveInput {
   expires_at?: string;
 }
 
+export type FinancePeriod = "week" | "month" | "year" | "all";
+
+export interface FinanceChartPoint {
+  date: string;
+  revenue: string;
+}
+
+export interface FinanceTopProduct {
+  product_id: number;
+  name: string;
+  revenue_uah: string;
+  units: number;
+}
+
+export interface FinanceReasonCount {
+  reason: string;
+  count: number;
+}
+
 export interface FinanceSummary {
   shop_id: number;
   revenue_uah: string;
   sales_count: number;
   units_sold: number;
+  returns_uah: string;
+  returns_count: number;
+  chart: FinanceChartPoint[];
+  top_products: FinanceTopProduct[];
+  release_reasons: FinanceReasonCount[];
+  return_reasons: FinanceReasonCount[];
 }
 
 export type WriteOffReason = "sold" | "defect" | "correction" | "other";

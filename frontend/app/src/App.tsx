@@ -18,6 +18,7 @@ import { effectivePlanCode, isLiveTrial } from "./lib/planStatus";
 import { initTelegram, setAccentColor } from "./telegram";
 import type {
   AdjustPayload,
+  FinancePeriod,
   FinanceSummary,
   NotPickedUpPayload,
   Plan,
@@ -42,6 +43,12 @@ const EMPTY_FINANCE: FinanceSummary = {
   revenue_uah: "0.00",
   sales_count: 0,
   units_sold: 0,
+  returns_uah: "0.00",
+  returns_count: 0,
+  chart: [],
+  top_products: [],
+  release_reasons: [],
+  return_reasons: [],
 };
 
 const LAST_SHOP_KEY = "skladbase:activeShopId";
@@ -71,6 +78,7 @@ export default function App() {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [finance, setFinance] = useState<FinanceSummary>(EMPTY_FINANCE);
+  const [financePeriod, setFinancePeriod] = useState<FinancePeriod>("all");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [clearingDemos, setClearingDemos] = useState(false);
@@ -87,13 +95,18 @@ export default function App() {
   // sale-рух (adjust з причиною "sold", fulfill резерву), лишає Фінанси-
   // картку застарілою, якщо не рефетчити явно — вона більше НЕ підписана на
   // жоден інший стан (products/reservations), лише на власний виклик API.
-  async function refetchFinance(role: string | undefined) {
+  async function refetchFinance(role: string | undefined, period: FinancePeriod = financePeriod) {
     if (role !== "owner") return;
     try {
-      setFinance(await api.getFinanceSummary());
+      setFinance(await api.getFinanceSummary(period));
     } catch (err) {
       console.error("[App] finance fetch failed:", err);
     }
+  }
+
+  async function handleFinancePeriodChange(period: FinancePeriod) {
+    setFinancePeriod(period);
+    await refetchFinance(shop?.role, period);
   }
 
   // Повний рефетч під ВЖЕ встановлений api.setActiveShopId() — той самий
@@ -636,6 +649,8 @@ export default function App() {
               shop={shop}
               loading={loading}
               finance={finance}
+              financePeriod={financePeriod}
+              onFinancePeriodChange={handleFinancePeriodChange}
               metricCards={metricCards}
               reservations={reservations}
               resolveReservationVariant={resolveReservationVariant}

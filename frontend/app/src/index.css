@@ -1477,6 +1477,130 @@ body {
   border-bottom: none;
 }
 
+.finance-returns-value {
+  background: var(--state-low);
+  color: #c0392b;
+  border-radius: 8px;
+  padding: 2px 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.finance-empty-state {
+  padding: 16px 0;
+  text-align: center;
+}
+
+/* ── Фінанси — перемикач періоду ─────────────────────────────────────── */
+.finance-period-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.finance-period-chip {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1.5px solid var(--line);
+  background: var(--surface);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.finance-period-chip--active {
+  border-color: var(--green);
+  background: var(--green);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* ── Фінанси — графік доходу ─────────────────────────────────────────── */
+.revenue-chart {
+  margin: 4px 0 12px;
+}
+
+.revenue-chart-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 120px;
+  padding: 0 2px;
+}
+
+.revenue-chart-bar {
+  flex: 1 1 auto;
+  min-width: 2px;
+  border: none;
+  border-radius: 2px 2px 0 0;
+  background: var(--green);
+  cursor: pointer;
+  padding: 0;
+}
+
+.revenue-chart-bar:hover,
+.revenue-chart-bar:focus-visible {
+  background: var(--green-deep);
+}
+
+.revenue-chart-tooltip {
+  min-height: 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  text-align: center;
+}
+
+.revenue-chart-axis {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-soft);
+  margin-top: 2px;
+}
+
+/* ── Фінанси — топ товарів / причини ─────────────────────────────────── */
+.finance-subsection-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-soft);
+  margin: 12px 0 6px;
+}
+
+.finance-top-products ul,
+.finance-reason-block ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.finance-reason-block li {
+  font-size: 13px;
+  color: var(--text-soft);
+}
+
+.finance-top-product-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.finance-top-product-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.finance-top-product-value {
+  flex-shrink: 0;
+  color: var(--text-soft);
+}
+
 /* ── Modal ───────────────────────────────────────────────────────────── */
 @keyframes modal-fade-in {
   from { opacity: 0; }
