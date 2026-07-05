@@ -505,24 +505,47 @@ export default function App() {
   }
 
   async function handlePatchVariant(variantId: number, payload: VariantPatchPayload) {
-    applyVariantUpdate(await api.patchVariant(variantId, payload));
+    try {
+      applyVariantUpdate(await api.patchVariant(variantId, payload));
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 402) {
+        setUpgradePrompt({ message: err.detail });
+      } else {
+        throw err;
+      }
+    }
   }
 
   async function handleAddVariant(productId: number, payload: VariantAddPayload): Promise<Variant> {
-    const variant = await api.addVariant(productId, payload);
-    setProducts((prev) =>
-      prev.map((p) =>
-        p.id === productId ? { ...p, variants: [...p.variants, variant] } : p,
-      ),
-    );
-    return variant;
+    try {
+      const variant = await api.addVariant(productId, payload);
+      setProducts((prev) =>
+        prev.map((p) =>
+          p.id === productId ? { ...p, variants: [...p.variants, variant] } : p,
+        ),
+      );
+      return variant;
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 402) {
+        setUpgradePrompt({ message: err.detail });
+      }
+      throw err;
+    }
   }
 
   async function handleDeleteVariant(variantId: number) {
-    await api.deleteVariant(variantId);
-    setProducts((prev) =>
-      prev.map((p) => ({ ...p, variants: p.variants.filter((v) => v.id !== variantId) })),
-    );
+    try {
+      await api.deleteVariant(variantId);
+      setProducts((prev) =>
+        prev.map((p) => ({ ...p, variants: p.variants.filter((v) => v.id !== variantId) })),
+      );
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 402) {
+        setUpgradePrompt({ message: err.detail });
+      } else {
+        throw err;
+      }
+    }
   }
 
   function handleFrozenAction() {

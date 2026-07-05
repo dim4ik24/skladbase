@@ -1886,6 +1886,91 @@ describe("Variant CRUD in modal (tag → sheet)", () => {
     expect(calledPayload).not.toHaveProperty("sku");
   });
 
+  it("add variant 402 shows UpgradePrompt instead of a silent failure", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    const variant = makeVariant({ id: 210, sku: "SKU-210" });
+    vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ id: 1, variants: [variant] })]);
+    vi.mocked(api.addVariant).mockRejectedValue(new ApiError(402, "Ліміт плану вичерпано"));
+
+    render(<App />);
+    await goToSklad();
+    await screen.findByText("Футболка");
+
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
+    await screen.findByTestId("available-210");
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Додати варіант" }));
+
+    expect(await screen.findByText("Ліміт плану вичерпано")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Обрати тариф" })).toBeInTheDocument();
+  });
+
+  it("'+ Додати варіант' on a frozen product shows UpgradePrompt without calling addVariant", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    const variant = makeVariant({ id: 211, sku: "SKU-211" });
+    vi.mocked(api.getProducts).mockResolvedValue([
+      makeProduct({ id: 1, is_frozen: true, variants: [variant] }),
+    ]);
+
+    render(<App />);
+    await goToSklad();
+    await screen.findByText("Футболка");
+
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
+    await screen.findByTestId("available-211");
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Додати варіант" }));
+
+    expect(
+      await screen.findByText("Цей товар заморожено. Оформіть тариф, щоб редагувати."),
+    ).toBeInTheDocument();
+    expect(api.addVariant).not.toHaveBeenCalled();
+  });
+
+  it("patch variant 402 shows UpgradePrompt, not the sheet's generic error banner", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    const variant = makeVariant({ id: 212, sku: "SKU-212", price: "450.00" });
+    vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ variants: [variant] })]);
+    vi.mocked(api.patchVariant).mockRejectedValue(new ApiError(402, "Товар заморожено"));
+
+    render(<App />);
+    await goToSklad();
+    await screen.findByText("Футболка");
+
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
+    await screen.findByTestId("available-212");
+
+    await openSheet("M");
+    fireEvent.change(screen.getByLabelText("Ціна"), { target: { value: "500" } });
+    fireEvent.click(screen.getByRole("button", { name: "Зберегти" }));
+
+    expect(await screen.findByText("Товар заморожено")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Обрати тариф" })).toBeInTheDocument();
+    expect(screen.queryByText("Не вдалося зберегти варіант")).not.toBeInTheDocument();
+  });
+
+  it("delete variant 402 shows UpgradePrompt, not the sheet's generic error banner", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    const variant = makeVariant({ id: 213, sku: "SKU-213" });
+    vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ variants: [variant] })]);
+    vi.mocked(api.deleteVariant).mockRejectedValue(new ApiError(402, "Товар заморожено"));
+
+    render(<App />);
+    await goToSklad();
+    await screen.findByText("Футболка");
+
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
+    await screen.findByTestId("available-213");
+
+    await openSheet("M");
+    fireEvent.click(screen.getByRole("button", { name: "Видалити варіант" }));
+    fireEvent.click(screen.getByRole("button", { name: "Так, видалити" }));
+
+    expect(await screen.findByText("Товар заморожено")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Обрати тариф" })).toBeInTheDocument();
+    expect(screen.queryByText("Не вдалося видалити варіант")).not.toBeInTheDocument();
+  });
+
   it("delete variant: tag → sheet → Видалити → Так → deleteVariant called", async () => {
     vi.mocked(api.getMe).mockResolvedValue(shopFixture);
     const variant = makeVariant({ id: 204, sku: "SKU-204" });
@@ -1957,6 +2042,49 @@ describe("Variant CRUD in modal (tag → sheet)", () => {
     fireEvent.click(screen.getByText("Списати"));
 
     expect(await screen.findByText("Недостатньо доступного залишку")).toBeInTheDocument();
+  });
+});
+
+describe("Edit-mode Info tab: template attributes", () => {
+  it("renders attribute fields seeded from product.attributes and saves changes via PATCH", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getTemplates).mockResolvedValue([clothingTemplate]);
+    vi.mocked(api.getProducts).mockResolvedValue([
+      makeProduct({
+        template_id: clothingTemplate.id,
+        attributes: { product_type: "Худі", material: "Бавовна" },
+      }),
+    ]);
+    vi.mocked(api.updateProduct).mockResolvedValue(
+      makeProduct({
+        template_id: clothingTemplate.id,
+        attributes: { product_type: "Футболка", material: "Бавовна" },
+      }),
+    );
+
+    render(<App />);
+    await goToSklad();
+    await screen.findByText("Футболка");
+
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Футболка"));
+    fireEvent.click(screen.getByRole("tab", { name: "Інфо" }));
+
+    const typeSelect = screen.getByLabelText("Тип") as HTMLSelectElement;
+    const materialInput = screen.getByLabelText("Матеріал") as HTMLInputElement;
+    expect(typeSelect.value).toBe("Худі");
+    expect(materialInput.value).toBe("Бавовна");
+
+    fireEvent.change(typeSelect, { target: { value: "Футболка" } });
+    fireEvent.click(screen.getByRole("button", { name: "Зберегти" }));
+
+    await waitFor(() => {
+      expect(api.updateProduct).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({
+          attributes: { product_type: "Футболка", material: "Бавовна" },
+        }),
+      );
+    });
   });
 });
 
