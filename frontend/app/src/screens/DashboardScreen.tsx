@@ -1,6 +1,8 @@
+import { useState } from "react";
 import type { RefObject } from "react";
 import type { MetricCardData } from "../components/MetricCarousel";
 import { MetricCarousel } from "../components/MetricCarousel";
+import { HistorySheet } from "../components/HistorySheet";
 import { ReservationsPanel } from "../components/ReservationsPanel";
 import { RevenueChart } from "../components/RevenueChart";
 import { ScrollFloat } from "../components/ScrollFloat";
@@ -76,12 +78,29 @@ export function DashboardScreen({
   onNavigateToSklad,
   scrollContainerRef,
 }: DashboardScreenProps) {
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyDate, setHistoryDate] = useState<string | undefined>(undefined);
+
+  function openHistory(date?: string) {
+    setHistoryDate(date);
+    setHistoryOpen(true);
+  }
+
   return (
     <>
       {shop ? <MetricCarousel cards={metricCards} onNavigate={onNavigateToSklad} /> : null}
 
       <div className="glass-card rounded-[20px] p-4 mb-4 shadow-[var(--shadow-card)]">
-        <h2 className="section-title mb-2">Фінанси</h2>
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="section-title mb-0">Фінанси</h2>
+          <button
+            type="button"
+            className="finance-history-btn"
+            onClick={() => openHistory(undefined)}
+          >
+            Історія
+          </button>
+        </div>
 
         <div className="finance-period-chips" role="group" aria-label="Період">
           {PERIOD_OPTIONS.map((option) => (
@@ -103,7 +122,11 @@ export function DashboardScreen({
           <p className="status-text finance-empty-state">Немає продажів за цей період</p>
         ) : (
           <>
-            <RevenueChart period={financePeriod} chart={finance.chart} />
+            <RevenueChart
+              period={financePeriod}
+              chart={finance.chart}
+              onOpenHistory={openHistory}
+            />
 
             <div className="finance-row">
               <span className="text-sm text-text-soft">Дохід</span>
@@ -200,6 +223,14 @@ export function DashboardScreen({
             </ul>
           </div>
         </div>
+      ) : null}
+
+      {historyOpen ? (
+        <HistorySheet
+          period={financePeriod}
+          date={historyDate}
+          onClose={() => setHistoryOpen(false)}
+        />
       ) : null}
     </>
   );

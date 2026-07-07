@@ -47,7 +47,7 @@ interface SkladScreenProps {
   onRestock: (variantId: number, qty: number) => Promise<void>;
   onAdjust: (variantId: number, payload: AdjustPayload) => Promise<void>;
   onUploadPhoto: (variantId: number, file: File) => Promise<void>;
-  onReserve: (variantId: number, payload: ReserveInput) => Promise<void>;
+  onReserve: (variantId: number, payload: ReserveInput) => Promise<Reservation | undefined>;
   onRelease: (id: number, payload?: ReleasePayload) => Promise<void>;
   onFulfill: (id: number) => Promise<void>;
   onShip: (id: number, payload: ShipPayload) => Promise<void>;
@@ -314,6 +314,9 @@ export function SkladScreen({
           onPatchVariant={onPatchVariant}
           onAddVariant={onAddVariant}
           onDeleteVariant={onDeleteVariant}
+          onShip={onShip}
+          onCreateTtn={onCreateTtn}
+          onNavigateToSettings={onNavigateToSettings}
           onFrozenAction={onFrozenAction}
           onClose={() => setModalProduct(null)}
         />

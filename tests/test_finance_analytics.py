@@ -158,9 +158,12 @@ async def test_chart_aggregates_by_day(client: AsyncClient) -> None:
 
     summary = await _summary(client, init_data, "week")
     chart_by_date = {row["date"]: row["revenue"] for row in summary["chart"]}
+    units_by_date = {row["date"]: row["units"] for row in summary["chart"]}
 
     assert chart_by_date[today.strftime("%Y-%m-%d")] == "30.00"
     assert chart_by_date[yesterday.strftime("%Y-%m-%d")] == "10.00"
+    assert units_by_date[today.strftime("%Y-%m-%d")] == 3  # 1+2
+    assert units_by_date[yesterday.strftime("%Y-%m-%d")] == 1
 
 
 # --------------------------------------------------------------------------- #

@@ -1,23 +1,33 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Literal
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
 from app.deps import require_permission
-from app.models import Membership, MovementType, Product, StockMovement, Variant, utcnow
+from app.models import (
+    Membership,
+    MovementType,
+    Product,
+    Reservation,
+    StockMovement,
+    Variant,
+    utcnow,
+)
 
 router = APIRouter(prefix="/api/finance", tags=["finance"])
 
 Period = Literal["week", "month", "year", "all"]
 _PERIOD_DAYS = {"week": 7, "month": 30, "year": 365}
 _TOP_PRODUCTS_LIMIT = 5
+_HISTORY_LIMIT = 100
+_HISTORY_TYPES = (MovementType.sale, MovementType.ret, MovementType.release)
 
 
 def _to_decimal(value: Decimal | float | int | None) -> Decimal:
@@ -132,17 +142,23 @@ async def _revenue_chart(
 
     rows = (await session.execute(stmt)).all()
 
-    buckets: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
+    revenue_buckets: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
+    units_buckets: dict[str, int] = defaultdict(int)
     fmt = "%Y-%m-%d" if granularity == "day" else "%Y-%m"
     for created_at, delta, price_at in rows:
+        key = created_at.strftime(fmt)
+        units_buckets[key] += abs(delta)
         if price_at is None:
             continue
-        key = created_at.strftime(fmt)
-        buckets[key] += abs(delta) * price_at
+        revenue_buckets[key] += abs(delta) * price_at
 
     return [
-        {"date": key, "revenue": str(value.quantize(Decimal("0.01")))}
-        for key, value in sorted(buckets.items())
+        {
+            "date": key,
+            "revenue": str(revenue_buckets[key].quantize(Decimal("0.01"))),
+            "units": units_buckets[key],
+        }
+        for key in sorted(units_buckets)
     ]
 
 
@@ -183,3 +199,68 @@ async def finance_summary(
             session, membership.shop_id, MovementType.ret, since
         ),
     }
+
+
+def _variant_label(variant: Variant) -> str:
+    return " / ".join(v for v in variant.axis_values.values() if v) or (variant.sku or "")
+
+
+@router.get("/history")
+async def finance_history(
+    period: Period = "all",
+    date: str | None = None,
+    membership: Membership = require_permission("can_view_finance"),
+    session: AsyncSession = Depends(get_session),
+) -> list[dict]:
+    """Стрічка подій каси/складу: продаж/повернення/зняття, DESC, ліміт 100.
+
+    `date` (YYYY-MM-DD) звужує до ОДНОГО дня і ПЕРЕВАЖАЄ `period` (день
+    вужчий за будь-який період) — саме так подвійний тап на денний стовпець
+    графіка відкриває історію лише за цей день. customer/ttn — з резерву,
+    ЯКЩО рух ним породжений (reservation_id, див. models.StockMovement);
+    прямий продаж/списання (sell_direct/write_off) їх не має — і не мусить."""
+    stmt = (
+        select(StockMovement, Variant, Product, Reservation)
+        .join(Variant, Variant.id == StockMovement.variant_id)
+        .join(Product, Product.id == Variant.product_id)
+        .outerjoin(Reservation, Reservation.id == StockMovement.reservation_id)
+        .where(
+            StockMovement.shop_id == membership.shop_id,
+            StockMovement.type.in_(_HISTORY_TYPES),
+        )
+        .order_by(StockMovement.created_at.desc())
+        .limit(_HISTORY_LIMIT)
+    )
+
+    if date is not None:
+        try:
+            day_start = datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=UTC)
+        except ValueError as exc:
+            raise HTTPException(422, "date має бути у форматі YYYY-MM-DD") from exc
+        day_end = day_start + timedelta(days=1)
+        stmt = stmt.where(StockMovement.created_at >= day_start, StockMovement.created_at < day_end)
+    else:
+        since = _period_since(period)
+        if since is not None:
+            stmt = stmt.where(StockMovement.created_at >= since)
+
+    rows = (await session.execute(stmt)).all()
+
+    events = []
+    for movement, variant, product, reservation in rows:
+        amount = None
+        if movement.price_at is not None:
+            amount = str((abs(movement.delta) * movement.price_at).quantize(Decimal("0.01")))
+        events.append({
+            "id": movement.id,
+            "date": movement.created_at.isoformat(),
+            "type": movement.type.value,
+            "product_name": product.name,
+            "variant_label": _variant_label(variant),
+            "qty": abs(movement.delta),
+            "amount": amount,
+            "reason": movement.reason,
+            "customer": reservation.customer_note if reservation else None,
+            "ttn": reservation.ttn if reservation else None,
+        })
+    return events

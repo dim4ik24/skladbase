@@ -1,7 +1,16 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
-import type { FinanceSummary, Plan, Product, Reservation, Shop, Template, Variant } from "../types";
+import type {
+  FinanceSummary,
+  HistoryEvent,
+  Plan,
+  Product,
+  Reservation,
+  Shop,
+  Template,
+  Variant,
+} from "../types";
 
 vi.mock("../api", () => ({
   ApiError: class ApiError extends Error {
@@ -36,6 +45,7 @@ vi.mock("../api", () => ({
   checkoutStars: vi.fn(),
   clearDemos: vi.fn(),
   getFinanceSummary: vi.fn(),
+  getFinanceHistory: vi.fn(),
   patchVariant: vi.fn(),
   addVariant: vi.fn(),
   deleteVariant: vi.fn(),
@@ -156,6 +166,22 @@ function makeFinance(overrides: Partial<FinanceSummary> = {}): FinanceSummary {
   };
 }
 
+function makeHistoryEvent(overrides: Partial<HistoryEvent> = {}): HistoryEvent {
+  return {
+    id: 1,
+    date: "2026-07-05T10:00:00Z",
+    type: "sale",
+    product_name: "Футболка",
+    variant_label: "M",
+    qty: 1,
+    amount: "300.00",
+    reason: null,
+    customer: null,
+    ttn: null,
+    ...overrides,
+  };
+}
+
 function makeReservation(overrides: Partial<Reservation> = {}): Reservation {
   return {
     id: 100,
@@ -200,6 +226,7 @@ beforeEach(() => {
   vi.mocked(api.checkoutStars).mockReset();
   vi.mocked(api.clearDemos).mockReset();
   vi.mocked(api.getFinanceSummary).mockReset().mockResolvedValue(makeFinance());
+  vi.mocked(api.getFinanceHistory).mockReset().mockResolvedValue([]);
   vi.mocked(api.patchVariant).mockReset();
   vi.mocked(api.addVariant).mockReset();
   vi.mocked(api.deleteVariant).mockReset();
@@ -285,6 +312,27 @@ describe("App catalog screen", () => {
     const image = await screen.findByRole("img", { name: "Футболка" });
     expect(image).toHaveAttribute("src", "https://cdn.example.test/photo.webp");
     expect(screen.queryByText("📦")).not.toBeInTheDocument();
+  });
+
+  it("variant chip falls back to the product's first photo when the variant has none", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    const variant = makeVariant({ id: 62, sku: "SKU-62", photo_url: null });
+    vi.mocked(api.getProducts).mockResolvedValue([
+      makeProduct({
+        name: "Сукня",
+        variants: [variant],
+        photos: [{ id: 1, url: "https://cdn.example.test/product-cover.webp", position: 0 }],
+      }),
+    ]);
+
+    render(<App />);
+    await goToSklad();
+    await screen.findByText("Сукня");
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Сукня"));
+
+    const tagButton = await screen.findByLabelText("Варіант: M");
+    const img = tagButton.querySelector("img");
+    expect(img).toHaveAttribute("src", "https://cdn.example.test/product-cover.webp");
   });
 
   it("applies shop branding: accent color CSS variable and name in header", async () => {
@@ -772,6 +820,188 @@ describe("Variant photo upload", () => {
 
     expect(await screen.findByText("Фото недоступні на поточному плані")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Обрати тариф" })).toBeInTheDocument();
+  });
+});
+
+describe("Product photo gallery viewer", () => {
+  async function openGalleryViewer(photoIndex: number) {
+    fireEvent.click(screen.getByRole("tab", { name: "Фото" }));
+    const thumbs = document.querySelectorAll(".photo-thumb img");
+    fireEvent.click(thumbs[photoIndex]);
+    return document.querySelector(".photo-viewer-image") as HTMLImageElement;
+  }
+
+  function twoPhotoProduct() {
+    return makeProduct({
+      name: "Сукня",
+      photos: [
+        { id: 1, url: "https://cdn.example.test/p1.webp", position: 0 },
+        { id: 2, url: "https://cdn.example.test/p2.webp", position: 1 },
+      ],
+    });
+  }
+
+  it("tapping a thumbnail opens the viewer on that photo", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([twoPhotoProduct()]);
+
+    render(<App />);
+    await goToSklad();
+    await screen.findByText("Сукня");
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Сукня"));
+
+    const image = await openGalleryViewer(1);
+    expect(image).toHaveAttribute("src", "https://cdn.example.test/p2.webp");
+    expect(screen.getByRole("dialog", { name: "Перегляд фото" })).toBeInTheDocument();
+  });
+
+  it("swiping left/right navigates photos, looping at both ends", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([twoPhotoProduct()]);
+
+    render(<App />);
+    await goToSklad();
+    await screen.findByText("Сукня");
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Сукня"));
+
+    const image = await openGalleryViewer(0);
+    expect(image).toHaveAttribute("src", "https://cdn.example.test/p1.webp");
+
+    // Свайп вліво -> наступне фото
+    fireEvent.touchStart(image, { touches: [{ clientX: 200 }] });
+    fireEvent.touchEnd(image, { changedTouches: [{ clientX: 100 }] });
+    expect(image).toHaveAttribute("src", "https://cdn.example.test/p2.webp");
+
+    // Свайп вліво знову -> зациклено на перше
+    fireEvent.touchStart(image, { touches: [{ clientX: 200 }] });
+    fireEvent.touchEnd(image, { changedTouches: [{ clientX: 100 }] });
+    expect(image).toHaveAttribute("src", "https://cdn.example.test/p1.webp");
+
+    // Свайп вправо -> зациклено назад на останнє
+    fireEvent.touchStart(image, { touches: [{ clientX: 100 }] });
+    fireEvent.touchEnd(image, { changedTouches: [{ clientX: 200 }] });
+    expect(image).toHaveAttribute("src", "https://cdn.example.test/p2.webp");
+  });
+
+  it("a small touch movement below the swipe threshold does not navigate", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([twoPhotoProduct()]);
+
+    render(<App />);
+    await goToSklad();
+    await screen.findByText("Сукня");
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Сукня"));
+
+    const image = await openGalleryViewer(0);
+    fireEvent.touchStart(image, { touches: [{ clientX: 200 }] });
+    fireEvent.touchEnd(image, { changedTouches: [{ clientX: 185 }] });
+
+    expect(image).toHaveAttribute("src", "https://cdn.example.test/p1.webp");
+  });
+
+  it("desktop arrow buttons navigate the viewer", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([twoPhotoProduct()]);
+
+    render(<App />);
+    await goToSklad();
+    await screen.findByText("Сукня");
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Сукня"));
+
+    const image = await openGalleryViewer(0);
+    fireEvent.click(screen.getByRole("button", { name: "Наступне фото" }));
+    expect(image).toHaveAttribute("src", "https://cdn.example.test/p2.webp");
+
+    fireEvent.click(screen.getByRole("button", { name: "Попереднє фото" }));
+    expect(image).toHaveAttribute("src", "https://cdn.example.test/p1.webp");
+  });
+
+  it("closes on the close button", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([twoPhotoProduct()]);
+
+    render(<App />);
+    await goToSklad();
+    await screen.findByText("Сукня");
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Сукня"));
+    await openGalleryViewer(0);
+
+    const dialog = screen.getByRole("dialog", { name: "Перегляд фото" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Закрити" }));
+
+    expect(screen.queryByRole("dialog", { name: "Перегляд фото" })).not.toBeInTheDocument();
+  });
+});
+
+describe("Продано (VariantSheet)", () => {
+  it("without shipping calls adjust with reason=sold — no duplicated write-off logic", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    const variant = makeVariant({ id: 71, sku: "SKU-71", on_hand: 5, available: 5 });
+    vi.mocked(api.getProducts).mockResolvedValue([
+      makeProduct({ name: "Кепка", variants: [variant] }),
+    ]);
+    vi.mocked(api.adjust).mockResolvedValue({ ...variant, on_hand: 3, reserved: 0 });
+
+    render(<App />);
+    await goToSklad();
+    await screen.findByText("Кепка");
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Кепка"));
+    await screen.findByTestId("available-71");
+    await openSheet("M");
+
+    fireEvent.click(screen.getByRole("button", { name: "Продано" }));
+    const sellForm = document.querySelector(".sell-form") as HTMLElement;
+    fireEvent.change(within(sellForm).getByLabelText("Кількість (доступно 5)"), {
+      target: { value: "2" },
+    });
+    fireEvent.click(within(sellForm).getByRole("button", { name: "Продано" }));
+
+    await waitFor(() => {
+      expect(api.adjust).toHaveBeenCalledWith(71, { qty: 2, reason: "sold" });
+    });
+    expect(api.reserve).not.toHaveBeenCalled();
+  });
+
+  it("with 'Оформити відправку' reserves then opens ShipSheet, and submitting ships it", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    const variant = makeVariant({ id: 72, sku: "SKU-72", on_hand: 5, available: 5, price: "300.00" });
+    vi.mocked(api.getProducts).mockResolvedValue([
+      makeProduct({ name: "Штани", variants: [variant] }),
+    ]);
+    const reservation = makeReservation({ id: 210, variant_id: 72, qty: 1 });
+    vi.mocked(api.reserve).mockResolvedValue(reservation);
+    vi.mocked(api.shipReservation).mockResolvedValue({
+      ...reservation,
+      status: "shipped",
+      ttn: "20450123456789",
+    });
+
+    render(<App />);
+    await goToSklad();
+    await screen.findByText("Штани");
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Штани"));
+    await screen.findByTestId("available-72");
+    await openSheet("M");
+
+    fireEvent.click(screen.getByRole("button", { name: "Продано" }));
+    const sellForm = document.querySelector(".sell-form") as HTMLElement;
+    fireEvent.click(within(sellForm).getByRole("checkbox", { name: "Оформити відправку" }));
+    fireEvent.click(within(sellForm).getByRole("button", { name: "Продано" }));
+
+    await waitFor(() => {
+      expect(api.reserve).toHaveBeenCalledWith(72, { qty: 1 });
+    });
+    expect(api.adjust).not.toHaveBeenCalled();
+
+    const shipDialog = await screen.findByRole("dialog", { name: /Відправити:/ });
+    fireEvent.change(within(shipDialog).getByLabelText("ТТН (можна додати пізніше)"), {
+      target: { value: "20450123456789" },
+    });
+    fireEvent.click(within(shipDialog).getByRole("button", { name: "Відправлено" }));
+
+    await waitFor(() => {
+      expect(api.shipReservation).toHaveBeenCalledWith(210, { ttn: "20450123456789" });
+    });
   });
 });
 
@@ -2324,7 +2554,7 @@ describe("Finance summary (Dashboard)", () => {
         revenue_uah: "100.00",
         sales_count: 1,
         units_sold: 1,
-        chart: [{ date: today, revenue: "100.00" }],
+        chart: [{ date: today, revenue: "100.00", units: 1 }],
       }),
     );
 
@@ -2333,6 +2563,140 @@ describe("Finance summary (Dashboard)", () => {
     expect(await screen.findByRole("img", { name: "Графік доходу за період" })).toBeInTheDocument();
     const bars = document.querySelectorAll(".revenue-chart-bar");
     expect(bars.length).toBeGreaterThan(0);
+  });
+
+  it("chart tooltip shows units sold alongside revenue", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    const today = new Date().toISOString().slice(0, 10);
+    vi.mocked(api.getFinanceSummary).mockResolvedValue(
+      makeFinance({
+        revenue_uah: "300.00",
+        sales_count: 2,
+        units_sold: 3,
+        chart: [{ date: today, revenue: "300.00", units: 3 }],
+      }),
+    );
+
+    render(<App />);
+    await screen.findByText("Фінанси");
+    fireEvent.click(screen.getByRole("button", { name: "Тиждень" })); // денні бакети
+    await screen.findByRole("img", { name: "Графік доходу за період" });
+
+    const bars = document.querySelectorAll(".revenue-chart-bar");
+    fireEvent.mouseEnter(bars[bars.length - 1]);
+
+    expect(await screen.findByText(/продано 3 шт/)).toBeInTheDocument();
+  });
+
+  it("double-tapping the same daily bar opens History filtered to that date", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    const today = new Date().toISOString().slice(0, 10);
+    vi.mocked(api.getFinanceSummary).mockResolvedValue(
+      makeFinance({ sales_count: 1, chart: [{ date: today, revenue: "100.00", units: 1 }] }),
+    );
+
+    render(<App />);
+    await screen.findByText("Фінанси");
+    fireEvent.click(screen.getByRole("button", { name: "Тиждень" })); // денні бакети
+    await screen.findByRole("img", { name: "Графік доходу за період" });
+
+    const bars = document.querySelectorAll(".revenue-chart-bar");
+    const todayBar = bars[bars.length - 1];
+    fireEvent.click(todayBar);
+    fireEvent.click(todayBar);
+
+    await screen.findByRole("dialog", { name: "Історія" });
+    await waitFor(() => {
+      expect(api.getFinanceHistory).toHaveBeenCalledWith("week", today);
+    });
+  });
+
+  it("a single tap on a bar does not open History", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    const today = new Date().toISOString().slice(0, 10);
+    vi.mocked(api.getFinanceSummary).mockResolvedValue(
+      makeFinance({ sales_count: 1, chart: [{ date: today, revenue: "100.00", units: 1 }] }),
+    );
+
+    render(<App />);
+    await screen.findByText("Фінанси");
+    await screen.findByRole("img", { name: "Графік доходу за період" });
+
+    const bars = document.querySelectorAll(".revenue-chart-bar");
+    fireEvent.click(bars[bars.length - 1]);
+
+    expect(screen.queryByRole("dialog", { name: "Історія" })).not.toBeInTheDocument();
+  });
+
+  it("'Історія' button opens History without a date filter", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+
+    render(<App />);
+    await screen.findByText("Фінанси");
+    fireEvent.click(screen.getByRole("button", { name: "Історія" }));
+
+    await screen.findByRole("dialog", { name: "Історія" });
+    await waitFor(() => {
+      expect(api.getFinanceHistory).toHaveBeenCalledWith("all", undefined);
+    });
+  });
+
+  it("History sheet renders an event row with product/variant/qty/amount", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.getFinanceHistory).mockResolvedValue([
+      makeHistoryEvent({ product_name: "Сукня", variant_label: "M", qty: 2, amount: "900.00" }),
+    ]);
+
+    render(<App />);
+    await screen.findByText("Фінанси");
+    fireEvent.click(screen.getByRole("button", { name: "Історія" }));
+
+    expect(await screen.findByText(/Сукня.*M.*2 шт/)).toBeInTheDocument();
+    expect(screen.getByText(/900.00 ₴/)).toBeInTheDocument();
+  });
+
+  it("History sheet shows 'Немає подій' when there are none", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.getFinanceHistory).mockResolvedValue([]);
+
+    render(<App />);
+    await screen.findByText("Фінанси");
+    fireEvent.click(screen.getByRole("button", { name: "Історія" }));
+
+    expect(await screen.findByText("Немає подій")).toBeInTheDocument();
+  });
+
+  it("'Показати всі дати' clears the day filter and refetches without date", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    const today = new Date().toISOString().slice(0, 10);
+    vi.mocked(api.getFinanceSummary).mockResolvedValue(
+      makeFinance({ sales_count: 1, chart: [{ date: today, revenue: "100.00", units: 1 }] }),
+    );
+    vi.mocked(api.getFinanceHistory).mockResolvedValue([]);
+
+    render(<App />);
+    await screen.findByText("Фінанси");
+    fireEvent.click(screen.getByRole("button", { name: "Тиждень" }));
+    await screen.findByRole("img", { name: "Графік доходу за період" });
+
+    const bars = document.querySelectorAll(".revenue-chart-bar");
+    const todayBar = bars[bars.length - 1];
+    fireEvent.click(todayBar);
+    fireEvent.click(todayBar);
+    await screen.findByRole("dialog", { name: "Історія" });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Показати всі дати" }));
+
+    await waitFor(() => {
+      expect(api.getFinanceHistory).toHaveBeenLastCalledWith("week", undefined);
+    });
   });
 
   it("renders the top products list sorted by revenue", async () => {

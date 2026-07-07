@@ -104,6 +104,7 @@ def _record_movement(
     type_: MovementType,
     delta: int,
     order_id: int | None = None,
+    reservation_id: int | None = None,
     reason: str | None = None,
     comment: str | None = None,
     price_at: Decimal | None = None,
@@ -115,6 +116,7 @@ def _record_movement(
             shop_id=shop_id,
             variant_id=variant_id,
             order_id=order_id,
+            reservation_id=reservation_id,
             type=type_,
             delta=delta,
             reason=reason,
@@ -231,6 +233,7 @@ async def release(
         type_=MovementType.release,
         delta=-reservation.qty,
         order_id=reservation.order_id,
+        reservation_id=reservation.id,
         reason=reason,
         comment=comment,
     )
@@ -258,6 +261,7 @@ async def _finalize_sale(
         type_=MovementType.sale,
         delta=-reservation.qty,
         order_id=reservation.order_id,
+        reservation_id=reservation.id,
         price_at=variant.price,
     )
 
@@ -390,6 +394,7 @@ async def not_picked_up(
         type_=MovementType.ret,
         delta=reservation.qty,
         order_id=reservation.order_id,
+        reservation_id=reservation.id,
         reason=reason,
         comment=comment,
         price_at=None,

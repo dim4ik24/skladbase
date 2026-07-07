@@ -4,7 +4,23 @@ import type { FormEvent } from "react";
 import { useReducedMotion } from "motion/react";
 import { ApiError } from "../api";
 import { errorMessage } from "../errors";
-import type { AdjustPayload, Product, ProductInput, ProductPatch, ReserveInput, Template, TemplateField, Variant, VariantAddPayload, VariantInput, VariantPatchPayload } from "../types";
+import type {
+  AdjustPayload,
+  CreateTtnPayload,
+  CreateTtnResult,
+  Product,
+  ProductInput,
+  ProductPatch,
+  Reservation,
+  ReserveInput,
+  ShipPayload,
+  Template,
+  TemplateField,
+  Variant,
+  VariantAddPayload,
+  VariantInput,
+  VariantPatchPayload,
+} from "../types";
 import { Panel } from "./ui/Panel";
 import { ProductPhotoGallery } from "./ProductPhotoGallery";
 import { TemplateBuilderModal } from "./TemplateBuilderModal";
@@ -25,10 +41,13 @@ interface ProductModalProps {
   onRestock: (variantId: number, qty: number) => void;
   onAdjust: (variantId: number, payload: AdjustPayload) => Promise<void>;
   onUploadPhoto: (variantId: number, file: File) => Promise<void>;
-  onReserve: (variantId: number, payload: ReserveInput) => Promise<void>;
+  onReserve: (variantId: number, payload: ReserveInput) => Promise<Reservation | undefined>;
   onPatchVariant: (variantId: number, patch: VariantPatchPayload) => Promise<void>;
   onAddVariant: (productId: number, payload: VariantAddPayload) => Promise<Variant>;
   onDeleteVariant: (variantId: number) => Promise<void>;
+  onShip: (reservationId: number, payload: ShipPayload) => Promise<void>;
+  onCreateTtn: (reservationId: number, payload: CreateTtnPayload) => Promise<CreateTtnResult>;
+  onNavigateToSettings: () => void;
   onFrozenAction?: () => void;
   onClose: () => void;
 }
@@ -429,10 +448,13 @@ interface EditFormProps {
   onRestock: (variantId: number, qty: number) => void;
   onAdjust: (variantId: number, payload: AdjustPayload) => Promise<void>;
   onUploadPhoto: (variantId: number, file: File) => Promise<void>;
-  onReserve: (variantId: number, payload: ReserveInput) => Promise<void>;
+  onReserve: (variantId: number, payload: ReserveInput) => Promise<Reservation | undefined>;
   onPatchVariant: (variantId: number, patch: VariantPatchPayload) => Promise<void>;
   onAddVariant: (productId: number, payload: VariantAddPayload) => Promise<Variant>;
   onDeleteVariant: (variantId: number) => Promise<void>;
+  onShip: (reservationId: number, payload: ShipPayload) => Promise<void>;
+  onCreateTtn: (reservationId: number, payload: CreateTtnPayload) => Promise<CreateTtnResult>;
+  onNavigateToSettings: () => void;
   onFrozenAction?: () => void;
   onClose: () => void;
 }
@@ -451,6 +473,9 @@ function EditForm({
   onPatchVariant,
   onAddVariant,
   onDeleteVariant,
+  onShip,
+  onCreateTtn,
+  onNavigateToSettings,
   onFrozenAction,
   onClose,
 }: EditFormProps) {
@@ -555,6 +580,7 @@ function EditForm({
                 <VariantTag
                   variant={variant}
                   axes={axes}
+                  photoUrl={variant.photo_url ?? product.photos[0]?.url ?? null}
                   onClick={() => setActiveVariantId(variant.id)}
                 />
               </li>
@@ -574,6 +600,8 @@ function EditForm({
             <VariantSheet
               variant={activeVariant}
               axes={axes}
+              photoUrl={activeVariant.photo_url ?? product.photos[0]?.url ?? null}
+              productName={product.name}
               isFrozen={product.is_frozen}
               onFrozenAction={onFrozenAction}
               onRestock={onRestock}
@@ -582,6 +610,9 @@ function EditForm({
               onReserve={onReserve}
               onPatchVariant={onPatchVariant}
               onDeleteVariant={onDeleteVariant}
+              onShip={onShip}
+              onCreateTtn={onCreateTtn}
+              onNavigateToSettings={onNavigateToSettings}
               onClose={() => setActiveVariantId(null)}
             />
           ) : null}
@@ -681,6 +712,9 @@ export function ProductModal({
   onPatchVariant,
   onAddVariant,
   onDeleteVariant,
+  onShip,
+  onCreateTtn,
+  onNavigateToSettings,
   onFrozenAction,
   onClose,
 }: ProductModalProps) {
@@ -742,6 +776,9 @@ export function ProductModal({
             onPatchVariant={onPatchVariant}
             onAddVariant={onAddVariant}
             onDeleteVariant={onDeleteVariant}
+            onShip={onShip}
+            onCreateTtn={onCreateTtn}
+            onNavigateToSettings={onNavigateToSettings}
             onFrozenAction={onFrozenAction}
             onClose={handleClose}
           />

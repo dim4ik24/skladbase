@@ -358,7 +358,10 @@ export default function App() {
     setShop((prev) => prev ? { ...prev, logo_url: null } : prev);
   }
 
-  async function handleReserve(variantId: number, payload: ReserveInput) {
+  async function handleReserve(
+    variantId: number,
+    payload: ReserveInput,
+  ): Promise<Reservation | undefined> {
     try {
       const reservation = await api.reserve(variantId, payload);
       const variant = products
@@ -368,9 +371,11 @@ export default function App() {
       const onHand = variant?.on_hand ?? 0;
       patchVariant(variantId, { reserved, available: onHand - reserved });
       setReservations((prev) => [reservation, ...prev]);
+      return reservation;
     } catch (err) {
       if (err instanceof ApiError && err.status === 402) {
         setUpgradePrompt({ message: err.detail });
+        return undefined;
       } else {
         throw err;
       }

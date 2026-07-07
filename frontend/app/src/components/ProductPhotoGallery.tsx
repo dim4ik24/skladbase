@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { ApiError } from "../api";
+import { PhotoViewer } from "./PhotoViewer";
 import type { Product } from "../types";
 
 interface ProductPhotoGalleryProps {
@@ -17,6 +18,7 @@ export function ProductPhotoGallery({
 }: ProductPhotoGalleryProps) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const sortedPhotos = [...product.photos].sort((a, b) => a.position - b.position);
@@ -69,9 +71,9 @@ export function ProductPhotoGallery({
       ) : null}
 
       <div className="photo-grid">
-        {sortedPhotos.map((photo) => (
+        {sortedPhotos.map((photo, i) => (
           <div key={photo.id} className="photo-thumb">
-            <img src={photo.url} alt="" />
+            <img src={photo.url} alt="" onClick={() => setViewerIndex(i)} />
             <button
               type="button"
               className="photo-thumb__remove"
@@ -106,6 +108,14 @@ export function ProductPhotoGallery({
       </div>
 
       {error ? <p className="photo-error">{error}</p> : null}
+
+      {viewerIndex !== null ? (
+        <PhotoViewer
+          photos={sortedPhotos}
+          initialIndex={viewerIndex}
+          onClose={() => setViewerIndex(null)}
+        />
+      ) : null}
     </div>
   );
 }

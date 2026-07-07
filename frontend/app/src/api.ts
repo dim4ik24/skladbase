@@ -11,6 +11,7 @@ import type {
   CreateTtnResult,
   FinancePeriod,
   FinanceSummary,
+  HistoryEvent,
   Invite,
   NotPickedUpPayload,
   NpCity,
@@ -288,6 +289,14 @@ export function createTtn(
 
 export function getFinanceSummary(period: FinancePeriod = "all"): Promise<FinanceSummary> {
   return request<FinanceSummary>(`/api/finance/summary?period=${period}`);
+}
+
+export function getFinanceHistory(
+  period: FinancePeriod = "all",
+  date?: string,
+): Promise<HistoryEvent[]> {
+  const dateParam = date ? `&date=${encodeURIComponent(date)}` : "";
+  return request<HistoryEvent[]>(`/api/finance/history?period=${period}${dateParam}`);
 }
 
 export function patchVariant(variantId: number, payload: VariantPatchPayload): Promise<Variant> {

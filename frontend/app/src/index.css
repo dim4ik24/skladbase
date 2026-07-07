@@ -927,6 +927,17 @@ body {
   gap: 8px;
 }
 
+.sell-form {
+  margin-top: 8px;
+  padding: 10px;
+  border-radius: 12px;
+  background: var(--bg);
+  border: 1.5px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .write-off-reasons {
   display: flex;
   flex-wrap: wrap;
@@ -1349,8 +1360,13 @@ body {
   color: var(--text);
 }
 
+.sheet-action-row {
+  display: flex;
+  gap: 8px;
+}
+
 .sheet-reserve-btn {
-  width: 100%;
+  flex: 1;
   padding: 14px;
   border-radius: 14px;
   background: linear-gradient(135deg, var(--green) 0%, var(--green-deep) 100%);
@@ -1367,6 +1383,26 @@ body {
 .sheet-reserve-btn:disabled {
   background: var(--glass-bg);
   box-shadow: none;
+  color: var(--text-soft);
+  cursor: not-allowed;
+}
+
+.sheet-sell-btn {
+  flex: 1;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--text);
+  color: var(--surface);
+  border: none;
+  font-family: "Manrope", system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.sheet-sell-btn:disabled {
+  background: var(--glass-bg);
   color: var(--text-soft);
   cursor: not-allowed;
 }
@@ -1610,6 +1646,17 @@ body {
   font-weight: 600;
 }
 
+.finance-history-btn {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1.5px solid var(--line);
+  background: var(--surface);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-soft);
+  cursor: pointer;
+}
+
 /* ── Фінанси — графік доходу ─────────────────────────────────────────── */
 .revenue-chart {
   margin: 4px 0 12px;
@@ -1693,6 +1740,59 @@ body {
 
 .finance-top-product-value {
   flex-shrink: 0;
+  color: var(--text-soft);
+}
+
+/* ── History sheet — стрічка подій каси/складу ───────────────────────── */
+.history-clear-day {
+  align-self: flex-start;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1.5px solid var(--line);
+  background: var(--surface);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.history-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--bg);
+}
+
+.history-row-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.history-row-center {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.history-row-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.history-row-meta {
+  font-size: 12px;
   color: var(--text-soft);
 }
 
@@ -2343,6 +2443,7 @@ body {
   border-radius: 10px;
   object-fit: cover;
   display: block;
+  cursor: pointer;
 }
 
 .photo-thumb__remove {
@@ -2368,6 +2469,88 @@ body {
 
 .photo-thumb__remove:hover {
   background: rgba(28, 37, 32, 0.92);
+}
+
+/* ── Photo viewer — lightbox зі свайпом ───────────────────────────────── */
+.photo-viewer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: rgba(10, 14, 12, 0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.photo-viewer-image {
+  max-width: 92vw;
+  max-height: 82vh;
+  object-fit: contain;
+  border-radius: 12px;
+  touch-action: pan-y;
+}
+
+.photo-viewer-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.photo-viewer-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.photo-viewer-arrow--prev {
+  left: 12px;
+}
+
+.photo-viewer-arrow--next {
+  right: 12px;
+}
+
+.photo-viewer-dots {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+}
+
+.photo-viewer-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.photo-viewer-dot--active {
+  background: #fff;
 }
 
 .photo-add-btn {

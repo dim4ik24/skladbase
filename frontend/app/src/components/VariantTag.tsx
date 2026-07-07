@@ -4,6 +4,7 @@ import type { TemplateField, Variant } from "../types";
 interface VariantTagProps {
   variant: Variant;
   axes: TemplateField[];
+  photoUrl: string | null;
   onClick: () => void;
 }
 
@@ -12,7 +13,7 @@ function fmt(p: string): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(2);
 }
 
-export function VariantTag({ variant, axes, onClick }: VariantTagProps) {
+export function VariantTag({ variant, axes, photoUrl, onClick }: VariantTagProps) {
   const axisLabel = Object.values(variant.axis_values).filter(Boolean).join(" / ");
   const chipColor = resolveChipColor(axes, variant.axis_values);
   const letter = chipLetter(axes, variant.axis_values);
@@ -38,8 +39,8 @@ export function VariantTag({ variant, axes, onClick }: VariantTagProps) {
             border: isWhite ? "1.5px solid var(--line)" : undefined,
           }}
         />
-      ) : variant.photo_url ? (
-        <img src={variant.photo_url} alt="" className="variant-chip variant-chip--photo" />
+      ) : photoUrl ? (
+        <img src={photoUrl} alt="" className="variant-chip variant-chip--photo" />
       ) : (
         <span className="variant-chip variant-chip--neutral">{letter}</span>
       )}

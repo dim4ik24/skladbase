@@ -387,13 +387,22 @@ class StockMovement(Base):
     price_at агрегуються в дохід, ret (поки не пишеться жодним кодом,
     фіча A) віднімається. reason/comment — лише для type=adjustment
     (списання з причиною); type=sale з fulfill()/write_off(sold) теж
-    отримує price_at, але БЕЗ reason (це нормальний продаж, не списання)."""
+    отримує price_at, але БЕЗ reason (це нормальний продаж, не списання).
+
+    reservation_id — опційний зв'язок з резервом, ЯКЩО рух породжений ним
+    (fulfill/pick_up -> sale, release -> release, not_picked_up -> return);
+    sell_direct()/write_off() (без резерву) лишають його NULL. Потрібен
+    Історії (GET /api/finance/history) — без нього customer/ttn для
+    sale/return/release неможливо дістати з самого руху."""
     __tablename__ = "stock_movements"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     shop_id: Mapped[int] = mapped_column(ForeignKey("shops.id", ondelete="CASCADE"), index=True)
     variant_id: Mapped[int] = mapped_column(ForeignKey("variants.id", ondelete="CASCADE"), index=True)
     order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id", ondelete="SET NULL"))
+    reservation_id: Mapped[int | None] = mapped_column(
+        ForeignKey("reservations.id", ondelete="SET NULL"), index=True
+    )
     type: Mapped[MovementType] = mapped_column(SAEnum(MovementType))
     delta: Mapped[int] = mapped_column(Integer)   # знакове: -3 продаж, +10 поповнення
     reason: Mapped[str | None] = mapped_column(String(40))  # sold/defect/correction/other — лише списання

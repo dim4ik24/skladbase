@@ -196,6 +196,22 @@ export type FinancePeriod = "week" | "month" | "year" | "all";
 export interface FinanceChartPoint {
   date: string;
   revenue: string;
+  units: number;
+}
+
+export type HistoryEventType = "sale" | "return" | "release";
+
+export interface HistoryEvent {
+  id: number;
+  date: string;
+  type: HistoryEventType;
+  product_name: string;
+  variant_label: string;
+  qty: number;
+  amount: string | null;
+  reason: string | null;
+  customer: string | null;
+  ttn: string | null;
 }
 
 export interface FinanceTopProduct {

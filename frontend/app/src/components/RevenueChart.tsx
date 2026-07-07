@@ -1,16 +1,20 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { FinanceChartPoint, FinancePeriod } from "../types";
 
 interface RevenueChartProps {
   period: FinancePeriod;
   chart: FinanceChartPoint[];
+  onOpenHistory?: (date?: string) => void;
 }
 
 interface ChartBar {
   key: string;
   label: string;
   value: number;
+  units: number;
 }
+
+const DOUBLE_TAP_MS = 300;
 
 function pad(n: number): string {
   return n < 10 ? `0${n}` : `${n}`;
@@ -37,7 +41,7 @@ function monthLabel(key: string): string {
 // Бекенд групує по днях (week/month) або місяцях (year/all) — тут лише
 // добудовуємо порожні бакети нулями, самі дати вже прийшли у chart.
 function buildBars(period: FinancePeriod, chart: FinanceChartPoint[]): ChartBar[] {
-  const revenueByKey = new Map(chart.map((point) => [point.date, Number(point.revenue)]));
+  const pointByKey = new Map(chart.map((point) => [point.date, point]));
   const now = new Date();
 
   if (period === "week" || period === "month") {
@@ -47,7 +51,13 @@ function buildBars(period: FinancePeriod, chart: FinanceChartPoint[]): ChartBar[
       const d = new Date(now);
       d.setDate(d.getDate() - i);
       const key = dayKey(d);
-      bars.push({ key, label: dayLabel(key), value: revenueByKey.get(key) ?? 0 });
+      const point = pointByKey.get(key);
+      bars.push({
+        key,
+        label: dayLabel(key),
+        value: Number(point?.revenue ?? 0),
+        units: point?.units ?? 0,
+      });
     }
     return bars;
   }
@@ -56,16 +66,37 @@ function buildBars(period: FinancePeriod, chart: FinanceChartPoint[]): ChartBar[
   for (let i = 11; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const key = monthKey(d);
-    bars.push({ key, label: monthLabel(key), value: revenueByKey.get(key) ?? 0 });
+    const point = pointByKey.get(key);
+    bars.push({
+      key,
+      label: monthLabel(key),
+      value: Number(point?.revenue ?? 0),
+      units: point?.units ?? 0,
+    });
   }
   return bars;
 }
 
-export function RevenueChart({ period, chart }: RevenueChartProps) {
+export function RevenueChart({ period, chart, onOpenHistory }: RevenueChartProps) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const lastTapRef = useRef<{ index: number; time: number } | null>(null);
   const bars = buildBars(period, chart);
   const max = Math.max(1, ...bars.map((bar) => bar.value));
   const active = activeIndex != null ? bars[activeIndex] : null;
+  const isDaily = period === "week" || period === "month";
+
+  function handleBarTap(i: number) {
+    setActiveIndex(i);
+
+    const now = Date.now();
+    const last = lastTapRef.current;
+    if (last && last.index === i && now - last.time < DOUBLE_TAP_MS) {
+      lastTapRef.current = null;
+      onOpenHistory?.(isDaily ? bars[i].key : undefined);
+      return;
+    }
+    lastTapRef.current = { index: i, time: now };
+  }
 
   return (
     <div className="revenue-chart">
@@ -81,13 +112,14 @@ export function RevenueChart({ period, chart }: RevenueChartProps) {
             onFocus={() => setActiveIndex(i)}
             onBlur={() => setActiveIndex(null)}
             onTouchStart={() => setActiveIndex(i)}
+            onClick={() => handleBarTap(i)}
             aria-label={`${bar.label}: ${bar.value.toLocaleString("uk-UA", { maximumFractionDigits: 0 })} ₴`}
           />
         ))}
       </div>
       <div className="revenue-chart-tooltip" aria-live="polite">
         {active
-          ? `${active.label} · ${active.value.toLocaleString("uk-UA", { maximumFractionDigits: 0 })} ₴`
+          ? `${active.label} · продано ${active.units} шт · ${active.value.toLocaleString("uk-UA", { maximumFractionDigits: 0 })} ₴`
           : ""}
       </div>
       <div className="revenue-chart-axis">

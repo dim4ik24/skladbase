@@ -3,27 +3,46 @@ import { createPortal } from "react-dom";
 import type { ChangeEvent } from "react";
 import { errorMessage } from "../errors";
 import { chipLetter, resolveChipColor } from "../lib/variantColor";
-import type { AdjustPayload, ReserveInput, TemplateField, Variant, VariantPatchPayload } from "../types";
+import type {
+  AdjustPayload,
+  CreateTtnPayload,
+  CreateTtnResult,
+  Reservation,
+  ReserveInput,
+  ShipPayload,
+  TemplateField,
+  Variant,
+  VariantPatchPayload,
+} from "../types";
 import { ReserveForm } from "./ReserveForm";
+import { SellForm } from "./SellForm";
+import { ShipSheet } from "./ShipSheet";
 import { WriteOffForm } from "./WriteOffForm";
 
 interface VariantSheetProps {
   variant: Variant;
   axes: TemplateField[];
+  photoUrl: string | null;
+  productName: string;
   isFrozen?: boolean;
   onFrozenAction?: () => void;
   onRestock: (variantId: number, qty: number) => void;
   onAdjust: (variantId: number, payload: AdjustPayload) => Promise<void>;
   onUploadPhoto: (variantId: number, file: File) => Promise<void>;
-  onReserve: (variantId: number, payload: ReserveInput) => Promise<void>;
+  onReserve: (variantId: number, payload: ReserveInput) => Promise<Reservation | undefined>;
   onPatchVariant: (variantId: number, patch: VariantPatchPayload) => Promise<void>;
   onDeleteVariant: (variantId: number) => Promise<void>;
+  onShip: (reservationId: number, payload: ShipPayload) => Promise<void>;
+  onCreateTtn: (reservationId: number, payload: CreateTtnPayload) => Promise<CreateTtnResult>;
+  onNavigateToSettings: () => void;
   onClose: () => void;
 }
 
 export function VariantSheet({
   variant,
   axes,
+  photoUrl,
+  productName,
   isFrozen = false,
   onFrozenAction,
   onRestock,
@@ -32,6 +51,9 @@ export function VariantSheet({
   onReserve,
   onPatchVariant,
   onDeleteVariant,
+  onShip,
+  onCreateTtn,
+  onNavigateToSettings,
   onClose,
 }: VariantSheetProps) {
   const [isClosing, setIsClosing] = useState(false);
@@ -55,6 +77,10 @@ export function VariantSheet({
 
   // Write-off (списання з причиною)
   const [showWriteOffForm, setShowWriteOffForm] = useState(false);
+
+  // Продано: без відправки -> write_off(reason=sold); з відправкою -> reserve + ship
+  const [showSellForm, setShowSellForm] = useState(false);
+  const [sellReservation, setSellReservation] = useState<Reservation | null>(null);
 
   // Photo upload
   const [photoUploading, setPhotoUploading] = useState(false);
@@ -124,6 +150,17 @@ export function VariantSheet({
     setShowWriteOffForm(false);
   }
 
+  async function handleSellSubmit(variantId: number, qty: number, withShipping: boolean) {
+    if (!withShipping) {
+      await onAdjust(variantId, { qty, reason: "sold" });
+      setShowSellForm(false);
+      return;
+    }
+    const reservation = await onReserve(variantId, { qty });
+    setShowSellForm(false);
+    if (reservation) setSellReservation(reservation);
+  }
+
   const sheet = (
     <>
       <div
@@ -146,8 +183,8 @@ export function VariantSheet({
                 border: isWhite ? "1.5px solid var(--line)" : undefined,
               }}
             />
-          ) : variant.photo_url ? (
-            <img src={variant.photo_url} alt="" className="variant-chip variant-chip--photo" />
+          ) : photoUrl ? (
+            <img src={photoUrl} alt="" className="variant-chip variant-chip--photo" />
           ) : (
             <span className="variant-chip variant-chip--neutral">{letter}</span>
           )}
@@ -166,8 +203,8 @@ export function VariantSheet({
 
         {/* ── Photo upload ── */}
         <div className="variant-photo">
-          {variant.photo_url ? (
-            <img src={variant.photo_url} alt="" />
+          {photoUrl ? (
+            <img src={photoUrl} alt="" />
           ) : (
             <div className="variant-photo-placeholder" aria-hidden="true">📦</div>
           )}
@@ -232,25 +269,47 @@ export function VariantSheet({
           />
         ) : null}
 
-        {/* ── Reserve ── */}
-        <button
-          type="button"
-          className="sheet-reserve-btn"
-          aria-disabled={isFrozen}
-          disabled={variant.available <= 0}
-          onClick={() => {
-            if (isFrozen) { onFrozenAction?.(); return; }
-            setShowReserveForm((prev) => !prev);
-          }}
-        >
-          Відклади
-        </button>
+        {/* ── Reserve / Продано ── */}
+        <div className="sheet-action-row">
+          <button
+            type="button"
+            className="sheet-reserve-btn"
+            aria-disabled={isFrozen}
+            disabled={variant.available <= 0}
+            onClick={() => {
+              if (isFrozen) { onFrozenAction?.(); return; }
+              setShowReserveForm((prev) => !prev);
+            }}
+          >
+            Відклади
+          </button>
+          <button
+            type="button"
+            className="sheet-sell-btn"
+            aria-disabled={isFrozen}
+            disabled={variant.available <= 0}
+            onClick={() => {
+              if (isFrozen) { onFrozenAction?.(); return; }
+              setShowSellForm((prev) => !prev);
+            }}
+          >
+            Продано
+          </button>
+        </div>
         {showReserveForm ? (
           <ReserveForm
             variantId={variant.id}
             maxQty={variant.available}
             onSubmit={handleReserveSubmit}
             onCancel={() => setShowReserveForm(false)}
+          />
+        ) : null}
+        {showSellForm ? (
+          <SellForm
+            variantId={variant.id}
+            maxQty={variant.available}
+            onSubmit={handleSellSubmit}
+            onCancel={() => setShowSellForm(false)}
           />
         ) : null}
 
@@ -352,6 +411,19 @@ export function VariantSheet({
           </button>
         )}
       </div>
+
+      {sellReservation ? (
+        <ShipSheet
+          reservationId={sellReservation.id}
+          title={`${productName} (${[axisLabel, `${sellReservation.qty} шт.`].filter(Boolean).join(", ")})`}
+          productName={productName}
+          defaultCodAmount={Number(variant.price) * sellReservation.qty}
+          onSubmit={onShip}
+          onCreateTtn={onCreateTtn}
+          onNavigateToSettings={onNavigateToSettings}
+          onClose={() => setSellReservation(null)}
+        />
+      ) : null}
     </>
   );
 
