@@ -1431,10 +1431,42 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
+  width: 100%;
   padding: 10px 12px;
   border-radius: 14px;
+  border: none;
   background: var(--bg);
   color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 0.1s ease;
+}
+
+.reservation-card:active {
+  transform: scale(0.98);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reservation-card:active {
+    transform: none;
+  }
+}
+
+.reservation-card-right {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.badge-active {
+  background: var(--state-ok);
+  color: var(--green-deep);
+}
+
+.badge-shipped {
+  background: var(--state-rsv);
+  color: #1c6f85;
 }
 
 .reservation-card-chip {
@@ -1480,37 +1512,50 @@ body {
   text-overflow: ellipsis;
 }
 
-.reservation-card-actions {
-  /* Стовпчиком і компактно: два повнорозмірні modal-actions-кнопки в ряд
-     (по 10px 20px паддінгу кожна) на вузькому екрані з'їдали майже всю
-     ширину рядка й тиснули .reservation-card-center (flex:1, min-width:0)
-     до 0px — текст був у DOM, але візуально зникав (інцидент "порожня
-     бирка"). Стовпчик + менший паддінг лишають center гарантоване місце. */
-  flex-shrink: 0;
-  flex-direction: column;
-  margin-top: 0;
-  gap: 4px;
-}
-
-.reservation-card-actions button {
-  padding: 6px 14px;
-  font-size: 12px;
-  border-radius: 10px;
-}
-
 .reservation-ttn-tap {
   cursor: pointer;
   text-decoration: underline dotted;
   text-underline-offset: 2px;
 }
 
-.reservation-ttn-edit input {
-  font-size: 12px;
-  padding: 2px 6px;
-  border-radius: 6px;
+/* ── Reservation sheet — info + діі за станом (VariantSheet pattern) ─── */
+.reservation-sheet-photo {
+  width: 64px;
+  height: 64px;
+  font-size: 18px;
+}
+
+.reservation-sheet-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.reservation-sheet-row {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.reservation-sheet-ttn input {
+  font-size: 13px;
+  padding: 4px 8px;
+  border-radius: 8px;
   border: 1px solid var(--line);
   background: var(--bg);
   color: var(--text);
+}
+
+.reservation-status-badge {
+  align-self: flex-start;
+}
+
+.reservation-sheet-actions {
+  flex-direction: column;
+  gap: 8px;
+}
+
+.reservation-sheet-actions button {
   width: 100%;
 }
 

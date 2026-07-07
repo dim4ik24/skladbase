@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { NotPickedUpSheet } from "./NotPickedUpSheet";
 import { ReleaseSheet } from "./ReleaseSheet";
+import { ReservationSheet } from "./ReservationSheet";
 import { ShipSheet } from "./ShipSheet";
 import type {
   CreateTtnPayload,
@@ -51,11 +52,10 @@ export function ReservationsPanel({
   onCreateTtn,
   onNavigateToSettings,
 }: ReservationsPanelProps) {
+  const [activeId, setActiveId] = useState<number | null>(null);
   const [releasingId, setReleasingId] = useState<number | null>(null);
   const [shippingId, setShippingId] = useState<number | null>(null);
   const [notPickedUpId, setNotPickedUpId] = useState<number | null>(null);
-  const [editingTtnId, setEditingTtnId] = useState<number | null>(null);
-  const [ttnDraft, setTtnDraft] = useState("");
 
   if (reservations.length === 0) {
     return <p className="status-text">Активних резервів немає</p>;
@@ -76,14 +76,7 @@ export function ReservationsPanel({
     setNotPickedUpId(null);
   }
 
-  async function handleTtnSave(reservationId: number) {
-    const trimmed = ttnDraft.trim();
-    if (trimmed) {
-      await onUpdateTtn(reservationId, trimmed);
-    }
-    setEditingTtnId(null);
-  }
-
+  const activeReservation = reservations.find((r) => r.id === activeId) ?? null;
   const releasingReservation = reservations.find((r) => r.id === releasingId) ?? null;
   const shippingReservation = reservations.find((r) => r.id === shippingId) ?? null;
   const notPickedUpReservation = reservations.find((r) => r.id === notPickedUpId) ?? null;
@@ -111,6 +104,24 @@ export function ReservationsPanel({
     return `${name} (${inner})`;
   }
 
+  function resolveDisplay(reservation: Reservation) {
+    const resolved = resolveReservationVariant(reservation.variant_id);
+    const variant = resolved?.variant;
+    const product = resolved?.product;
+    const axisLabel = variant
+      ? Object.values(variant.axis_values).filter(Boolean).join(" / ")
+      : "";
+    const title = product ? product.name : `Варіант #${reservation.variant_id}`;
+    const photoUrl = variant?.photo_url ?? product?.photos[0]?.url ?? null;
+    const letter = (axisLabel.charAt(0) || product?.name.charAt(0) || "?").toUpperCase();
+    const unitPrice = variant ? Number(variant.price) : null;
+    const sum = variant ? Number(variant.price) * reservation.qty : null;
+    const deadlineLabel = reservation.expires_at
+      ? formatCompactDate(reservation.expires_at)
+      : null;
+    return { axisLabel, title, photoUrl, letter, unitPrice, sum, deadlineLabel };
+  }
+
   return (
     <>
       <ul className="reservation-list">
@@ -118,25 +129,16 @@ export function ReservationsPanel({
           // Fallback навмисно не порожній: якщо variant/product ще не
           // прийшли (products не завантажені/варіант видалили) — бирка
           // все одно показує номер резерву і кількість, а не порожнечу.
-          const resolved = resolveReservationVariant(reservation.variant_id);
-          const variant = resolved?.variant;
-          const product = resolved?.product;
-          const axisLabel = variant
-            ? Object.values(variant.axis_values).filter(Boolean).join(" / ")
-            : "";
-          const title = product ? product.name : `Варіант #${reservation.variant_id}`;
-          const photoUrl = variant?.photo_url ?? product?.photos[0]?.url ?? null;
-          const letter = (axisLabel.charAt(0) || product?.name.charAt(0) || "?").toUpperCase();
+          const { axisLabel, title, photoUrl, letter, unitPrice, sum } =
+            resolveDisplay(reservation);
 
-          const qtyPriceLine = variant
-            ? `${reservation.qty} шт. × ${fmtMoney(Number(variant.price))} ₴ = ${fmtMoney(
-                Number(variant.price) * reservation.qty,
-              )} ₴`
-            : `${reservation.qty} шт.`;
+          const qtyPriceLine =
+            unitPrice !== null && sum !== null
+              ? `${reservation.qty} шт. × ${fmtMoney(unitPrice)} ₴ = ${fmtMoney(sum)} ₴`
+              : `${reservation.qty} шт.`;
           const row2 = [axisLabel, qtyPriceLine].filter(Boolean).join(" · ");
 
           const isShipped = reservation.status === "shipped";
-          const isEditingTtn = editingTtnId === reservation.id;
 
           const row3Parts = [
             reservation.customer_note,
@@ -144,80 +146,64 @@ export function ReservationsPanel({
           ].filter((part): part is string => Boolean(part));
 
           return (
-            <li className="reservation-card" key={reservation.id}>
-              {photoUrl ? (
-                <img src={photoUrl} alt="" className="reservation-card-chip" />
-              ) : (
-                <span className="reservation-card-chip reservation-card-chip--neutral">
-                  {letter}
-                </span>
-              )}
+            <li key={reservation.id}>
+              <button
+                type="button"
+                className="reservation-card"
+                aria-label={`Резерв: ${title}`}
+                onClick={() => setActiveId(reservation.id)}
+              >
+                {photoUrl ? (
+                  <img src={photoUrl} alt="" className="reservation-card-chip" />
+                ) : (
+                  <span className="reservation-card-chip reservation-card-chip--neutral">
+                    {letter}
+                  </span>
+                )}
 
-              <div className="reservation-card-center">
-                <span className="reservation-card-title">{title}</span>
-                <span className="reservation-card-meta">{row2}</span>
-                {row3Parts.length > 0 ? (
-                  <span className="reservation-card-meta">{row3Parts.join(" · ")}</span>
-                ) : null}
-                {isShipped ? (
-                  isEditingTtn ? (
-                    <span className="reservation-card-meta reservation-ttn-edit">
-                      <input
-                        type="text"
-                        value={ttnDraft}
-                        autoFocus
-                        onChange={(event) => setTtnDraft(event.target.value)}
-                        onBlur={() => void handleTtnSave(reservation.id)}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter") void handleTtnSave(reservation.id);
-                        }}
-                      />
-                    </span>
-                  ) : (
-                    <span
-                      className="reservation-card-meta reservation-ttn-tap"
-                      onClick={() => {
-                        setEditingTtnId(reservation.id);
-                        setTtnDraft(reservation.ttn ?? "");
-                      }}
-                    >
+                <div className="reservation-card-center">
+                  <span className="reservation-card-title">{title}</span>
+                  <span className="reservation-card-meta">{row2}</span>
+                  {row3Parts.length > 0 ? (
+                    <span className="reservation-card-meta">{row3Parts.join(" · ")}</span>
+                  ) : null}
+                  {isShipped ? (
+                    <span className="reservation-card-meta">
                       🚚 {reservation.ttn ? reservation.ttn : "Відправлено (додати ТТН)"}
                     </span>
-                  )
-                ) : null}
-                {isShipped && reservation.np_status ? (
-                  <span className="reservation-card-meta">📍 {reservation.np_status}</span>
-                ) : null}
-              </div>
+                  ) : null}
+                  {isShipped && reservation.np_status ? (
+                    <span className="reservation-card-meta">📍 {reservation.np_status}</span>
+                  ) : null}
+                </div>
 
-              <div className="modal-actions reservation-card-actions">
-                {reservation.status === "active" ? (
-                  <>
-                    <button type="button" onClick={() => setReleasingId(reservation.id)}>
-                      Зняти
-                    </button>
-                    <button type="button" onClick={() => setShippingId(reservation.id)}>
-                      Відправлено
-                    </button>
-                    <button type="button" onClick={() => onFulfill(reservation.id)}>
-                      Продано
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button type="button" onClick={() => setNotPickedUpId(reservation.id)}>
-                      Не забрав
-                    </button>
-                    <button type="button" onClick={() => onPickUp(reservation.id)}>
-                      Забрав
-                    </button>
-                  </>
-                )}
-              </div>
+                <span className="reservation-card-right">
+                  <span className={`badge${isShipped ? " badge-shipped" : " badge-active"}`}>
+                    {isShipped ? "🚚 Відправлено" : "Активний"}
+                  </span>
+                </span>
+              </button>
             </li>
           );
         })}
       </ul>
+
+      {activeReservation ? (
+        <ReservationSheet
+          reservation={activeReservation}
+          {...resolveDisplay(activeReservation)}
+          title={resolveDisplay(activeReservation).title}
+          qty={activeReservation.qty}
+          customerNote={activeReservation.customer_note}
+          onRequestRelease={() => setReleasingId(activeReservation.id)}
+          onRequestShip={() => setShippingId(activeReservation.id)}
+          onRequestNotPickedUp={() => setNotPickedUpId(activeReservation.id)}
+          onFulfill={onFulfill}
+          onPickUp={onPickUp}
+          onUpdateTtn={onUpdateTtn}
+          onClose={() => setActiveId(null)}
+        />
+      ) : null}
 
       {releasingReservation ? (
         <ReleaseSheet

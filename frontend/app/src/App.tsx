@@ -72,6 +72,26 @@ function persistShopId(id: number): void {
   }
 }
 
+const FINANCE_PERIOD_KEY = "skladbase:financePeriod";
+const FINANCE_PERIODS: FinancePeriod[] = ["week", "month", "year", "all"];
+
+function readSavedFinancePeriod(): FinancePeriod | null {
+  try {
+    const raw = localStorage.getItem(FINANCE_PERIOD_KEY);
+    return (FINANCE_PERIODS as string[]).includes(raw ?? "") ? (raw as FinancePeriod) : null;
+  } catch {
+    return null;
+  }
+}
+
+function persistFinancePeriod(period: FinancePeriod): void {
+  try {
+    localStorage.setItem(FINANCE_PERIOD_KEY, period);
+  } catch {
+    // деякі WebView можуть кидати — вибір періоду просто не переживе перезапуск
+  }
+}
+
 export default function App() {
   const [shop, setShop] = useState<Shop | null>(null);
   const [shops, setShops] = useState<ShopSummary[]>([]);
@@ -80,7 +100,9 @@ export default function App() {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [finance, setFinance] = useState<FinanceSummary>(EMPTY_FINANCE);
-  const [financePeriod, setFinancePeriod] = useState<FinancePeriod>("all");
+  const [financePeriod, setFinancePeriod] = useState<FinancePeriod>(
+    () => readSavedFinancePeriod() ?? "all",
+  );
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [clearingDemos, setClearingDemos] = useState(false);
@@ -108,6 +130,7 @@ export default function App() {
 
   async function handleFinancePeriodChange(period: FinancePeriod) {
     setFinancePeriod(period);
+    persistFinancePeriod(period);
     await refetchFinance(shop?.role, period);
   }
 

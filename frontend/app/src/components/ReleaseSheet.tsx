@@ -13,9 +13,9 @@ interface ReleaseSheetProps {
 
 const REASONS: { value: ReleaseReason; label: string }[] = [
   { value: "customer_changed_mind", label: "Клієнт передумав" },
-  { value: "unresponsive", label: "Не відповідає" },
-  { value: "mistaken_reservation", label: "Помилковий резерв" },
-  { value: "other", label: "❓ Інше" },
+  { value: "unresponsive", label: "Клієнт не виходить на зв'язок" },
+  { value: "mistaken_reservation", label: "Резерв створено помилково" },
+  { value: "other", label: "❓ Інша причина" },
 ];
 
 export function ReleaseSheet({ reservationId, title, onSubmit, onClose }: ReleaseSheetProps) {
@@ -72,7 +72,9 @@ export function ReleaseSheet({ reservationId, title, onSubmit, onClose }: Releas
         onClick={(e) => e.stopPropagation()}
       >
         <div className="sheet-header">
-          <span className="sheet-axis-label release-sheet-title">Зняти резерв: {title}</span>
+          <span className="sheet-axis-label release-sheet-title">
+            Чому знімаєте резерв «{title}»?
+          </span>
           <button type="button" className="sheet-close" aria-label="Закрити" onClick={handleClose}>
             ✕
           </button>
@@ -81,7 +83,7 @@ export function ReleaseSheet({ reservationId, title, onSubmit, onClose }: Releas
         <form onSubmit={handleSubmit}>
           {error ? <p className="error-banner">{error}</p> : null}
 
-          <div className="write-off-reasons" role="group" aria-label="Причина зняття">
+          <div className="write-off-reasons" role="group" aria-label="Чому знімаєте резерв?">
             {REASONS.map((r) => (
               <button
                 key={r.value}

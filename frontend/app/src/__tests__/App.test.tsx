@@ -243,6 +243,12 @@ async function openSheet(tagLabel: string) {
   fireEvent.click(await screen.findByLabelText(`Варіант: ${tagLabel}`));
 }
 
+// Reservation badges are clean (no action buttons) — tap the badge to open
+// the info sheet, which exposes the state-based actions (Зняти/Відправлено/...).
+async function openReservationSheet(productName: string) {
+  fireEvent.click(await screen.findByLabelText(`Резерв: ${productName}`));
+}
+
 describe("App catalog screen", () => {
   it("renders products from the API: photo placeholder, name, price, stock", async () => {
     vi.mocked(api.getMe).mockResolvedValue(shopFixture);
@@ -826,6 +832,7 @@ describe("Reservations", () => {
     await screen.findByTestId("available-71");
 
     fireEvent.click(screen.getByRole("button", { name: "Резерви (1)" }));
+    await openReservationSheet("Футболка");
     fireEvent.click(screen.getByRole("button", { name: "Зняти" }));
     fireEvent.click(screen.getByText("Клієнт передумав"));
     fireEvent.click(screen.getByRole("button", { name: "Підтвердити" }));
@@ -856,8 +863,9 @@ describe("Reservations", () => {
     await screen.findByTestId("available-72");
 
     fireEvent.click(screen.getByRole("button", { name: "Резерви (1)" }));
+    await openReservationSheet("Футболка");
     fireEvent.click(screen.getByRole("button", { name: "Зняти" }));
-    fireEvent.click(screen.getByText("❓ Інше"));
+    fireEvent.click(screen.getByText("❓ Інша причина"));
     fireEvent.click(screen.getByRole("button", { name: "Підтвердити" }));
 
     expect(screen.getByLabelText("Коментар (обов'язково)")).toHaveAttribute(
@@ -867,7 +875,7 @@ describe("Reservations", () => {
     expect(api.releaseReservation).not.toHaveBeenCalled();
   });
 
-  it("'Зняти' opens a bottom sheet (portal), not an inline dialog inside the card", async () => {
+  it("tapping the badge opens a bottom sheet (portal), and 'Зняти' opens a second one on top", async () => {
     vi.mocked(api.getMe).mockResolvedValue(shopFixture);
     const variant = makeVariant({ id: 73, sku: "SKU-73", on_hand: 5, reserved: 2, available: 3 });
     vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ variants: [variant] })]);
@@ -881,15 +889,20 @@ describe("Reservations", () => {
     await screen.findByTestId("available-73");
 
     fireEvent.click(screen.getByRole("button", { name: "Резерви (1)" }));
-    const cardButton = screen.getByRole("button", { name: "Зняти" });
+    const cardButton = screen.getByRole("button", { name: "Резерв: Футболка" });
     const card = cardButton.closest("li") as HTMLElement;
     fireEvent.click(cardButton);
 
-    const dialog = screen.getByRole("dialog", { name: /Зняти резерв/ });
-    expect(dialog).toBeInTheDocument();
+    const infoDialog = await screen.findByRole("dialog", { name: /Резерв: Футболка/ });
+    expect(infoDialog).toBeInTheDocument();
     // Портал (createPortal у document.body) — sheet НЕ вкладений у саму бирку,
     // на відміну від старого інлайн-ReleaseForm, який розсипався поверх карток.
-    expect(card.contains(dialog)).toBe(false);
+    expect(card.contains(infoDialog)).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: "Зняти" }));
+
+    const releaseDialog = await screen.findByRole("dialog", { name: /Зняти резерв/ });
+    expect(card.contains(releaseDialog)).toBe(false);
     expect(screen.getByText("Клієнт передумав")).toBeInTheDocument();
   });
 
@@ -928,6 +941,7 @@ describe("Reservations", () => {
     await screen.findByTestId("available-81");
 
     fireEvent.click(screen.getByRole("button", { name: "Резерви (1)" }));
+    await openReservationSheet("Футболка");
     fireEvent.click(screen.getByRole("button", { name: "Продано" }));
 
     await waitFor(() => {
@@ -960,6 +974,7 @@ describe("Reservations", () => {
     await screen.findByTestId("available-82");
 
     fireEvent.click(screen.getByRole("button", { name: "Резерви (1)" }));
+    await openReservationSheet("Футболка");
     fireEvent.click(screen.getByRole("button", { name: "Продано" }));
 
     await waitFor(() => {
@@ -1032,6 +1047,75 @@ describe("Reservations", () => {
     fireEvent.click(screen.getByRole("button", { name: "Резерви (1)" }));
 
     expect(screen.getByText("📍 Прибув у відділення")).toBeInTheDocument();
+  });
+
+  it("badge tap opens an info sheet with full details and active-state actions", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    const variant = makeVariant({ id: 91, sku: "SKU-91", price: "450.00" });
+    vi.mocked(api.getProducts).mockResolvedValue([
+      makeProduct({ name: "Сукня", variants: [variant] }),
+    ]);
+    const reservation = makeReservation({
+      id: 500,
+      variant_id: 91,
+      qty: 2,
+      customer_note: "Оксана, +380501112233",
+    });
+    vi.mocked(api.getReservations).mockResolvedValue([reservation]);
+
+    render(<App />);
+    await goToSklad();
+    await screen.findByText("Сукня");
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Сукня"));
+    await screen.findByTestId("available-91");
+
+    fireEvent.click(screen.getByRole("button", { name: "Резерви (1)" }));
+    await openReservationSheet("Сукня");
+
+    const dialog = screen.getByRole("dialog", { name: "Резерв: Сукня" });
+    expect(within(dialog).getByText("2 шт. × 450 ₴ = 900 ₴")).toBeInTheDocument();
+    expect(within(dialog).getByText("Оксана, +380501112233")).toBeInTheDocument();
+    expect(within(dialog).getByText("Активний")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Відправлено" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Продано" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Зняти" })).toBeInTheDocument();
+  });
+
+  it("shipped reservation info sheet exposes Забрав / Не забрав, and Забрав calls the endpoint", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    const variant = makeVariant({ id: 92, sku: "SKU-92" });
+    vi.mocked(api.getProducts).mockResolvedValue([
+      makeProduct({ name: "Кепка", variants: [variant] }),
+    ]);
+    const reservation = makeReservation({
+      id: 501,
+      variant_id: 92,
+      qty: 1,
+      status: "shipped",
+      ttn: "20450000000099",
+    });
+    vi.mocked(api.getReservations).mockResolvedValue([reservation]);
+    vi.mocked(api.pickUpReservation).mockResolvedValue({ ...reservation, status: "fulfilled" });
+
+    render(<App />);
+    await goToSklad();
+    await screen.findByText("Кепка");
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Кепка"));
+    await screen.findByTestId("available-92");
+
+    fireEvent.click(screen.getByRole("button", { name: "Резерви (1)" }));
+    await openReservationSheet("Кепка");
+
+    const dialog = screen.getByRole("dialog", { name: "Резерв: Кепка" });
+    expect(within(dialog).getByText("🚚 Відправлено")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Забрав" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Не забрав" })).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Забрав" }));
+
+    await waitFor(() => {
+      expect(api.pickUpReservation).toHaveBeenCalledWith(501);
+    });
   });
 });
 
@@ -2190,6 +2274,75 @@ describe("Finance summary (Dashboard)", () => {
     expect(screen.getByText("Клієнт передумав — 2")).toBeInTheDocument();
     expect(screen.queryByText("Повернення")).not.toBeInTheDocument();
   });
+
+  it("persists the selected period to localStorage", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.getFinanceSummary).mockResolvedValue(makeFinance());
+    const setItemSpy = vi.spyOn(Storage.prototype, "setItem");
+
+    render(<App />);
+    await screen.findByText("Фінанси");
+
+    fireEvent.click(screen.getByRole("button", { name: "Рік" }));
+
+    await waitFor(() => {
+      expect(setItemSpy).toHaveBeenCalledWith("skladbase:financePeriod", "year");
+    });
+  });
+
+  it("restores the previously selected period on load", async () => {
+    localStorage.setItem("skladbase:financePeriod", "year");
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.getFinanceSummary).mockResolvedValue(makeFinance());
+
+    render(<App />);
+    await screen.findByText("Фінанси");
+
+    await waitFor(() => {
+      expect(api.getFinanceSummary).toHaveBeenCalledWith("year");
+    });
+    expect(screen.getByRole("button", { name: "Рік" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("defaults to 'all time' when no period was ever saved", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.getFinanceSummary).mockResolvedValue(makeFinance());
+
+    render(<App />);
+    await screen.findByText("Фінанси");
+
+    expect(screen.getByRole("button", { name: "Весь час" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  it("renders Top Products as its own section, separate from the finance card", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.getFinanceSummary).mockResolvedValue(
+      makeFinance({
+        revenue_uah: "700.00",
+        sales_count: 2,
+        units_sold: 4,
+        top_products: [{ product_id: 1, name: "Кепка", revenue_uah: "500.00", units: 1 }],
+      }),
+    );
+
+    render(<App />);
+    await screen.findByText("Фінанси");
+
+    const topProductsHeading = await screen.findByText("Топ товарів");
+    const financeCard = screen.getByText("Фінанси").closest(".glass-card");
+    const topProductsCard = topProductsHeading.closest(".glass-card");
+
+    expect(topProductsCard).not.toBeNull();
+    expect(topProductsCard).not.toBe(financeCard);
+    expect(financeCard?.contains(topProductsHeading)).toBe(false);
+  });
 });
 
 describe("Nova Poshta sender profile (Settings, owner-only)", () => {
@@ -2289,6 +2442,7 @@ describe("ShipSheet — automatic TTN creation", () => {
     await screen.findByTestId("available-501");
 
     fireEvent.click(screen.getByRole("button", { name: "Резерви (1)" }));
+    await openReservationSheet("Кросівки");
     fireEvent.click(screen.getByRole("button", { name: "Відправлено" }));
     fireEvent.click(await screen.findByRole("button", { name: "Створити ТТН автоматично" }));
   }

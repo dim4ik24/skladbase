@@ -126,22 +126,6 @@ export function DashboardScreen({
                 </span>
               </div>
             ) : null}
-
-            {finance.top_products.length > 0 ? (
-              <div className="finance-top-products">
-                <h3 className="finance-subsection-title">Топ товарів</h3>
-                <ul>
-                  {finance.top_products.map((product) => (
-                    <li key={product.product_id} className="finance-top-product-row">
-                      <span className="finance-top-product-name">{product.name}</span>
-                      <span className="finance-top-product-value">
-                        {formatUah(product.revenue_uah)} · {product.units} шт.
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
           </>
         )}
 
@@ -199,6 +183,24 @@ export function DashboardScreen({
           )}
         </div>
       </Panel>
+
+      {finance.top_products.length > 0 ? (
+        <div className="glass-card rounded-[20px] p-4 mb-4 shadow-[var(--shadow-card)]">
+          <h2 className="section-title mb-2">Топ товарів</h2>
+          <div className="finance-top-products">
+            <ul>
+              {finance.top_products.map((product) => (
+                <li key={product.product_id} className="finance-top-product-row">
+                  <span className="finance-top-product-name">{product.name}</span>
+                  <span className="finance-top-product-value">
+                    {formatUah(product.revenue_uah)} · {product.units} шт.
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }

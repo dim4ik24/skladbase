@@ -13,8 +13,8 @@ interface NotPickedUpSheetProps {
 
 const REASONS: { value: NotPickedUpReason; label: string }[] = [
   { value: "did_not_pick_up", label: "Не забрав з пошти" },
-  { value: "refused", label: "Відмовився" },
-  { value: "other", label: "❓ Інше" },
+  { value: "refused", label: "Відмовився від посилки" },
+  { value: "other", label: "❓ Інша причина" },
 ];
 
 export function NotPickedUpSheet({
@@ -76,7 +76,9 @@ export function NotPickedUpSheet({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="sheet-header">
-          <span className="sheet-axis-label release-sheet-title">Не забрав: {title}</span>
+          <span className="sheet-axis-label release-sheet-title">
+            Чому клієнт не забрав «{title}»?
+          </span>
           <button type="button" className="sheet-close" aria-label="Закрити" onClick={handleClose}>
             ✕
           </button>
@@ -85,7 +87,7 @@ export function NotPickedUpSheet({
         <form onSubmit={handleSubmit}>
           {error ? <p className="error-banner">{error}</p> : null}
 
-          <div className="write-off-reasons" role="group" aria-label="Причина незабору">
+          <div className="write-off-reasons" role="group" aria-label="Чому клієнт не забрав?">
             {REASONS.map((r) => (
               <button
                 key={r.value}

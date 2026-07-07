@@ -3,15 +3,15 @@
 // (див. також ReleaseSheet.tsx / NotPickedUpSheet.tsx).
 export const RELEASE_REASON_LABELS: Record<string, string> = {
   customer_changed_mind: "Клієнт передумав",
-  unresponsive: "Не відповідає",
-  mistaken_reservation: "Помилковий резерв",
-  other: "Інше",
+  unresponsive: "Клієнт не виходить на зв'язок",
+  mistaken_reservation: "Резерв створено помилково",
+  other: "Інша причина",
 };
 
 export const RETURN_REASON_LABELS: Record<string, string> = {
   did_not_pick_up: "Не забрав з пошти",
-  refused: "Відмовився",
-  other: "Інше",
+  refused: "Відмовився від посилки",
+  other: "Інша причина",
 };
 
 export function reasonLabel(map: Record<string, string>, reason: string): string {
