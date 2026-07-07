@@ -18,7 +18,7 @@ from collections.abc import Awaitable, Callable
 from datetime import timedelta
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
@@ -213,6 +213,17 @@ async def np_tracking(session: AsyncSession, notify: Notifier, track: NpTrackFn)
     shops = (await session.scalars(
         select(Shop).where(Shop.np_api_key_encrypted.is_not(None))
     )).all()
+
+    ttns_total = 0
+    if shops:
+        ttns_total = await session.scalar(
+            select(func.count()).select_from(Reservation).where(
+                Reservation.shop_id.in_([s.id for s in shops]),
+                Reservation.status == ReservationStatus.shipped,
+                Reservation.ttn.is_not(None),
+            )
+        ) or 0
+    logger.info("np_tracking: cycle start, shops=%d, ttns=%d", len(shops), ttns_total)
 
     for shop in shops:
         try:

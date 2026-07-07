@@ -130,6 +130,27 @@ def _make_track(responses: dict[str, list[dict] | Exception]):
 
 
 @pytest.mark.asyncio
+async def test_cycle_start_is_logged_for_visibility(
+    client: AsyncClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    """journalctl мовчав про виконання джоби — цей рядок на вході циклу дає
+    видимість (shops/ttns) незалежно від того, чи щось реально оброблено."""
+    _init_data, shop_id = await _bootstrap(client, 91010)
+    variant_id = await _add_variant(shop_id, on_hand=10)
+    await _set_np_key(shop_id, "np-key-10")
+    await _reserve_and_ship(shop_id, variant_id, ttn="20450000000010", qty=1)
+
+    track = _make_track({"np-key-10": []})
+    notifier = _StubNotifier()
+
+    with caplog.at_level("INFO", logger="app.tasks"):
+        async with db.async_session() as session:
+            await tasks.np_tracking(session, notifier, track)
+
+    assert "np_tracking: cycle start, shops=1, ttns=1" in caplog.text
+
+
+@pytest.mark.asyncio
 async def test_picked_status_triggers_pick_up_and_grows_revenue(client: AsyncClient) -> None:
     init_data, shop_id = await _bootstrap(client, 91001)
     variant_id = await _add_variant(shop_id, on_hand=10, price="150.00")

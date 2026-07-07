@@ -23,7 +23,7 @@ Criteria (ROADMAP.md, Стадія 6):
 """
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from uuid import uuid4
 
@@ -401,6 +401,39 @@ async def test_scheduler_registers_expected_jobs_with_intervals() -> None:
     assert jobs["charge_due_card_subscriptions"].trigger.interval == timedelta(hours=6)
     assert jobs["expire_subscriptions"].trigger.interval == timedelta(hours=24)
     assert jobs["send_renewal_reminders"].trigger.interval == timedelta(hours=24)
+
+
+@pytest.mark.asyncio
+async def test_scheduler_fires_idempotent_jobs_immediately_on_startup() -> None:
+    """Кожен деплой/рестарт не повинен відкладати перший реальний прогін на
+    цілий інтервал (живий баг: np_tracking мовчав 10 хв після кожного
+    рестарту). Ідемпотентні джоби (фільтр "ще не оброблено" + позначка після
+    обробки) отримують next_run_time=зараз; charge_due_card_subscriptions
+    (реальне списання грошей) — навмисно НІ, лишається на стабільному
+    інтервалі."""
+    from app.scheduler import create_scheduler
+
+    scheduler = create_scheduler()
+    jobs = {job.id: job for job in scheduler.get_jobs()}
+    now = datetime.now(UTC)
+
+    immediate_jobs = [
+        "np_tracking",
+        "release_expired_reservations",
+        "low_stock_scan",
+        "expire_subscriptions",
+        "send_renewal_reminders",
+    ]
+    for job_id in immediate_jobs:
+        next_run = jobs[job_id].next_run_time
+        assert next_run is not None
+        assert abs((next_run - now).total_seconds()) < 5, job_id
+
+    # Фінансова джоба БЕЗ явного next_run_time — APScheduler обчислить перший
+    # запуск лише коли scheduler.start() (тут не стартуємо), тож атрибут ще
+    # не виставлений. Це і є доказ "не одразу" — на відміну від джоб вище,
+    # де next_run_time=now був переданий явно в add_job.
+    assert getattr(jobs["charge_due_card_subscriptions"], "next_run_time", None) is None
 
 
 @pytest.mark.asyncio
