@@ -216,6 +216,70 @@ async def test_unknown_status_code_only_saves_np_status(client: AsyncClient) -> 
 
 
 @pytest.mark.asyncio
+async def test_recipient_fields_are_saved_and_returned_via_api(client: AsyncClient) -> None:
+    init_data, shop_id = await _bootstrap(client, 91008)
+    variant_id = await _add_variant(shop_id, on_hand=10)
+    await _set_np_key(shop_id, "np-key-8")
+    reservation_id = await _reserve_and_ship(shop_id, variant_id, ttn="20450000000008", qty=1)
+
+    track = _make_track(
+        {
+            "np-key-8": [
+                {
+                    "Number": "20450000000008",
+                    "StatusCode": 6,
+                    "Status": "У дорозі",
+                    "RecipientFullName": "Іваненко Іван",
+                    "CityRecipient": "Львів",
+                    "WarehouseRecipient": "Відділення №5",
+                }
+            ]
+        }
+    )
+    notifier = _StubNotifier()
+
+    async with db.async_session() as session:
+        await tasks.np_tracking(session, notifier, track)
+
+    reservation = await _get_reservation(reservation_id)
+    assert reservation.np_recipient == "Іваненко Іван · Львів, Відділення №5"
+
+    r = await client.get("/api/reservations", headers={HEADER: init_data})
+    assert r.status_code == 200, r.text
+    payload = next(row for row in r.json() if row["id"] == reservation_id)
+    assert payload["np_recipient"] == "Іваненко Іван · Львів, Відділення №5"
+
+
+@pytest.mark.asyncio
+async def test_partial_recipient_fields_are_not_saved(client: AsyncClient) -> None:
+    _init_data, shop_id = await _bootstrap(client, 91009)
+    variant_id = await _add_variant(shop_id, on_hand=10)
+    await _set_np_key(shop_id, "np-key-9")
+    reservation_id = await _reserve_and_ship(shop_id, variant_id, ttn="20450000000009", qty=1)
+
+    track = _make_track(
+        {
+            "np-key-9": [
+                {
+                    "Number": "20450000000009",
+                    "StatusCode": 6,
+                    "Status": "У дорозі",
+                    "RecipientFullName": "Іваненко Іван",
+                    # CityRecipient/WarehouseRecipient відсутні — часткові дані не зберігаємо
+                }
+            ]
+        }
+    )
+    notifier = _StubNotifier()
+
+    async with db.async_session() as session:
+        await tasks.np_tracking(session, notifier, track)
+
+    reservation = await _get_reservation(reservation_id)
+    assert reservation.np_recipient is None
+
+
+@pytest.mark.asyncio
 async def test_bad_key_shop_does_not_block_other_shops(client: AsyncClient) -> None:
     _init_a, shop_a = await _bootstrap(client, 91004, "Магазин А")
     variant_a = await _add_variant(shop_a, on_hand=10, price="100.00")

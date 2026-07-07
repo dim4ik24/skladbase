@@ -168,6 +168,7 @@ function makeReservation(overrides: Partial<Reservation> = {}): Reservation {
     status: "active",
     ttn: null,
     np_status: null,
+    np_recipient: null,
     expires_at: null,
     created_at: "2026-06-01T00:00:00Z",
     released_at: null,
@@ -1115,6 +1116,103 @@ describe("Reservations", () => {
 
     await waitFor(() => {
       expect(api.pickUpReservation).toHaveBeenCalledWith(501);
+    });
+  });
+
+  it("shipped reservation sheet shows the np_recipient line when present", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    const variant = makeVariant({ id: 93, sku: "SKU-93" });
+    vi.mocked(api.getProducts).mockResolvedValue([
+      makeProduct({ name: "Шапка", variants: [variant] }),
+    ]);
+    const reservation = makeReservation({
+      id: 502,
+      variant_id: 93,
+      qty: 1,
+      status: "shipped",
+      ttn: "20450000000098",
+      np_recipient: "Іваненко Іван · Львів, Відділення №5",
+    });
+    vi.mocked(api.getReservations).mockResolvedValue([reservation]);
+
+    render(<App />);
+    await goToSklad();
+    await screen.findByText("Шапка");
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Шапка"));
+    await screen.findByTestId("available-93");
+
+    fireEvent.click(screen.getByRole("button", { name: "Резерви (1)" }));
+    await openReservationSheet("Шапка");
+
+    const dialog = screen.getByRole("dialog", { name: "Резерв: Шапка" });
+    expect(dialog.textContent).toContain("📮 Іваненко Іван · Львів, Відділення №5");
+  });
+
+  it("ship: manual TTN with an invalid format is rejected client-side", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    const variant = makeVariant({ id: 94, sku: "SKU-94" });
+    vi.mocked(api.getProducts).mockResolvedValue([
+      makeProduct({ name: "Кофта", variants: [variant] }),
+    ]);
+    const reservation = makeReservation({ id: 503, variant_id: 94, qty: 1 });
+    vi.mocked(api.getReservations).mockResolvedValue([reservation]);
+
+    render(<App />);
+    await goToSklad();
+    await screen.findByText("Кофта");
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Кофта"));
+    await screen.findByTestId("available-94");
+
+    fireEvent.click(screen.getByRole("button", { name: "Резерви (1)" }));
+    await openReservationSheet("Кофта");
+    fireEvent.click(screen.getByRole("button", { name: "Відправлено" }));
+
+    const shipDialog = await screen.findByRole("dialog", { name: /Відправити:/ });
+    fireEvent.change(within(shipDialog).getByLabelText("ТТН (можна додати пізніше)"), {
+      target: { value: "12345" },
+    });
+    fireEvent.click(within(shipDialog).getByRole("button", { name: "Відправлено" }));
+
+    expect(
+      await within(shipDialog).findByText(
+        "ТТН Нової Пошти — 14 цифр, починається з 20 або 59",
+      ),
+    ).toBeInTheDocument();
+    expect(api.shipReservation).not.toHaveBeenCalled();
+  });
+
+  it("ship: a valid manual TTN is accepted", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    const variant = makeVariant({ id: 95, sku: "SKU-95" });
+    vi.mocked(api.getProducts).mockResolvedValue([
+      makeProduct({ name: "Штани", variants: [variant] }),
+    ]);
+    const reservation = makeReservation({ id: 504, variant_id: 95, qty: 1 });
+    vi.mocked(api.getReservations).mockResolvedValue([reservation]);
+    vi.mocked(api.shipReservation).mockResolvedValue({
+      ...reservation,
+      status: "shipped",
+      ttn: "20450123456789",
+    });
+
+    render(<App />);
+    await goToSklad();
+    await screen.findByText("Штани");
+    fireEvent.click(screen.getByLabelText("Редагувати товар: Штани"));
+    await screen.findByTestId("available-95");
+
+    fireEvent.click(screen.getByRole("button", { name: "Резерви (1)" }));
+    await openReservationSheet("Штани");
+    fireEvent.click(screen.getByRole("button", { name: "Відправлено" }));
+
+    const shipDialog = await screen.findByRole("dialog", { name: /Відправити:/ });
+    fireEvent.change(within(shipDialog).getByLabelText("ТТН (можна додати пізніше)"), {
+      target: { value: "20450123456789" },
+    });
+    fireEvent.click(within(shipDialog).getByRole("button", { name: "Відправлено" }));
+
+    await waitFor(() => {
+      expect(api.shipReservation).toHaveBeenCalledWith(504, { ttn: "20450123456789" });
     });
   });
 });

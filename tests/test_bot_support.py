@@ -24,6 +24,7 @@ from aiogram.fsm.storage.base import StorageKey
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import Update
 
+from app import db
 from app.bot import handlers
 from app.config import settings
 from tests.conftest import TEST_BOT_TOKEN
@@ -116,7 +117,8 @@ async def test_cmd_support_sets_active_state_and_greets() -> None:
     message = _make_message()
     state = AsyncMock()
 
-    await handlers.cmd_support(message, state)
+    async with db.async_session() as session:
+        await handlers.cmd_support(message, state, session)
 
     state.set_state.assert_awaited_once_with(handlers.SupportStates.active)
     message.answer.assert_awaited_once()
@@ -177,7 +179,8 @@ async def test_support_message_forwards_to_admin_with_id_in_context_line() -> No
     bot.send_message = AsyncMock(return_value=MagicMock(message_id=701))
     bot.copy_message = AsyncMock(return_value=MagicMock(message_id=702))
 
-    await handlers.support_message(message, state, bot)
+    async with db.async_session() as session:
+        await handlers.support_message(message, state, bot, session)
 
     bot.send_message.assert_awaited_once()
     admin_id_arg, context_text = bot.send_message.call_args.args
@@ -203,7 +206,8 @@ async def test_support_message_without_username_falls_back() -> None:
     bot.send_message = AsyncMock(return_value=MagicMock(message_id=711))
     bot.copy_message = AsyncMock(return_value=MagicMock(message_id=712))
 
-    await handlers.support_message(message, state, bot)
+    async with db.async_session() as session:
+        await handlers.support_message(message, state, bot, session)
 
     context_text = bot.send_message.call_args.args[1]
     assert "без username" in context_text
@@ -294,6 +298,146 @@ async def test_admin_close_unmapped_reply_shows_hint() -> None:
 
     admin_message.answer.assert_awaited_once()
     bot.send_message.assert_not_called()
+
+
+# --------------------------------------------------------------------------- #
+#  /mute, /ban, /unban (SupportBan)
+# --------------------------------------------------------------------------- #
+@pytest.mark.asyncio
+async def test_admin_mute_notifies_user_and_confirms_to_admin() -> None:
+    handlers.support_map[701] = handlers.SupportTarget(2020, "Ольга")
+    reply_to = MagicMock(message_id=701)
+    admin_message = _make_message(
+        tg_id=settings.ADMIN_TG_ID, text="/mute", reply_to_message=reply_to
+    )
+    bot = AsyncMock()
+
+    async with db.async_session() as session:
+        await handlers.admin_mute(admin_message, bot, session)
+
+    bot.send_message.assert_awaited_once_with(
+        2020, "⏸ Підтримка тимчасово недоступна (1 година)"
+    )
+    admin_message.answer.assert_awaited_once_with("Ольга замучено в підтримці на 1 годину.")
+
+    async with db.async_session() as session:
+        ban = await handlers.get_ban(session, 2020)
+    assert ban is not None
+    assert ban.muted_until is not None
+
+
+@pytest.mark.asyncio
+async def test_admin_mute_without_reply_shows_hint() -> None:
+    admin_message = _make_message(
+        tg_id=settings.ADMIN_TG_ID, text="/mute", reply_to_message=None
+    )
+    bot = AsyncMock()
+
+    async with db.async_session() as session:
+        await handlers.admin_mute(admin_message, bot, session)
+
+    admin_message.answer.assert_awaited_once()
+    hint = admin_message.answer.call_args.args[0]
+    assert "reply" in hint.lower()
+    bot.send_message.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_admin_ban_is_silent_to_user_and_confirms_to_admin() -> None:
+    handlers.support_map[702] = handlers.SupportTarget(2021, "Петро")
+    reply_to = MagicMock(message_id=702)
+    admin_message = _make_message(
+        tg_id=settings.ADMIN_TG_ID, text="/ban", reply_to_message=reply_to
+    )
+
+    async with db.async_session() as session:
+        await handlers.admin_ban(admin_message, session)
+
+    admin_message.answer.assert_awaited_once_with("Петро забанено в підтримці.")
+
+    async with db.async_session() as session:
+        ban = await handlers.get_ban(session, 2021)
+    assert ban is not None
+    assert ban.banned is True
+
+
+@pytest.mark.asyncio
+async def test_admin_unban_clears_ban_and_mute_and_confirms_to_admin() -> None:
+    handlers.support_map[703] = handlers.SupportTarget(2022, "Іван")
+    reply_to = MagicMock(message_id=703)
+
+    async with db.async_session() as session:
+        await handlers.ban_user(session, 2022)
+        await handlers.mute_user(session, 2022)
+
+    admin_message = _make_message(
+        tg_id=settings.ADMIN_TG_ID, text="/unban", reply_to_message=reply_to
+    )
+    async with db.async_session() as session:
+        await handlers.admin_unban(admin_message, session)
+
+    admin_message.answer.assert_awaited_once_with("Іван розбанено в підтримці.")
+
+    async with db.async_session() as session:
+        ban = await handlers.get_ban(session, 2022)
+    assert ban is not None
+    assert ban.banned is False
+    assert ban.muted_until is None
+
+
+@pytest.mark.asyncio
+async def test_banned_user_is_silently_ignored_by_cmd_support_and_support_message() -> None:
+    banned_tg_id = 2023
+    async with db.async_session() as session:
+        await handlers.ban_user(session, banned_tg_id)
+
+    message = _make_message(tg_id=banned_tg_id)
+    state = AsyncMock()
+
+    async with db.async_session() as session:
+        await handlers.cmd_support(message, state, session)
+    message.answer.assert_not_called()
+    state.set_state.assert_not_called()
+
+    bot = AsyncMock()
+    async with db.async_session() as session:
+        await handlers.support_message(message, state, bot, session)
+    message.answer.assert_not_called()
+    bot.send_message.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_muted_user_sees_remaining_minutes_on_support_and_message() -> None:
+    muted_tg_id = 2024
+    async with db.async_session() as session:
+        await handlers.mute_user(session, muted_tg_id)
+
+    message = _make_message(tg_id=muted_tg_id)
+    state = AsyncMock()
+
+    async with db.async_session() as session:
+        await handlers.cmd_support(message, state, session)
+    message.answer.assert_awaited_once()
+    assert "буде доступна через" in message.answer.call_args.args[0]
+    state.set_state.assert_not_called()
+
+    message2 = _make_message(tg_id=muted_tg_id, message_id=910)
+    bot = AsyncMock()
+    async with db.async_session() as session:
+        await handlers.support_message(message2, state, bot, session)
+    message2.answer.assert_awaited_once()
+    assert "буде доступна через" in message2.answer.call_args.args[0]
+    bot.send_message.assert_not_called()
+
+
+def test_is_admin_filter_rejects_non_admin() -> None:
+    """Гарантує, що /mute /ban /unban (Command(...) + _is_admin) ігнорують
+    команди від будь-кого, крім settings.ADMIN_TG_ID."""
+    user_message = _make_message(tg_id=2002)
+    assert handlers._is_admin(user_message) is False
+
+    admin_message = _make_message(tg_id=settings.ADMIN_TG_ID)
+    assert handlers._is_admin(admin_message) is True
 
 
 @pytest.mark.asyncio
@@ -393,11 +537,13 @@ async def test_rate_limit_blocks_second_message_within_60s() -> None:
     bot.copy_message = AsyncMock(return_value=MagicMock(message_id=802))
 
     message1 = _make_message(tg_id=3003, message_id=900)
-    await handlers.support_message(message1, state, bot)
+    async with db.async_session() as session:
+        await handlers.support_message(message1, state, bot, session)
     assert message1.answer.await_args.args[0] == "Передано ✅"
 
     message2 = _make_message(tg_id=3003, message_id=901)
-    await handlers.support_message(message2, state, bot)
+    async with db.async_session() as session:
+        await handlers.support_message(message2, state, bot, session)
     assert (
         message2.answer.await_args.args[0]
         == "Зачекайте хвилину перед наступним повідомленням."
@@ -415,7 +561,8 @@ async def test_support_message_without_admin_configured_tells_user(
     state = AsyncMock()
     bot = AsyncMock()
 
-    await handlers.support_message(message, state, bot)
+    async with db.async_session() as session:
+        await handlers.support_message(message, state, bot, session)
 
     message.answer.assert_awaited_once_with("Підтримка тимчасово недоступна.")
     bot.send_message.assert_not_called()

@@ -36,6 +36,18 @@ support_message (бо і той матчиться за станом) заміс
 виключає "це reply від адміна" (`not _is_admin_reply`) — навіть якщо
 колись хтось переставить порядок хендлерів, ця гілка не оживе випадково.
 
+Мут/бан (admin_mute/admin_ban/admin_unban, SupportBan у app/models.py) —
+той самий reply-на-переслане розбір через support_map, що й admin_close.
+З ТІЄЇ Ж причини, що й admin_close, вони зареєстровані РАНІШЕ за
+admin_reply: admin_reply — catch-all для БУДЬ-ЯКОГО reply адміна без
+Command-фільтра, тож якби /mute/ban/unban були нижче, admin_reply
+перехопив би їх першим і надіслав би юзеру текст "/mute" як звичайну
+відповідь підтримки. /mute ставить SupportBan.muted_until = now+1год і
+повідомляє юзера; /ban мовчки виставляє banned=True (юзер нічого не
+отримує); /unban знімає обидва прапорці. Перевірка бану/муту сидить на
+вході (cmd_support) і на кожному наступному повідомленні (support_message):
+banned -> тихий ігнор без відповіді, muted -> "буде доступна через N хв".
+
 `_is_admin`/`_is_admin_reply` — звичайні функції, не magic-filter:
 `F.from_user.id == settings.ADMIN_TG_ID` обчислив би праву частину ОДИН
 РАЗ при імпорті модуля (заморозив би значення) — monkeypatch у тестах на
@@ -58,9 +70,17 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.base import BaseStorage, StorageKey
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, WebAppInfo
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.security.rate_limit import InMemoryRateLimiter
+from app.services.support_moderation import (
+    ban_user,
+    get_ban,
+    mute_user,
+    remaining_mute_minutes,
+    unban_user,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +118,19 @@ async def cmd_start(message: Message) -> None:
 
 
 @router.message(Command("support"))
-async def cmd_support(message: Message, state: FSMContext) -> None:
+async def cmd_support(message: Message, state: FSMContext, session: AsyncSession) -> None:
+    if message.from_user is None:
+        return
+
+    ban = await get_ban(session, message.from_user.id)
+    if ban is not None and ban.banned:
+        return  # тихо ігноруємо — юзер не має знати, що забанений
+
+    remaining = remaining_mute_minutes(ban)
+    if remaining is not None:
+        await message.answer(f"Підтримка буде доступна через {remaining} хв")
+        return
+
     await state.set_state(SupportStates.active)
     await message.answer(
         "Ви на зв'язку з підтримкою. Опишіть проблему — я передам адміністратору.\n"
@@ -159,6 +191,50 @@ async def admin_close(message: Message, bot: Bot, storage: BaseStorage) -> None:
     await message.answer(f"Чат із {target.name} закрито.")
 
 
+def _resolve_reply_target(message: Message) -> SupportTarget | None:
+    reply_to = message.reply_to_message
+    return support_map.get(reply_to.message_id) if reply_to is not None else None
+
+
+@router.message(Command("mute"), _is_admin)
+async def admin_mute(message: Message, bot: Bot, session: AsyncSession) -> None:
+    target = _resolve_reply_target(message)
+    if target is None:
+        await message.answer("Зробіть reply на звернення, яке хочете замутити.")
+        return
+
+    await mute_user(session, target.tg_id)
+    try:
+        await bot.send_message(target.tg_id, "⏸ Підтримка тимчасово недоступна (1 година)")
+    except Exception:
+        logger.warning("не вдалося повідомити юзера tg_id=%s про мут", target.tg_id, exc_info=True)
+
+    await message.answer(f"{target.name} замучено в підтримці на 1 годину.")
+
+
+@router.message(Command("ban"), _is_admin)
+async def admin_ban(message: Message, session: AsyncSession) -> None:
+    target = _resolve_reply_target(message)
+    if target is None:
+        await message.answer("Зробіть reply на звернення, яке хочете забанити.")
+        return
+
+    await ban_user(session, target.tg_id)
+    # Тихий бан — юзер нічого не отримує, лише адмін бачить підтвердження.
+    await message.answer(f"{target.name} забанено в підтримці.")
+
+
+@router.message(Command("unban"), _is_admin)
+async def admin_unban(message: Message, session: AsyncSession) -> None:
+    target = _resolve_reply_target(message)
+    if target is None:
+        await message.answer("Зробіть reply на звернення, яке хочете розбанити.")
+        return
+
+    await unban_user(session, target.tg_id)
+    await message.answer(f"{target.name} розбанено в підтримці.")
+
+
 @router.message(_is_admin_reply)
 async def admin_reply(message: Message, bot: Bot) -> None:
     reply_to = message.reply_to_message
@@ -181,10 +257,19 @@ async def admin_reply(message: Message, bot: Bot) -> None:
 
 
 @router.message(StateFilter(SupportStates.active), lambda m: not _is_admin_reply(m))
-async def support_message(message: Message, state: FSMContext, bot: Bot) -> None:
+async def support_message(message: Message, state: FSMContext, bot: Bot, session: AsyncSession) -> None:
     if message.from_user is None:
         return
     user = message.from_user
+
+    ban = await get_ban(session, user.id)
+    if ban is not None and ban.banned:
+        return  # тихо ігноруємо — юзер не має знати, що забанений
+
+    remaining = remaining_mute_minutes(ban)
+    if remaining is not None:
+        await message.answer(f"Підтримка буде доступна через {remaining} хв")
+        return
 
     if not settings.ADMIN_TG_ID:
         await message.answer("Підтримка тимчасово недоступна.")

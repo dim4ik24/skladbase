@@ -208,6 +208,51 @@ async def test_patch_ttn_on_active_reservation_returns_409(client: AsyncClient) 
 
 
 # --------------------------------------------------------------------------- #
+#  ТТН — формат Нової Пошти (14 цифр, "20"/"59")
+# --------------------------------------------------------------------------- #
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "bad_ttn",
+    [
+        "2045012345678",  # 13 цифр
+        "204501234567890",  # 15 цифр
+        "2045012345678a",  # містить літеру
+        "10450123456789",  # невалідний префікс
+    ],
+)
+async def test_ship_with_invalid_ttn_returns_422(client: AsyncClient, bad_ttn: str) -> None:
+    init_data, shop_id = await _bootstrap(client, 80013)
+    variant_id = await _add_variant(shop_id, on_hand=10)
+    reservation_id = await _reserve(client, init_data, variant_id, qty=1)
+
+    r = await client.post(
+        f"/api/reservations/{reservation_id}/ship",
+        json={"ttn": bad_ttn},
+        headers={HEADER: init_data},
+    )
+    assert r.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_patch_ttn_with_invalid_format_returns_422(client: AsyncClient) -> None:
+    init_data, shop_id = await _bootstrap(client, 80014)
+    variant_id = await _add_variant(shop_id, on_hand=10)
+    reservation_id = await _reserve(client, init_data, variant_id, qty=1)
+
+    r = await client.post(
+        f"/api/reservations/{reservation_id}/ship", headers={HEADER: init_data}
+    )
+    assert r.status_code == 200, r.text
+
+    r2 = await client.patch(
+        f"/api/reservations/{reservation_id}/ttn",
+        json={"ttn": "not-a-ttn-1234"},
+        headers={HEADER: init_data},
+    )
+    assert r2.status_code == 422
+
+
+# --------------------------------------------------------------------------- #
 #  pick_up -> дохід
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio

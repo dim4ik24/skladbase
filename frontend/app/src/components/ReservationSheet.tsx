@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { errorMessage } from "../errors";
+import { isValidTtn, TTN_ERROR_MESSAGE } from "../lib/ttn";
 import type { Reservation } from "../types";
 
 interface ReservationSheetProps {
@@ -51,6 +52,7 @@ export function ReservationSheet({
   const [actionError, setActionError] = useState<string | null>(null);
   const [editingTtn, setEditingTtn] = useState(false);
   const [ttnDraft, setTtnDraft] = useState(reservation.ttn ?? "");
+  const [ttnError, setTtnError] = useState<string | null>(null);
 
   const isShipped = reservation.status === "shipped";
 
@@ -100,6 +102,11 @@ export function ReservationSheet({
 
   async function handleTtnSave() {
     const trimmed = ttnDraft.trim();
+    if (trimmed && !isValidTtn(trimmed)) {
+      setTtnError(TTN_ERROR_MESSAGE);
+      return;
+    }
+    setTtnError(null);
     setEditingTtn(false);
     if (trimmed && trimmed !== reservation.ttn) {
       await onUpdateTtn(reservation.id, trimmed);
@@ -161,13 +168,20 @@ export function ReservationSheet({
               {editingTtn ? (
                 <input
                   type="text"
+                  inputMode="numeric"
+                  maxLength={14}
                   autoFocus
                   value={ttnDraft}
-                  onChange={(e) => setTtnDraft(e.target.value)}
+                  onChange={(e) => {
+                    setTtnDraft(e.target.value);
+                    setTtnError(null);
+                  }}
                   onBlur={() => void handleTtnSave()}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") void handleTtnSave();
                   }}
+                  aria-invalid={ttnError !== null}
+                  className={ttnError !== null ? "input-error" : undefined}
                 />
               ) : (
                 <span
@@ -181,8 +195,10 @@ export function ReservationSheet({
                 </span>
               )}
               {reservation.np_status ? <> · 📍 {reservation.np_status}</> : null}
+              {reservation.np_recipient ? <> · 📮 {reservation.np_recipient}</> : null}
             </p>
           ) : null}
+          {ttnError ? <p className="error-banner">{ttnError}</p> : null}
         </div>
 
         <div className="sheet-divider" />

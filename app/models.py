@@ -377,6 +377,7 @@ class Reservation(Base):
     ttn: Mapped[str | None] = mapped_column(String(40))  # накладна Нової пошти тощо, опційна
     shipped_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     np_status: Mapped[str | None] = mapped_column(String(120))  # останній текст статусу з трекінгу НП (фіча B1/B2)
+    np_recipient: Mapped[str | None] = mapped_column(String(200))  # "ПІБ · Місто, відділення" з трекінгу НП
 
 
 class StockMovement(Base):
@@ -550,6 +551,18 @@ class PromoRedemption(Base):
     promo_code_id: Mapped[int] = mapped_column(ForeignKey("promo_codes.id", ondelete="CASCADE"), index=True)
     shop_id: Mapped[int] = mapped_column(ForeignKey("shops.id", ondelete="CASCADE"), index=True)
     redeemed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class SupportBan(Base):
+    """Мут/бан у техпідтримці бота (app/bot/handlers.py) — адмін реагує на
+    зловживання реплаєм /mute, /ban, /unban на переслане 🆘-звернення."""
+    __tablename__ = "support_bans"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tg_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)
+    muted_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    banned: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 # --------------------------------------------------------------------------- #

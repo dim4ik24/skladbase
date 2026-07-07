@@ -23,6 +23,7 @@ locking під конкурентним навантаженням.
 """
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from decimal import Decimal
 from http import HTTPStatus
@@ -46,6 +47,20 @@ _T = TypeVar("_T")
 WRITE_OFF_REASONS = ("sold", "defect", "correction", "other")
 RELEASE_REASONS = ("customer_changed_mind", "unresponsive", "mistaken_reservation", "other")
 NOT_PICKED_UP_REASONS = ("did_not_pick_up", "refused", "other")
+
+# ТТН Нової Пошти: 14 цифр, номер починається з "20" (звичайні відправлення)
+# або "59" (внутрішні/особливі типи).
+_TTN_RE = re.compile(r"^(20|59)\d{12}$")
+
+
+def _validate_ttn(ttn: str | None) -> None:
+    """Порожньо/None — дозволено (ТТН опційний, продавець може вписати пізніше
+    через update_ttn())."""
+    if ttn and not _TTN_RE.fullmatch(ttn):
+        raise InventoryError(
+            HTTPStatus.UNPROCESSABLE_ENTITY,
+            "ТТН Нової Пошти — 14 цифр, починається з 20 або 59",
+        )
 
 
 class InventoryError(Exception):
@@ -286,6 +301,7 @@ async def ship(
     конкретного клієнта). ТТН опційний — продавець може вписати пізніше
     через update_ttn(). Без stock-руху: сума on_hand+reserved не змінюється,
     змінюється лише статус/локація товару."""
+    _validate_ttn(ttn)
     reservation = await _locked_reservation(session, shop_id, reservation_id)
     if reservation.status != ReservationStatus.active:
         raise InventoryError(HTTPStatus.CONFLICT, "Резерв не активний")
@@ -310,6 +326,7 @@ async def update_ttn(
     commit: bool = True,
 ) -> Reservation:
     """Правка ТТН на вже відправленому резерві (продавець вписав її пізніше)."""
+    _validate_ttn(ttn)
     reservation = await _locked_reservation(session, shop_id, reservation_id)
     if reservation.status != ReservationStatus.shipped:
         raise InventoryError(HTTPStatus.CONFLICT, "Резерв не відправлено")

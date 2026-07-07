@@ -178,6 +178,7 @@ export interface Reservation {
   status: ReservationStatus;
   ttn: string | null;
   np_status: string | null;
+  np_recipient: string | null;
   expires_at: string | null;
   created_at: string;
   released_at: string | null;

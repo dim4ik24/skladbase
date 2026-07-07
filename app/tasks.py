@@ -187,6 +187,17 @@ async def _np_display_name(session: AsyncSession, variant_id: int) -> tuple[str,
     return name, variant
 
 
+def _extract_np_recipient(result: dict) -> str | None:
+    """"ПІБ · Місто, відділення" з відповіді getStatusDocuments. Зберігаємо
+    лише коли ВСІ три поля непорожні — часткові дані гірші за їх відсутність."""
+    name = result.get("RecipientFullName")
+    city = result.get("CityRecipient")
+    warehouse = result.get("WarehouseRecipient")
+    if not (name and city and warehouse):
+        return None
+    return f"{name} · {city}, {warehouse}"
+
+
 async def np_tracking(session: AsyncSession, notify: Notifier, track: NpTrackFn) -> int:
     """Фіча B1: пуш-трекінг shipped-резервів через Нова Пошта.
 
@@ -235,6 +246,10 @@ async def np_tracking(session: AsyncSession, notify: Notifier, track: NpTrackFn)
                 code = int(result["StatusCode"])
             except (KeyError, TypeError, ValueError):
                 continue
+
+            recipient = _extract_np_recipient(result)
+            if recipient:
+                reservation.np_recipient = recipient
 
             try:
                 if code in PICKED_CODES:

@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import type { FormEvent } from "react";
 import * as api from "../api";
 import { errorMessage } from "../errors";
+import { isValidTtn, TTN_ERROR_MESSAGE } from "../lib/ttn";
 import { NpCityPicker } from "./NpCityPicker";
 import { NpWarehousePicker } from "./NpWarehousePicker";
 import type { CreateTtnPayload, CreateTtnResult, NpCity, NpWarehouse, ShipPayload } from "../types";
@@ -39,6 +40,7 @@ export function ShipSheet({
 
   // Manual mode (як і раніше)
   const [ttn, setTtn] = useState("");
+  const [ttnInvalid, setTtnInvalid] = useState(false);
 
   // Auto mode
   const [senderConfigured, setSenderConfigured] = useState<boolean | null>(null);
@@ -84,10 +86,17 @@ export function ShipSheet({
   async function handleManualSubmit(event: FormEvent) {
     event.preventDefault();
     setError(null);
+    setTtnInvalid(false);
+
+    const trimmedTtn = ttn.trim();
+    if (trimmedTtn && !isValidTtn(trimmedTtn)) {
+      setTtnInvalid(true);
+      setError(TTN_ERROR_MESSAGE);
+      return;
+    }
 
     setSubmitting(true);
     try {
-      const trimmedTtn = ttn.trim();
       await onSubmit(reservationId, { ttn: trimmedTtn || undefined });
       handleClose();
     } catch (err) {
@@ -183,9 +192,16 @@ export function ShipSheet({
                 <span>ТТН (можна додати пізніше)</span>
                 <input
                   type="text"
+                  inputMode="numeric"
+                  maxLength={14}
                   value={ttn}
-                  onChange={(event) => setTtn(event.target.value)}
+                  onChange={(event) => {
+                    setTtn(event.target.value);
+                    setTtnInvalid(false);
+                  }}
                   placeholder="20450123456789"
+                  aria-invalid={ttnInvalid}
+                  className={ttnInvalid ? "input-error" : undefined}
                 />
               </label>
             ) : senderConfigured === null ? (

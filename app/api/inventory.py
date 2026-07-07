@@ -80,6 +80,7 @@ class ReservationOut(BaseModel):
     status: ReservationStatus
     ttn: str | None
     np_status: str | None
+    np_recipient: str | None
     expires_at: datetime | None
     created_at: datetime
     released_at: datetime | None
