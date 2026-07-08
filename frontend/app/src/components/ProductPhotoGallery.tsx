@@ -1,7 +1,12 @@
-import { useRef, useState } from "react";
+import { Suspense, useRef, useState } from "react";
 import { ApiError } from "../api";
-import { PhotoViewer } from "./PhotoViewer";
+import { lazyWithRetry } from "../lib/lazyWithRetry";
+import { LazyOverlayFallback } from "./LazyFallback";
 import type { Product } from "../types";
+
+const PhotoViewer = lazyWithRetry(() =>
+  import("./PhotoViewer").then((m) => ({ default: m.PhotoViewer })),
+);
 
 interface ProductPhotoGalleryProps {
   product: Product;
@@ -110,11 +115,13 @@ export function ProductPhotoGallery({
       {error ? <p className="photo-error">{error}</p> : null}
 
       {viewerIndex !== null ? (
-        <PhotoViewer
-          photos={sortedPhotos}
-          initialIndex={viewerIndex}
-          onClose={() => setViewerIndex(null)}
-        />
+        <Suspense fallback={<LazyOverlayFallback />}>
+          <PhotoViewer
+            photos={sortedPhotos}
+            initialIndex={viewerIndex}
+            onClose={() => setViewerIndex(null)}
+          />
+        </Suspense>
       ) : null}
     </div>
   );

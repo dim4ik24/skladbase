@@ -488,6 +488,65 @@ body {
   padding: 4px 0;
 }
 
+/* ── Lazy-load fallbacks (code-split modals/sheets) ──────────────────── */
+@keyframes lazy-spin {
+  to { transform: rotate(360deg); }
+}
+
+.lazy-spinner {
+  display: inline-block;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 3px solid var(--line);
+  border-top-color: var(--green);
+  animation: lazy-spin 700ms linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lazy-spinner {
+    animation-duration: 1.4s;
+  }
+}
+
+.lazy-fallback-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(28, 37, 32, 0.38);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.lazy-fallback-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(28, 37, 32, 0.30);
+}
+
+.lazy-fallback-sheet-inner {
+  width: 100%;
+  max-width: 960px;
+  padding: 32px;
+  border-radius: 20px 20px 0 0;
+  background: var(--glass-bg-heavy);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lazy-fallback-inline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+}
+
 @keyframes banner-slide-down {
   from { opacity: 0; transform: translateY(-8px); }
   to   { opacity: 1; transform: translateY(0); }

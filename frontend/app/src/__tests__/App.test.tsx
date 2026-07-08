@@ -267,8 +267,12 @@ async function goToSklad() {
 }
 
 // Open modal, then open the variant sheet for the tag with the given axisLabel.
+// VariantSheet is code-split (React.lazy) — opening the tag mounts a
+// Suspense boundary that resolves on a microtask, so callers must await
+// its actual appearance before querying anything inside it.
 async function openSheet(tagLabel: string) {
   fireEvent.click(await screen.findByLabelText(`Варіант: ${tagLabel}`));
+  await screen.findByRole("dialog", { name: new RegExp(`^Варіант: `) });
 }
 
 // Reservation badges are clean (no action buttons) — tap the badge to open
@@ -828,6 +832,8 @@ describe("Product photo gallery viewer", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Фото" }));
     const thumbs = document.querySelectorAll(".photo-thumb img");
     fireEvent.click(thumbs[photoIndex]);
+    // PhotoViewer is code-split — await its Suspense boundary resolving.
+    await screen.findByRole("dialog", { name: "Перегляд фото" });
     return document.querySelector(".photo-viewer-image") as HTMLImageElement;
   }
 
@@ -1065,7 +1071,8 @@ describe("Reservations", () => {
     fireEvent.click(screen.getByRole("button", { name: "Резерви (1)" }));
     await openReservationSheet("Футболка");
     fireEvent.click(screen.getByRole("button", { name: "Зняти" }));
-    fireEvent.click(screen.getByText("Клієнт передумав"));
+    // ReleaseSheet is code-split — first open in a test run resolves async.
+    fireEvent.click(await screen.findByText("Клієнт передумав"));
     fireEvent.click(screen.getByRole("button", { name: "Підтвердити" }));
 
     await waitFor(() => {

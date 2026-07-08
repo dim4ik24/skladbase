@@ -1,8 +1,6 @@
-import { useState } from "react";
-import { NotPickedUpSheet } from "./NotPickedUpSheet";
-import { ReleaseSheet } from "./ReleaseSheet";
+import { Suspense, useState } from "react";
+import { lazyWithRetry } from "../lib/lazyWithRetry";
 import { ReservationSheet } from "./ReservationSheet";
-import { ShipSheet } from "./ShipSheet";
 import type {
   CreateTtnPayload,
   CreateTtnResult,
@@ -13,6 +11,17 @@ import type {
   ShipPayload,
   Variant,
 } from "../types";
+import { LazySheetFallback } from "./LazyFallback";
+
+const ReleaseSheet = lazyWithRetry(() =>
+  import("./ReleaseSheet").then((m) => ({ default: m.ReleaseSheet })),
+);
+const ShipSheet = lazyWithRetry(() =>
+  import("./ShipSheet").then((m) => ({ default: m.ShipSheet })),
+);
+const NotPickedUpSheet = lazyWithRetry(() =>
+  import("./NotPickedUpSheet").then((m) => ({ default: m.NotPickedUpSheet })),
+);
 
 interface ReservationsPanelProps {
   reservations: Reservation[];
@@ -206,33 +215,39 @@ export function ReservationsPanel({
       ) : null}
 
       {releasingReservation ? (
-        <ReleaseSheet
-          reservationId={releasingReservation.id}
-          title={resolveTitle(releasingReservation)}
-          onSubmit={handleReleaseSubmit}
-          onClose={() => setReleasingId(null)}
-        />
+        <Suspense fallback={<LazySheetFallback />}>
+          <ReleaseSheet
+            reservationId={releasingReservation.id}
+            title={resolveTitle(releasingReservation)}
+            onSubmit={handleReleaseSubmit}
+            onClose={() => setReleasingId(null)}
+          />
+        </Suspense>
       ) : null}
 
       {shippingReservation ? (
-        <ShipSheet
-          reservationId={shippingReservation.id}
-          title={resolveTitle(shippingReservation)}
-          {...resolveShipDefaults(shippingReservation)}
-          onSubmit={handleShipSubmit}
-          onCreateTtn={onCreateTtn}
-          onNavigateToSettings={onNavigateToSettings}
-          onClose={() => setShippingId(null)}
-        />
+        <Suspense fallback={<LazySheetFallback />}>
+          <ShipSheet
+            reservationId={shippingReservation.id}
+            title={resolveTitle(shippingReservation)}
+            {...resolveShipDefaults(shippingReservation)}
+            onSubmit={handleShipSubmit}
+            onCreateTtn={onCreateTtn}
+            onNavigateToSettings={onNavigateToSettings}
+            onClose={() => setShippingId(null)}
+          />
+        </Suspense>
       ) : null}
 
       {notPickedUpReservation ? (
-        <NotPickedUpSheet
-          reservationId={notPickedUpReservation.id}
-          title={resolveTitle(notPickedUpReservation)}
-          onSubmit={handleNotPickedUpSubmit}
-          onClose={() => setNotPickedUpId(null)}
-        />
+        <Suspense fallback={<LazySheetFallback />}>
+          <NotPickedUpSheet
+            reservationId={notPickedUpReservation.id}
+            title={resolveTitle(notPickedUpReservation)}
+            onSubmit={handleNotPickedUpSubmit}
+            onClose={() => setNotPickedUpId(null)}
+          />
+        </Suspense>
       ) : null}
     </>
   );

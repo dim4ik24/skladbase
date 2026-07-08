@@ -1,13 +1,14 @@
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import type { RefObject } from "react";
+import { LazySheetFallback } from "../components/LazyFallback";
 import type { MetricCardData } from "../components/MetricCarousel";
 import { MetricCarousel } from "../components/MetricCarousel";
-import { HistorySheet } from "../components/HistorySheet";
 import { ReservationsPanel } from "../components/ReservationsPanel";
 import { RevenueChart } from "../components/RevenueChart";
 import { ScrollFloat } from "../components/ScrollFloat";
 import { Panel } from "../components/ui/Panel";
 import { RELEASE_REASON_LABELS, RETURN_REASON_LABELS, reasonLabel } from "../lib/financeReasons";
+import { lazyWithRetry } from "../lib/lazyWithRetry";
 import type {
   CreateTtnPayload,
   CreateTtnResult,
@@ -21,6 +22,10 @@ import type {
   Shop,
   Variant,
 } from "../types";
+
+const HistorySheet = lazyWithRetry(() =>
+  import("../components/HistorySheet").then((m) => ({ default: m.HistorySheet })),
+);
 
 const PERIOD_OPTIONS: { value: FinancePeriod; label: string }[] = [
   { value: "week", label: "Тиждень" },
@@ -226,11 +231,13 @@ export function DashboardScreen({
       ) : null}
 
       {historyOpen ? (
-        <HistorySheet
-          period={financePeriod}
-          date={historyDate}
-          onClose={() => setHistoryOpen(false)}
-        />
+        <Suspense fallback={<LazySheetFallback />}>
+          <HistorySheet
+            period={financePeriod}
+            date={historyDate}
+            onClose={() => setHistoryOpen(false)}
+          />
+        </Suspense>
       ) : null}
     </>
   );
