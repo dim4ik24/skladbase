@@ -44,6 +44,7 @@ from app.models import (
     Reservation,
     ReservationSource,
     ReservationStatus,
+    Role,
     Shop,
     SubPeriod,
     SubProvider,
@@ -69,7 +70,12 @@ async def _make_shop(tg_id: int, name: str = "Тест") -> int:
         shop = Shop(owner_tg_id=tg_id, name=name, slug=f"shop-{uuid4().hex[:8]}")
         session.add(shop)
         await session.flush()
-        session.add(Membership(shop_id=shop.id, tg_id=tg_id, role=MemberRole.owner))
+        role = Role(shop_id=shop.id, name="Власник", is_system=True)
+        session.add(role)
+        await session.flush()
+        session.add(
+            Membership(shop_id=shop.id, tg_id=tg_id, role=MemberRole.owner, role_id=role.id)
+        )
         await session.commit()
         return shop.id
 

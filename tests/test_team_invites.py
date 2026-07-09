@@ -12,8 +12,8 @@ from httpx import AsyncClient
 from sqlalchemy import select
 
 from app import db
-from app.models import Invite, MemberRole, Membership, utcnow
-from tests.conftest import make_init_data
+from app.models import Invite, MemberRole, Membership, Role, utcnow
+from tests.conftest import get_system_role_id, make_init_data
 
 HEADER = "X-Telegram-Init-Data"
 
@@ -28,7 +28,8 @@ async def _bootstrap(
 
 
 async def _make_manager(shop_id: int, tg_id: int) -> str:
-    m = Membership(shop_id=shop_id, tg_id=tg_id, role=MemberRole.manager)
+    role_id = await get_system_role_id(shop_id, "Менеджер")
+    m = Membership(shop_id=shop_id, tg_id=tg_id, role=MemberRole.manager, role_id=role_id)
     async with db.async_session() as s:
         s.add(m)
         await s.commit()
@@ -155,14 +156,21 @@ async def test_join_via_valid_invite_creates_manager_in_invite_shop(client: Asyn
 
     async with db.async_session() as s:
         membership = await s.scalar(select(Membership).where(Membership.tg_id == 3041))
-    assert membership is not None
+        assert membership is not None
+        role = await s.get(Role, membership.role_id)
     assert membership.shop_id == owner_me["shop_id"]
     assert membership.role == MemberRole.manager
+    # Права тепер живуть на role_ref, не на can_*-колонках Membership —
+    # інвайт садить у системну роль "Менеджер" свого магазину.
+    assert role is not None
+    assert role.name == "Менеджер"
+    assert role.shop_id == owner_me["shop_id"]
+    assert role.is_system is True
     for perm in (
         "can_view_inventory", "can_edit_products", "can_manage_reservations",
         "can_manage_stock", "can_view_finance", "can_manage_billing",
     ):
-        assert getattr(membership, perm) is True
+        assert getattr(role, perm) is True
 
 
 @pytest.mark.asyncio
@@ -279,7 +287,10 @@ async def test_cannot_delete_a_membership_with_owner_role(client: AsyncClient) -
     через збіг id."""
     owner_init, owner_me = await _bootstrap(client, 3110)
 
-    other_owner = Membership(shop_id=owner_me["shop_id"], tg_id=3111, role=MemberRole.owner)
+    owner_role_id = await get_system_role_id(owner_me["shop_id"], "Власник")
+    other_owner = Membership(
+        shop_id=owner_me["shop_id"], tg_id=3111, role=MemberRole.owner, role_id=owner_role_id
+    )
     async with db.async_session() as s:
         s.add(other_owner)
         await s.commit()
@@ -307,114 +318,261 @@ async def test_manager_cannot_list_or_delete_members(client: AsyncClient) -> Non
 
 
 # --------------------------------------------------------------------------- #
-#  Дозволи (Стадія 3) — PATCH /members/{id}/permissions                       #
+#  Кастомні ролі (Стадія 3b) — GET/POST/PATCH/DELETE /roles,                  #
+#  PATCH /members/{id}/role (замінює старий PATCH .../permissions)            #
 # --------------------------------------------------------------------------- #
+async def _create_role(client: AsyncClient, owner_init: str, **payload: object) -> dict:
+    body = {"name": "Тест-роль", **payload}
+    r = await client.post("/api/team/roles", headers={HEADER: owner_init}, json=body)
+    assert r.status_code == 201, r.text
+    return r.json()
+
+
 @pytest.mark.asyncio
-async def test_owner_revokes_finance_permission_and_gate_takes_effect(
-    client: AsyncClient,
-) -> None:
-    owner_init, owner_me = await _bootstrap(client, 3130)
-    manager_init = await _make_manager(owner_me["shop_id"], 3131)
+async def test_owner_creates_custom_role(client: AsyncClient) -> None:
+    owner_init, _owner_me = await _bootstrap(client, 3200)
+
+    role = await _create_role(
+        client, owner_init, name="Продавець", can_view_finance=False, can_manage_billing=False,
+    )
+    assert role["name"] == "Продавець"
+    assert role["can_view_finance"] is False
+    assert role["can_manage_billing"] is False
+    assert role["can_view_inventory"] is True  # дефолт (не передавали)
+    assert role["is_system"] is False
+    assert role["members_count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_create_role_duplicate_name_returns_409(client: AsyncClient) -> None:
+    owner_init, _owner_me = await _bootstrap(client, 3201)
+
+    r = await client.post(
+        "/api/team/roles", headers={HEADER: owner_init}, json={"name": "Менеджер"}
+    )
+    assert r.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_list_roles_includes_system_roles_and_members_count(client: AsyncClient) -> None:
+    owner_init, owner_me = await _bootstrap(client, 3210)
+    await _make_manager(owner_me["shop_id"], 3211)
+
+    r = await client.get("/api/team/roles", headers={HEADER: owner_init})
+    assert r.status_code == 200
+    roles_by_name = {role["name"]: role for role in r.json()}
+    assert {"Власник", "Менеджер"} <= set(roles_by_name)
+    assert roles_by_name["Власник"]["is_system"] is True
+    assert roles_by_name["Власник"]["members_count"] == 1
+    assert roles_by_name["Менеджер"]["members_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_manager_cannot_list_roles(client: AsyncClient) -> None:
+    _owner_init, owner_me = await _bootstrap(client, 3212)
+    manager_init = await _make_manager(owner_me["shop_id"], 3213)
+
+    r = await client.get("/api/team/roles", headers={HEADER: manager_init})
+    assert r.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_owner_assigns_role_and_gate_takes_effect(client: AsyncClient) -> None:
+    owner_init, owner_me = await _bootstrap(client, 3220)
+    manager_init = await _make_manager(owner_me["shop_id"], 3221)
+    role = await _create_role(client, owner_init, name="Без фінансів", can_view_finance=False)
 
     async with db.async_session() as s:
-        member = await s.scalar(select(Membership).where(Membership.tg_id == 3131))
+        member = await s.scalar(select(Membership).where(Membership.tg_id == 3221))
 
     r = await client.patch(
-        f"/api/team/members/{member.id}/permissions",
+        f"/api/team/members/{member.id}/role",
         headers={HEADER: owner_init},
-        json={"can_view_finance": False},
+        json={"role_id": role["id"]},
     )
     assert r.status_code == 200, r.text
     body = r.json()
+    assert body["role_id"] == role["id"]
+    assert body["role_name"] == "Без фінансів"
     assert body["can_view_finance"] is False
-    # решта прапорів лишились True (частковий патч)
-    assert body["can_view_inventory"] is True
-    assert body["can_manage_billing"] is True
 
     r = await client.get("/api/finance/summary", headers={HEADER: manager_init})
     assert r.status_code == 403
 
 
 @pytest.mark.asyncio
-async def test_patch_permissions_on_owner_returns_409(client: AsyncClient) -> None:
-    owner_init, _owner_me = await _bootstrap(client, 3140)
+async def test_editing_role_changes_all_holders_effective_permissions(
+    client: AsyncClient,
+) -> None:
+    """Редагування ролі одразу міняє права ВСІХ її носіїв — без окремого
+    перепризначення кожному."""
+    owner_init, owner_me = await _bootstrap(client, 3280)
+    manager1_init = await _make_manager(owner_me["shop_id"], 3281)
+    manager2_init = await _make_manager(owner_me["shop_id"], 3282)
+    role = await _create_role(client, owner_init, name="Спільна роль")
 
-    r = await client.get("/api/team/members", headers={HEADER: owner_init})
-    owner_membership_id = next(m["id"] for m in r.json() if m["tg_id"] == 3140)
+    async with db.async_session() as s:
+        member1 = await s.scalar(select(Membership).where(Membership.tg_id == 3281))
+        member2 = await s.scalar(select(Membership).where(Membership.tg_id == 3282))
+
+    for member in (member1, member2):
+        r = await client.patch(
+            f"/api/team/members/{member.id}/role",
+            headers={HEADER: owner_init},
+            json={"role_id": role["id"]},
+        )
+        assert r.status_code == 200, r.text
+
+    for init in (manager1_init, manager2_init):
+        r = await client.get("/api/finance/summary", headers={HEADER: init})
+        assert r.status_code == 200
 
     r = await client.patch(
-        f"/api/team/members/{owner_membership_id}/permissions",
+        f"/api/team/roles/{role['id']}",
         headers={HEADER: owner_init},
         json={"can_view_finance": False},
     )
-    assert r.status_code == 409
+    assert r.status_code == 200, r.text
+
+    for init in (manager1_init, manager2_init):
+        r = await client.get("/api/finance/summary", headers={HEADER: init})
+        assert r.status_code == 403
 
 
 @pytest.mark.asyncio
-async def test_patch_permissions_wrong_shop_returns_404(client: AsyncClient) -> None:
-    owner_a_init, _owner_a_me = await _bootstrap(client, 3150)
-    _owner_b_init, owner_b_me = await _bootstrap(client, 3151, first_name="Б")
-    await _make_manager(owner_b_me["shop_id"], 3152)
+async def test_patch_system_role_returns_403(client: AsyncClient) -> None:
+    owner_init, _owner_me = await _bootstrap(client, 3290)
 
-    async with db.async_session() as s:
-        member_b = await s.scalar(select(Membership).where(Membership.tg_id == 3152))
+    r = await client.get("/api/team/roles", headers={HEADER: owner_init})
+    manager_role_id = next(role["id"] for role in r.json() if role["name"] == "Менеджер")
 
     r = await client.patch(
-        f"/api/team/members/{member_b.id}/permissions",
-        headers={HEADER: owner_a_init},
-        json={"can_view_finance": False},
-    )
-    assert r.status_code == 404
-
-
-@pytest.mark.asyncio
-async def test_patch_permissions_missing_member_returns_404(client: AsyncClient) -> None:
-    owner_init, _owner_me = await _bootstrap(client, 3160)
-
-    r = await client.patch(
-        "/api/team/members/999999/permissions",
+        f"/api/team/roles/{manager_role_id}",
         headers={HEADER: owner_init},
-        json={"can_view_finance": False},
-    )
-    assert r.status_code == 404
-
-
-@pytest.mark.asyncio
-async def test_manager_cannot_patch_permissions(client: AsyncClient) -> None:
-    _owner_init, owner_me = await _bootstrap(client, 3170)
-    manager_init = await _make_manager(owner_me["shop_id"], 3171)
-
-    async with db.async_session() as s:
-        member = await s.scalar(select(Membership).where(Membership.tg_id == 3171))
-
-    r = await client.patch(
-        f"/api/team/members/{member.id}/permissions",
-        headers={HEADER: manager_init},
         json={"can_view_finance": False},
     )
     assert r.status_code == 403
 
 
 @pytest.mark.asyncio
-async def test_patch_permissions_partial_update_does_not_touch_other_fields(
-    client: AsyncClient,
-) -> None:
-    owner_init, owner_me = await _bootstrap(client, 3180)
-    await _make_manager(owner_me["shop_id"], 3181)
+async def test_patch_member_role_on_owner_returns_409(client: AsyncClient) -> None:
+    owner_init, _owner_me = await _bootstrap(client, 3230)
+    role = await _create_role(client, owner_init, name="Інша роль")
 
-    async with db.async_session() as s:
-        member = await s.scalar(select(Membership).where(Membership.tg_id == 3181))
+    r = await client.get("/api/team/members", headers={HEADER: owner_init})
+    owner_membership_id = next(m["id"] for m in r.json() if m["tg_id"] == 3230)
 
     r = await client.patch(
-        f"/api/team/members/{member.id}/permissions",
+        f"/api/team/members/{owner_membership_id}/role",
         headers={HEADER: owner_init},
-        json={"can_manage_stock": False},
+        json={"role_id": role["id"]},
+    )
+    assert r.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_patch_member_role_wrong_shop_member_returns_404(client: AsyncClient) -> None:
+    owner_a_init, _owner_a_me = await _bootstrap(client, 3240)
+    _owner_b_init, owner_b_me = await _bootstrap(client, 3241, first_name="Б")
+    await _make_manager(owner_b_me["shop_id"], 3242)
+    role = await _create_role(client, owner_a_init, name="Роль А")
+
+    async with db.async_session() as s:
+        member_b = await s.scalar(select(Membership).where(Membership.tg_id == 3242))
+
+    r = await client.patch(
+        f"/api/team/members/{member_b.id}/role",
+        headers={HEADER: owner_a_init},
+        json={"role_id": role["id"]},
+    )
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_patch_member_role_foreign_role_returns_404(client: AsyncClient) -> None:
+    owner_a_init, owner_a_me = await _bootstrap(client, 3250)
+    owner_b_init, _owner_b_me = await _bootstrap(client, 3251, first_name="Б")
+    await _make_manager(owner_a_me["shop_id"], 3252)
+    role_b = await _create_role(client, owner_b_init, name="Роль Б")
+
+    async with db.async_session() as s:
+        member_a = await s.scalar(select(Membership).where(Membership.tg_id == 3252))
+
+    r = await client.patch(
+        f"/api/team/members/{member_a.id}/role",
+        headers={HEADER: owner_a_init},
+        json={"role_id": role_b["id"]},
+    )
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_patch_member_role_missing_member_returns_404(client: AsyncClient) -> None:
+    owner_init, _owner_me = await _bootstrap(client, 3260)
+    role = await _create_role(client, owner_init, name="Роль")
+
+    r = await client.patch(
+        "/api/team/members/999999/role",
+        headers={HEADER: owner_init},
+        json={"role_id": role["id"]},
+    )
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_manager_cannot_patch_member_role(client: AsyncClient) -> None:
+    owner_init, owner_me = await _bootstrap(client, 3270)
+    manager_init = await _make_manager(owner_me["shop_id"], 3271)
+    role = await _create_role(client, owner_init, name="Роль")
+
+    async with db.async_session() as s:
+        member = await s.scalar(select(Membership).where(Membership.tg_id == 3271))
+
+    r = await client.patch(
+        f"/api/team/members/{member.id}/role",
+        headers={HEADER: manager_init},
+        json={"role_id": role["id"]},
+    )
+    assert r.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_delete_system_role_returns_409(client: AsyncClient) -> None:
+    owner_init, _owner_me = await _bootstrap(client, 3300)
+
+    r = await client.get("/api/team/roles", headers={HEADER: owner_init})
+    manager_role_id = next(role["id"] for role in r.json() if role["name"] == "Менеджер")
+
+    r = await client.delete(f"/api/team/roles/{manager_role_id}", headers={HEADER: owner_init})
+    assert r.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_delete_role_with_holders_returns_409(client: AsyncClient) -> None:
+    owner_init, owner_me = await _bootstrap(client, 3310)
+    await _make_manager(owner_me["shop_id"], 3311)
+    role = await _create_role(client, owner_init, name="Роль з носієм")
+
+    async with db.async_session() as s:
+        member = await s.scalar(select(Membership).where(Membership.tg_id == 3311))
+    r = await client.patch(
+        f"/api/team/members/{member.id}/role",
+        headers={HEADER: owner_init},
+        json={"role_id": role["id"]},
     )
     assert r.status_code == 200, r.text
-    body = r.json()
-    assert body["can_manage_stock"] is False
-    for perm in (
-        "can_view_inventory", "can_edit_products", "can_manage_reservations",
-        "can_view_finance", "can_manage_billing",
-    ):
-        assert body[perm] is True
+
+    r = await client.delete(f"/api/team/roles/{role['id']}", headers={HEADER: owner_init})
+    assert r.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_delete_role_without_holders_ok(client: AsyncClient) -> None:
+    owner_init, _owner_me = await _bootstrap(client, 3320)
+    role = await _create_role(client, owner_init, name="Порожня роль")
+
+    r = await client.delete(f"/api/team/roles/{role['id']}", headers={HEADER: owner_init})
+    assert r.status_code == 204
+
+    r = await client.get("/api/team/roles", headers={HEADER: owner_init})
+    assert role["id"] not in {row["id"] for row in r.json()}

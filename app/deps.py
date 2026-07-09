@@ -24,6 +24,7 @@ from typing import Any
 from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.db import get_session
@@ -74,9 +75,9 @@ async def resolve_membership(
         # Заголовок — лише фільтр СЕРЕД membership цього tg_id, не самостійне
         # джерело shop_id: чуже/неіснуюче членство -> 403, ніякого bootstrap.
         membership = await session.scalar(
-            select(Membership).where(
-                Membership.tg_id == init_data.user.id, Membership.shop_id == x_shop_id
-            )
+            select(Membership)
+            .options(selectinload(Membership.role_ref))
+            .where(Membership.tg_id == init_data.user.id, Membership.shop_id == x_shop_id)
         )
         if membership is None:
             raise HTTPException(
@@ -87,6 +88,7 @@ async def resolve_membership(
 
     membership = await session.scalar(
         select(Membership)
+        .options(selectinload(Membership.role_ref))
         .where(Membership.tg_id == init_data.user.id)
         .order_by(Membership.id)
         .limit(1)
@@ -146,11 +148,15 @@ async def require_writable(
 def _check_permission(membership: Membership, perm: str) -> None:
     """Pure sync check — exposed for direct testing without HTTP overhead.
 
-    owner role always passes (column value irrelevant — owner override).
+    owner role always passes (role_ref value irrelevant — owner override).
+    Reads role_ref, NOT the deprecated can_* columns on Membership itself —
+    callers MUST eager-load it (see resolve_membership's selectinload), a
+    lazy load here would cross the async greenlet boundary from this sync
+    function and crash.
     """
     if membership.role == MemberRole.owner:
         return
-    if not getattr(membership, perm, False):
+    if not getattr(membership.role_ref, perm, False):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"permission denied: {perm}",

@@ -13,6 +13,7 @@ from urllib.parse import urlencode
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
@@ -20,7 +21,7 @@ from app import db
 from app.api import orders as orders_api
 from app.config import settings
 from app.main import app
-from app.models import Base
+from app.models import Base, Role
 from app.security import rate_limit as rate_limit_module
 
 TEST_BOT_TOKEN = "123456:TEST-BOT-TOKEN"
@@ -90,3 +91,16 @@ def make_init_data(
 
     fields["hash"] = "0" * 64 if tamper_hash else computed_hash
     return urlencode(fields)
+
+
+async def get_system_role_id(shop_id: int, name: str) -> int:
+    """Id системної ролі шопу за назвою ("Власник"/"Менеджер") — bootstrap
+    створює обидві разом із магазином. Тести, що вставляють Membership напряму
+    в БД, мусять вказати role_id (non-nullable FK) — ця функція знаходить
+    правильний, замість того щоб кожен тест-файл повторював той самий select."""
+    async with db.async_session() as s:
+        role_id = await s.scalar(
+            select(Role.id).where(Role.shop_id == shop_id, Role.name == name)
+        )
+    assert role_id is not None, f"system role {name!r} missing for shop {shop_id}"
+    return role_id

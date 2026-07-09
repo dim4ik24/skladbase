@@ -39,6 +39,7 @@ from app.models import (
     Reservation,
     ReservationSource,
     ReservationStatus,
+    Role,
     Shop,
     StockMovement,
     Variant,
@@ -400,7 +401,10 @@ async def test_cron_release_expired_reservations_ignores_shipped() -> None:
         shop = Shop(owner_tg_id=80012, name="Тест", slug=f"shop-{uuid4().hex[:8]}")
         session.add(shop)
         await session.flush()
-        session.add(Membership(shop_id=shop.id, tg_id=80012, role=MemberRole.owner))
+        role = Role(shop_id=shop.id, name="Власник", is_system=True)
+        session.add(role)
+        await session.flush()
+        session.add(Membership(shop_id=shop.id, tg_id=80012, role=MemberRole.owner, role_id=role.id))
         product = Product(shop_id=shop.id, name="Товар")
         session.add(product)
         await session.flush()

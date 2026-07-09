@@ -22,7 +22,7 @@ from PIL import Image
 from app import db as db_module
 from app.config import settings
 from app.models import MemberRole, Membership, Shop
-from tests.conftest import make_init_data
+from tests.conftest import get_system_role_id, make_init_data
 
 HEADER = "X-Telegram-Init-Data"
 
@@ -39,8 +39,9 @@ async def _bootstrap(client: AsyncClient, tg_id: int, name: str = "Тест") ->
 
 
 async def _make_manager(shop_id: int, tg_id: int) -> None:
+    role_id = await get_system_role_id(shop_id, "Менеджер")
     async with db_module.async_session() as s:
-        s.add(Membership(shop_id=shop_id, tg_id=tg_id, role=MemberRole.manager))
+        s.add(Membership(shop_id=shop_id, tg_id=tg_id, role=MemberRole.manager, role_id=role_id))
         await s.commit()
 
 

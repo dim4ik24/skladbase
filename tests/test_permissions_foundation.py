@@ -19,10 +19,11 @@ import pytest
 from fastapi import HTTPException
 from httpx import AsyncClient
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from app import db
 from app.deps import _check_permission, _check_writable
-from app.models import MemberRole, Membership
+from app.models import MemberRole, Membership, Role
 from tests.conftest import make_init_data
 
 HEADER = "X-Telegram-Init-Data"
@@ -38,12 +39,16 @@ _ALL_PERMS = [
 
 
 def _make_membership(role: MemberRole, **overrides: bool) -> Membership:
-    """Construct an in-memory Membership with all perms True by default."""
+    """Construct an in-memory Membership + Role with all perms True by
+    default — жодного DB round-trip, лише Python-об'єкти (role_ref
+    відноситься в пам'яті через relationship, без сесії/lazy-load)."""
+    role_ref = Role()
+    for perm in _ALL_PERMS:
+        setattr(role_ref, perm, overrides.get(perm, True))
     m = Membership()
     m.role = role
     m.shop_id = 1
-    for perm in _ALL_PERMS:
-        setattr(m, perm, overrides.get(perm, True))
+    m.role_ref = role_ref
     return m
 
 
@@ -138,7 +143,7 @@ async def test_perm_false_active_sub_raises_403(client: AsyncClient) -> None:
 
 
 # --------------------------------------------------------------------------- #
-#  Test 6: bootstrapped membership has all 6 permission columns = True
+#  Test 6: bootstrapped owner's role_ref (Власник) has all 6 perms = True
 # --------------------------------------------------------------------------- #
 
 @pytest.mark.asyncio
@@ -147,8 +152,13 @@ async def test_bootstrap_membership_has_all_perms_true(client: AsyncClient) -> N
 
     async with db.async_session() as session:
         membership = await session.scalar(
-            select(Membership).where(Membership.tg_id == 9003)
+            select(Membership).options(selectinload(Membership.role_ref))
+            .where(Membership.tg_id == 9003)
         )
         assert membership is not None
+        assert membership.role_ref.name == "Власник"
+        assert membership.role_ref.is_system is True
         for perm in _ALL_PERMS:
-            assert getattr(membership, perm) is True, f"{perm} should be True after bootstrap"
+            assert getattr(membership.role_ref, perm) is True, (
+                f"{perm} should be True after bootstrap"
+            )

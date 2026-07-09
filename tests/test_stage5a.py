@@ -39,7 +39,7 @@ from app.models import (
     Subscription,
     SubStatus,
 )
-from tests.conftest import TEST_BOT_TOKEN, make_init_data
+from tests.conftest import TEST_BOT_TOKEN, get_system_role_id, make_init_data
 
 HEADER = "X-Telegram-Init-Data"
 
@@ -315,8 +315,9 @@ async def test_payment_credits_shop_from_payload_for_owner_of_two_shops(
     _init_data, shop_a = await _bootstrap(client, tg_id, "Шоп А власника")
 
     _other_init_data, shop_b = await _bootstrap(client, 5011, "Шоп Б іншого власника")
+    role_id = await get_system_role_id(shop_b, "Менеджер")
     async with db.async_session() as session:
-        session.add(Membership(shop_id=shop_b, tg_id=tg_id, role=MemberRole.manager))
+        session.add(Membership(shop_id=shop_b, tg_id=tg_id, role=MemberRole.manager, role_id=role_id))
         await session.commit()
 
     sub_b_before = await _get_subscription(shop_b)

@@ -38,13 +38,16 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
-from app.models import Invite, MemberRole, Membership, Shop, ShopStatus
+from app.models import Invite, MemberRole, Membership, Role, Shop, ShopStatus
 from app.security.initdata import TelegramUser
 from app.seed import seed_demo_catalog, seed_plans, seed_system_templates
 from app.services.subscriptions import SubscriptionService
 
 _INVITE_PREFIX = "invite_"
+OWNER_ROLE_NAME = "Власник"
+MANAGER_ROLE_NAME = "Менеджер"
 
 
 def parse_invite_token(start_param: str | None) -> str | None:
@@ -57,9 +60,17 @@ def parse_invite_token(start_param: str | None) -> str | None:
 
 async def _find_membership(session: AsyncSession, tg_id: int) -> Membership | None:
     """"Дефолтне" членство цього tg_id (multi-shop: може бути не єдиним) —
-    найменший id, той самий порядок, що й `resolve_membership` (deps.py)."""
+    найменший id, той самий порядок, що й `resolve_membership` (deps.py).
+
+    role_ref eager-loaded — повернене звідси Membership може дійти аж до
+    `_check_permission` (сама sync-функція, лінивий доступ там впав би на
+    async greenlet boundary)."""
     return await session.scalar(
-        select(Membership).where(Membership.tg_id == tg_id).order_by(Membership.id).limit(1)
+        select(Membership)
+        .options(selectinload(Membership.role_ref))
+        .where(Membership.tg_id == tg_id)
+        .order_by(Membership.id)
+        .limit(1)
     )
 
 
@@ -67,8 +78,19 @@ async def _find_membership_in_shop(
     session: AsyncSession, tg_id: int, shop_id: int
 ) -> Membership | None:
     return await session.scalar(
-        select(Membership).where(Membership.tg_id == tg_id, Membership.shop_id == shop_id)
+        select(Membership)
+        .options(selectinload(Membership.role_ref))
+        .where(Membership.tg_id == tg_id, Membership.shop_id == shop_id)
     )
+
+
+async def _get_system_role(session: AsyncSession, shop_id: int, name: str) -> Role:
+    role = await session.scalar(
+        select(Role).where(Role.shop_id == shop_id, Role.name == name, Role.is_system.is_(True))
+    )
+    if role is None:
+        raise RuntimeError(f"system role {name!r} missing for shop {shop_id}")
+    return role
 
 
 async def _find_active_invite(session: AsyncSession, token: str) -> Invite | None:
@@ -84,11 +106,13 @@ async def _find_active_invite(session: AsyncSession, token: str) -> Invite | Non
 async def _join_via_invite(
     session: AsyncSession, user: TelegramUser, invite: Invite
 ) -> tuple[Membership, str]:
+    manager_role = await _get_system_role(session, invite.shop_id, MANAGER_ROLE_NAME)
     membership = Membership(
         shop_id=invite.shop_id,
         tg_id=user.id,
         display_name=user.first_name or None,
         role=MemberRole.manager,
+        role_ref=manager_role,
     )
     session.add(membership)
 
@@ -155,13 +179,16 @@ async def bootstrap_shop(
 
     shop_name = f"Магазин {user.first_name}".strip() or "Мій магазин"
     shop = Shop(owner_tg_id=user.id, name=shop_name, slug=f"shop-{user.id}")
+    owner_role = Role(shop=shop, name=OWNER_ROLE_NAME, is_system=True)
+    manager_role = Role(shop=shop, name=MANAGER_ROLE_NAME, is_system=True)
     membership = Membership(
         shop=shop,
         tg_id=user.id,
         display_name=user.first_name or None,
         role=MemberRole.owner,
+        role_ref=owner_role,
     )
-    session.add_all([shop, membership])
+    session.add_all([shop, owner_role, manager_role, membership])
 
     try:
         await session.flush()

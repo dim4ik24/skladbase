@@ -15,7 +15,7 @@ from httpx import AsyncClient
 
 from app import db
 from app.models import MemberRole, Membership
-from tests.conftest import make_init_data
+from tests.conftest import get_system_role_id, make_init_data
 
 HEADER = "X-Telegram-Init-Data"
 
@@ -89,8 +89,13 @@ async def test_clear_demos_requires_owner(client: AsyncClient) -> None:
     owner_init_data, shop_id = await _bootstrap(client, 7201, "Власник")
 
     manager_tg_id = 7202
+    role_id = await get_system_role_id(shop_id, "Менеджер")
     async with db.async_session() as session:
-        session.add(Membership(shop_id=shop_id, tg_id=manager_tg_id, role=MemberRole.manager))
+        session.add(
+            Membership(
+                shop_id=shop_id, tg_id=manager_tg_id, role=MemberRole.manager, role_id=role_id
+            )
+        )
         await session.commit()
 
     manager_init_data = make_init_data(manager_tg_id, first_name="Менеджер")

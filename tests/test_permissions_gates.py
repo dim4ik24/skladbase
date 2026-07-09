@@ -13,9 +13,10 @@ from decimal import Decimal
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from app import db
-from app.models import MemberRole, Membership, Product, ProductPhoto, Subscription, Variant
+from app.models import MemberRole, Membership, Product, ProductPhoto, Role, Subscription, Variant
 from tests.conftest import make_init_data
 
 HEADER = "X-Telegram-Init-Data"
@@ -43,12 +44,16 @@ async def _bootstrap(client: AsyncClient, tg_id: int) -> tuple[str, int]:
 
 
 async def _make_manager(shop_id: int, tg_id: int, **perms: bool) -> str:
-    """Insert a manager with explicit permission flags. Unspecified perms default to True."""
-    m = Membership(shop_id=shop_id, tg_id=tg_id, role=MemberRole.manager)
-    for perm in _ALL_PERMS:
-        setattr(m, perm, perms.get(perm, True))
+    """Insert a manager whose role has explicit permission flags (unspecified
+    perms default to True) — права тепер живуть на Role, не на Membership."""
     async with db.async_session() as s:
-        s.add(m)
+        role = Role(
+            shop_id=shop_id, name=f"Тест-роль {tg_id}", is_system=False,
+            **{perm: perms.get(perm, True) for perm in _ALL_PERMS},
+        )
+        s.add(role)
+        await s.flush()
+        s.add(Membership(shop_id=shop_id, tg_id=tg_id, role=MemberRole.manager, role_id=role.id))
         await s.commit()
     return make_init_data(tg_id)
 
@@ -216,22 +221,24 @@ async def test_no_edit_products_delete_photo_403(client: AsyncClient) -> None:
 
 
 # --------------------------------------------------------------------------- #
-#  Test 10: owner with ALL perm columns = False in DB → still 200/201
-#  (owner override: role check trumps column values)
+#  Test 10: owner whose role_ref has ALL perms = False → still 200/201
+#  (owner override: role==owner check trumps role_ref values entirely)
 # --------------------------------------------------------------------------- #
 
 @pytest.mark.asyncio
-async def test_owner_override_all_columns_false(client: AsyncClient) -> None:
+async def test_owner_override_all_role_perms_false(client: AsyncClient) -> None:
     owner_init, _shop_id = await _bootstrap(client, tg_id=80101)
 
-    # Set all owner perm columns to False in DB
+    # Флипаємо усі can_*-права на role_ref власника — не Membership напряму.
     async with db.async_session() as session:
         membership = await session.scalar(
-            select(Membership).where(Membership.tg_id == 80101)
+            select(Membership)
+            .options(selectinload(Membership.role_ref))
+            .where(Membership.tg_id == 80101)
         )
         assert membership is not None
         for perm in _ALL_PERMS:
-            setattr(membership, perm, False)
+            setattr(membership.role_ref, perm, False)
         await session.commit()
 
     # Finance: was require_owner (now require_permission) — must still pass

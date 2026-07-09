@@ -11,6 +11,7 @@ from decimal import Decimal
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 
 from app import db
 from app.models import (
@@ -21,6 +22,7 @@ from app.models import (
     Reservation,
     ReservationSource,
     ReservationStatus,
+    Role,
     TemplateCode,
     Variant,
 )
@@ -50,11 +52,23 @@ async def _bootstrap(client: AsyncClient, tg_id: int) -> tuple[str, int]:
 
 
 async def _make_manager(shop_id: int, tg_id: int, **perms: bool) -> str:
-    m = Membership(shop_id=shop_id, tg_id=tg_id, role=MemberRole.manager)
-    for perm in _ALL_PERMS:
-        setattr(m, perm, perms.get(perm, True))
+    """Manager у shop_id. Без перевизначень — системна роль "Менеджер";
+    з перевизначеннями (perms) — окрема кастомна роль саме з цими правами
+    (права тепер живуть на ролі, не на Membership напряму)."""
     async with db.async_session() as s:
-        s.add(m)
+        if perms:
+            role = Role(
+                shop_id=shop_id, name=f"Тест-роль {tg_id}", is_system=False,
+                **{perm: perms.get(perm, True) for perm in _ALL_PERMS},
+            )
+            s.add(role)
+            await s.flush()
+            role_id = role.id
+        else:
+            role_id = await s.scalar(
+                select(Role.id).where(Role.shop_id == shop_id, Role.name == "Менеджер")
+            )
+        s.add(Membership(shop_id=shop_id, tg_id=tg_id, role=MemberRole.manager, role_id=role_id))
         await s.commit()
     return make_init_data(tg_id)
 

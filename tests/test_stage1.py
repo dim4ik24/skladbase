@@ -18,7 +18,7 @@ from sqlalchemy import select
 from app import db
 from app.models import MemberRole, Membership, Product, Subscription, SubStatus, utcnow
 from app.services.subscriptions import TRIAL_DAYS
-from tests.conftest import make_init_data
+from tests.conftest import get_system_role_id, make_init_data
 
 HEADER = "X-Telegram-Init-Data"
 
@@ -65,12 +65,14 @@ async def test_finance_access_by_role(client: AsyncClient) -> None:
     shop_id = r_owner.json()["shop_id"]
 
     manager_tg_id = 302
+    role_id = await get_system_role_id(shop_id, "Менеджер")
     async with db.async_session() as session:
         session.add(
             Membership(
                 shop_id=shop_id,
                 tg_id=manager_tg_id,
                 role=MemberRole.manager,
+                role_id=role_id,
             )
         )
         await session.commit()

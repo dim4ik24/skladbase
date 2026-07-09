@@ -186,6 +186,33 @@ class Shop(Base):
     subscription: Mapped["Subscription | None"] = relationship(back_populates="shop", uselist=False)
 
 
+class Role(Base):
+    """Іменований набір can_*-дозволів, per-shop (кастомні ролі, фіча 3b).
+
+    Призначається на Membership через role_id — редагування ролі одразу міняє
+    ефективні права всіх її носіїв. is_system=True для двох ролей, що
+    автостворюються на кожен магазин (Власник/Менеджер) — захищені від
+    редагування/видалення. Для role=owner (enum на Membership) role_ref
+    ігнорується require_permission (owner-override), тож can_*-значення ролі
+    "Власник" суто інформаційні."""
+    __tablename__ = "roles"
+    __table_args__ = (UniqueConstraint("shop_id", "name", name="uq_role_shop_name"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    shop_id: Mapped[int] = mapped_column(ForeignKey("shops.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(60))
+    can_view_inventory: Mapped[bool] = mapped_column(Boolean, default=True)
+    can_edit_products: Mapped[bool] = mapped_column(Boolean, default=True)
+    can_manage_reservations: Mapped[bool] = mapped_column(Boolean, default=True)
+    can_manage_stock: Mapped[bool] = mapped_column(Boolean, default=True)
+    can_view_finance: Mapped[bool] = mapped_column(Boolean, default=True)
+    can_manage_billing: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_system: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    shop: Mapped["Shop"] = relationship()
+
+
 class Membership(Base):
     """Хто має доступ до магазину і з якою роллю (фіча 3)."""
     __tablename__ = "memberships"
@@ -196,10 +223,13 @@ class Membership(Base):
     tg_id: Mapped[int] = mapped_column(BigInteger, index=True)
     display_name: Mapped[str | None] = mapped_column(String(120))
     role: Mapped[MemberRole] = mapped_column(SAEnum(MemberRole), default=MemberRole.manager)
+    role_id: Mapped[int] = mapped_column(ForeignKey("roles.id"), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
-    # Granular permissions (Stage 1). All default to True so existing members lose no access.
-    # owner always has all permissions via require_permission owner-override (role check, not column).
+    # Дозволи (Стадія 1) — ДЕПРЕКЕЙТ (фіча 3b): читання прав перейшло на
+    # role_ref (Role), ці 6 колонок більше НІКИМ не читаються. Лишені в
+    # схемі для безпечного відкату міграції custom-roles; дроп — окремою
+    # міграцією пізніше.
     can_view_inventory: Mapped[bool] = mapped_column(Boolean, default=True)
     can_edit_products: Mapped[bool] = mapped_column(Boolean, default=True)
     can_manage_reservations: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -208,6 +238,7 @@ class Membership(Base):
     can_manage_billing: Mapped[bool] = mapped_column(Boolean, default=True)
 
     shop: Mapped["Shop"] = relationship(back_populates="members")
+    role_ref: Mapped["Role"] = relationship()
 
 
 class Invite(Base):

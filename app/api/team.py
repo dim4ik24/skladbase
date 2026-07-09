@@ -1,8 +1,14 @@
 """
-SkladBase — команда: deep-link інвайти + керування учасниками (Стадія 2а).
+SkladBase — команда: deep-link інвайти + керування учасниками (Стадія 2а) +
+кастомні ролі (Стадія 3b).
 
 Усе тут — лише для owner (`require_owner`): менеджер не запрошує інших і не
-бачить/не редагує список команди.
+бачить/не редагує список команди чи ролі.
+
+Права читаються ТІЛЬКИ з Role (через Membership.role_ref) — індивідуальних
+per-person override більше нема. `PATCH /members/{id}/permissions`
+(чекбокси на людині) видалений; замість нього — `PATCH /members/{id}/role`
+(призначення ролі-сутності).
 """
 from __future__ import annotations
 
@@ -11,13 +17,14 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.db import get_session
 from app.deps import require_owner
-from app.models import Invite, MemberRole, Membership, utcnow
+from app.models import Invite, MemberRole, Membership, Role, utcnow
 
 router = APIRouter(prefix="/api/team", tags=["team"])
 
@@ -41,6 +48,8 @@ class MemberOut(BaseModel):
     tg_id: int
     display_name: str | None
     role: str
+    role_id: int
+    role_name: str
     can_view_inventory: bool
     can_edit_products: bool
     can_manage_reservations: bool
@@ -49,7 +58,31 @@ class MemberOut(BaseModel):
     can_manage_billing: bool
 
 
-class PermissionsPatch(BaseModel):
+class RoleOut(BaseModel):
+    id: int
+    name: str
+    can_view_inventory: bool
+    can_edit_products: bool
+    can_manage_reservations: bool
+    can_manage_stock: bool
+    can_view_finance: bool
+    can_manage_billing: bool
+    is_system: bool
+    members_count: int
+
+
+class RoleCreate(BaseModel):
+    name: str
+    can_view_inventory: bool = True
+    can_edit_products: bool = True
+    can_manage_reservations: bool = True
+    can_manage_stock: bool = True
+    can_view_finance: bool = True
+    can_manage_billing: bool = True
+
+
+class RolePatch(BaseModel):
+    name: str | None = None
     can_view_inventory: bool | None = None
     can_edit_products: bool | None = None
     can_manage_reservations: bool | None = None
@@ -58,15 +91,34 @@ class PermissionsPatch(BaseModel):
     can_manage_billing: bool | None = None
 
 
+class MemberRolePatch(BaseModel):
+    role_id: int
+
+
 def _to_member_out(m: Membership) -> MemberOut:
     return MemberOut(
         id=m.id, tg_id=m.tg_id, display_name=m.display_name, role=m.role.value,
-        can_view_inventory=m.can_view_inventory,
-        can_edit_products=m.can_edit_products,
-        can_manage_reservations=m.can_manage_reservations,
-        can_manage_stock=m.can_manage_stock,
-        can_view_finance=m.can_view_finance,
-        can_manage_billing=m.can_manage_billing,
+        role_id=m.role_id, role_name=m.role_ref.name,
+        can_view_inventory=m.role_ref.can_view_inventory,
+        can_edit_products=m.role_ref.can_edit_products,
+        can_manage_reservations=m.role_ref.can_manage_reservations,
+        can_manage_stock=m.role_ref.can_manage_stock,
+        can_view_finance=m.role_ref.can_view_finance,
+        can_manage_billing=m.role_ref.can_manage_billing,
+    )
+
+
+def _to_role_out(r: Role, members_count: int) -> RoleOut:
+    return RoleOut(
+        id=r.id, name=r.name,
+        can_view_inventory=r.can_view_inventory,
+        can_edit_products=r.can_edit_products,
+        can_manage_reservations=r.can_manage_reservations,
+        can_manage_stock=r.can_manage_stock,
+        can_view_finance=r.can_view_finance,
+        can_manage_billing=r.can_manage_billing,
+        is_system=r.is_system,
+        members_count=members_count,
     )
 
 
@@ -144,6 +196,7 @@ async def list_members(
     members = (
         await session.scalars(
             select(Membership)
+            .options(selectinload(Membership.role_ref))
             .where(Membership.shop_id == membership.shop_id)
             .order_by(Membership.created_at.asc())
         )
@@ -152,22 +205,128 @@ async def list_members(
     return [_to_member_out(m) for m in members]
 
 
-@router.patch("/members/{membership_id}/permissions", response_model=MemberOut)
-async def update_member_permissions(
+@router.get("/roles", response_model=list[RoleOut])
+async def list_roles(
+    membership: Membership = Depends(require_owner),
+    session: AsyncSession = Depends(get_session),
+) -> list[RoleOut]:
+    roles = (
+        await session.scalars(
+            select(Role)
+            .where(Role.shop_id == membership.shop_id)
+            .order_by(Role.created_at.asc())
+        )
+    ).all()
+
+    count_rows = (
+        await session.execute(
+            select(Membership.role_id, func.count())
+            .where(Membership.shop_id == membership.shop_id)
+            .group_by(Membership.role_id)
+        )
+    ).all()
+    counts: dict[int, int] = {row[0]: row[1] for row in count_rows}
+
+    return [_to_role_out(r, counts.get(r.id, 0)) for r in roles]
+
+
+@router.post("/roles", status_code=status.HTTP_201_CREATED, response_model=RoleOut)
+async def create_role(
+    payload: RoleCreate,
+    membership: Membership = Depends(require_owner),
+    session: AsyncSession = Depends(get_session),
+) -> RoleOut:
+    duplicate = await session.scalar(
+        select(Role.id).where(Role.shop_id == membership.shop_id, Role.name == payload.name)
+    )
+    if duplicate is not None:
+        raise HTTPException(status_code=409, detail="роль з такою назвою вже існує")
+
+    role = Role(shop_id=membership.shop_id, is_system=False, **payload.model_dump())
+    session.add(role)
+    await session.commit()
+    return _to_role_out(role, members_count=0)
+
+
+@router.patch("/roles/{role_id}", response_model=RoleOut)
+async def update_role(
+    role_id: int,
+    payload: RolePatch,
+    membership: Membership = Depends(require_owner),
+    session: AsyncSession = Depends(get_session),
+) -> RoleOut:
+    role = await session.get(Role, role_id)
+    if role is None or role.shop_id != membership.shop_id:
+        raise HTTPException(status_code=404, detail="роль не знайдено")
+    if role.is_system:
+        raise HTTPException(status_code=403, detail="Системну роль не можна змінювати")
+
+    changes = payload.model_dump(exclude_unset=True)
+    if "name" in changes and changes["name"] != role.name:
+        duplicate = await session.scalar(
+            select(Role.id).where(
+                Role.shop_id == membership.shop_id, Role.name == changes["name"]
+            )
+        )
+        if duplicate is not None:
+            raise HTTPException(status_code=409, detail="роль з такою назвою вже існує")
+
+    for field_name, value in changes.items():
+        setattr(role, field_name, value)
+
+    await session.commit()
+
+    members_count = await session.scalar(
+        select(func.count()).select_from(Membership).where(Membership.role_id == role.id)
+    )
+    return _to_role_out(role, members_count=members_count or 0)
+
+
+@router.delete("/roles/{role_id}", status_code=204)
+async def delete_role(
+    role_id: int,
+    membership: Membership = Depends(require_owner),
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    role = await session.get(Role, role_id)
+    if role is None or role.shop_id != membership.shop_id:
+        raise HTTPException(status_code=404, detail="роль не знайдено")
+    if role.is_system:
+        raise HTTPException(status_code=409, detail="Системну роль не можна видалити")
+
+    holders = await session.scalar(
+        select(func.count()).select_from(Membership).where(Membership.role_id == role_id)
+    )
+    if holders:
+        raise HTTPException(
+            status_code=409, detail="Спершу переведіть учасників на іншу роль"
+        )
+
+    await session.delete(role)
+    await session.commit()
+    return Response(status_code=204)
+
+
+@router.patch("/members/{membership_id}/role", response_model=MemberOut)
+async def update_member_role(
     membership_id: int,
-    payload: PermissionsPatch,
+    payload: MemberRolePatch,
     membership: Membership = Depends(require_owner),
     session: AsyncSession = Depends(get_session),
 ) -> MemberOut:
-    target = await session.get(Membership, membership_id)
+    target = await session.get(
+        Membership, membership_id, options=[selectinload(Membership.role_ref)]
+    )
     if target is None or target.shop_id != membership.shop_id:
         raise HTTPException(status_code=404, detail="учасника не знайдено")
     if target.role == MemberRole.owner:
-        raise HTTPException(status_code=409, detail="дозволи owner'а не редагуються")
+        raise HTTPException(status_code=409, detail="роль owner'а незмінна")
 
-    for field_name, value in payload.model_dump(exclude_unset=True).items():
-        setattr(target, field_name, value)
+    new_role = await session.get(Role, payload.role_id)
+    if new_role is None or new_role.shop_id != membership.shop_id:
+        raise HTTPException(status_code=404, detail="роль не знайдено")
 
+    target.role_ref = new_role
     await session.commit()
     return _to_member_out(target)
 
