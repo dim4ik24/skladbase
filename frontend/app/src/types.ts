@@ -43,11 +43,7 @@ export interface Invite {
   created_at?: string;
 }
 
-export interface TeamMember {
-  id: number;
-  tg_id: number;
-  display_name: string | null;
-  role: "owner" | "manager";
+export interface RolePermissions {
   can_view_inventory: boolean;
   can_edit_products: boolean;
   can_manage_reservations: boolean;
@@ -56,17 +52,27 @@ export interface TeamMember {
   can_manage_billing: boolean;
 }
 
-export type PermissionsPatch = Partial<
-  Pick<
-    TeamMember,
-    | "can_view_inventory"
-    | "can_edit_products"
-    | "can_manage_reservations"
-    | "can_manage_stock"
-    | "can_view_finance"
-    | "can_manage_billing"
-  >
->;
+export interface Role extends RolePermissions {
+  id: number;
+  name: string;
+  is_system: boolean;
+  members_count: number;
+}
+
+export interface RoleCreate extends RolePermissions {
+  name: string;
+}
+
+export type RolePatch = Partial<RoleCreate>;
+
+export interface TeamMember extends RolePermissions {
+  id: number;
+  tg_id: number;
+  display_name: string | null;
+  role: "owner" | "manager";
+  role_id: number;
+  role_name: string;
+}
 
 export interface Plan {
   code: string;

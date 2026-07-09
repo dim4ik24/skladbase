@@ -19,7 +19,6 @@ import type {
   NpSenderPayload,
   NpSenderProfile,
   NpWarehouse,
-  PermissionsPatch,
   Photo,
   Plan,
   Product,
@@ -28,6 +27,9 @@ import type {
   ReleasePayload,
   Reservation,
   ReserveInput,
+  Role,
+  RoleCreate,
+  RolePatch,
   Shop,
   ShipPayload,
   TeamMember,
@@ -337,12 +339,31 @@ export function removeMember(membershipId: number): Promise<void> {
   return request<void>(`/api/team/members/${membershipId}`, { method: "DELETE" });
 }
 
-export function updateMemberPermissions(
-  membershipId: number,
-  patch: PermissionsPatch,
-): Promise<TeamMember> {
-  return request<TeamMember>(`/api/team/members/${membershipId}/permissions`, {
+export function getRoles(): Promise<Role[]> {
+  return request<Role[]>("/api/team/roles");
+}
+
+export function createRole(payload: RoleCreate): Promise<Role> {
+  return request<Role>("/api/team/roles", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function patchRole(roleId: number, patch: RolePatch): Promise<Role> {
+  return request<Role>(`/api/team/roles/${roleId}`, {
     method: "PATCH",
     body: JSON.stringify(patch),
+  });
+}
+
+export function deleteRole(roleId: number): Promise<void> {
+  return request<void>(`/api/team/roles/${roleId}`, { method: "DELETE" });
+}
+
+export function setMemberRole(membershipId: number, roleId: number): Promise<TeamMember> {
+  return request<TeamMember>(`/api/team/members/${membershipId}/role`, {
+    method: "PATCH",
+    body: JSON.stringify({ role_id: roleId }),
   });
 }
