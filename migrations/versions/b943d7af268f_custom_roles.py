@@ -63,7 +63,7 @@ roles = sa.table(
     sa.column("shop_id", sa.Integer),
     sa.column("name", sa.String),
     sa.column("is_system", sa.Boolean),
-    sa.column("created_at", sa.DateTime),
+    sa.column("created_at", sa.DateTime(timezone=True)),
     *(sa.column(col, sa.Boolean) for col in _PERM_COLS),
 )
 
