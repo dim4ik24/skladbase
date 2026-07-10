@@ -344,11 +344,9 @@ export function TeamSection() {
                       tabIndex={role.is_system ? undefined : 0}
                       onClick={() => {
                         if (role.is_system) return;
-                        setExpandedRoleId((prev) => {
-                          const next = prev === role.id ? null : role.id;
-                          setRoleNameDraft(next === role.id ? role.name : "");
-                          return next;
-                        });
+                        const next = expandedRoleId === role.id ? null : role.id;
+                        setExpandedRoleId(next);
+                        setRoleNameDraft(next === role.id ? role.name : "");
                       }}
                       className={`flex items-center justify-between gap-2 px-3 py-2 ${
                         role.is_system ? "" : "cursor-pointer"

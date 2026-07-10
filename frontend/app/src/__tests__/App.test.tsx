@@ -2181,6 +2181,38 @@ describe("Team section (Settings, owner-only)", () => {
     });
   });
 
+  it("expands and collapses a custom role by clicking the row container itself", async () => {
+    // Regression: the row's onClick used to nest a second setState call
+    // (setRoleNameDraft) inside setExpandedRoleId's functional updater. React
+    // requires updater functions to stay pure — it may invoke them more than
+    // once per commit — so this only misbehaved intermittently on real
+    // devices, never in a fast synchronous test. Click the actual clickable
+    // container (role="button"), not the inner <p>, to match how a real tap
+    // hits the DOM.
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    const customRole: Role = {
+      id: 30, name: "Продавець", is_system: false, members_count: 0,
+      can_view_inventory: true, can_edit_products: true, can_manage_reservations: true,
+      can_manage_stock: true, can_view_finance: true, can_manage_billing: true,
+    };
+    vi.mocked(api.getRoles).mockResolvedValue([ownerRoleFixture, managerRoleFixture, customRole]);
+
+    render(<App />);
+    await goToSettings();
+    const nameNode = await screen.findByText("Продавець");
+    const rowContainer = nameNode.closest('[role="button"]');
+    expect(rowContainer).not.toBeNull();
+
+    expect(screen.queryByLabelText(/Назва ролі/)).not.toBeInTheDocument();
+
+    fireEvent.click(rowContainer as HTMLElement);
+    expect(await screen.findByLabelText("Назва ролі: Продавець")).toBeInTheDocument();
+
+    fireEvent.click(rowContainer as HTMLElement);
+    expect(screen.queryByLabelText(/Назва ролі/)).not.toBeInTheDocument();
+  });
+
   it("deletes a role without holders via two-step confirm", async () => {
     vi.mocked(api.getMe).mockResolvedValue(shopFixture);
     vi.mocked(api.getProducts).mockResolvedValue([]);
