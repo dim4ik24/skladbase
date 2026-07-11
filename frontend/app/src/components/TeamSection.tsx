@@ -60,6 +60,13 @@ export function TeamSection() {
   const [expandedRoleId, setExpandedRoleId] = useState<number | null>(null);
   const [roleNameDraft, setRoleNameDraft] = useState("");
   const [confirmDeleteRoleId, setConfirmDeleteRoleId] = useState<number | null>(null);
+  const [systemRoleHint, setSystemRoleHint] = useState(false);
+
+  useEffect(() => {
+    if (!systemRoleHint) return;
+    const timer = setTimeout(() => setSystemRoleHint(false), 3000);
+    return () => clearTimeout(timer);
+  }, [systemRoleHint]);
 
   useEffect(() => {
     let mounted = true;
@@ -331,6 +338,21 @@ export function TeamSection() {
             <h4 className="text-xs font-bold text-text-soft uppercase tracking-wide mb-2">
               Ролі
             </h4>
+
+            {systemRoleHint ? (
+              <div className="banner banner-neutral" onClick={() => setSystemRoleHint(false)}>
+                <span>Системну роль не можна змінювати. Створіть власну роль</span>
+                <button
+                  type="button"
+                  className="banner-dismiss"
+                  aria-label="Закрити"
+                  onClick={() => setSystemRoleHint(false)}
+                >
+                  ×
+                </button>
+              </div>
+            ) : null}
+
             <ul className="flex flex-col gap-2">
               {roles.map((role) => {
                 const isExpanded = expandedRoleId === role.id;
@@ -343,7 +365,10 @@ export function TeamSection() {
                       role={role.is_system ? undefined : "button"}
                       tabIndex={role.is_system ? undefined : 0}
                       onClick={() => {
-                        if (role.is_system) return;
+                        if (role.is_system) {
+                          setSystemRoleHint(true);
+                          return;
+                        }
                         const next = expandedRoleId === role.id ? null : role.id;
                         setExpandedRoleId(next);
                         setRoleNameDraft(next === role.id ? role.name : "");

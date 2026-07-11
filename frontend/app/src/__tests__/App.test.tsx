@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
 import type {
@@ -2143,7 +2143,8 @@ describe("Team section (Settings, owner-only)", () => {
     expect(await screen.findByText("Роль з такою назвою вже є")).toBeInTheDocument();
   });
 
-  it("does not expand a system role for editing", async () => {
+  it("does not expand a system role for editing, and shows a self-dismissing hint instead", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.mocked(api.getMe).mockResolvedValue(shopFixture);
     vi.mocked(api.getProducts).mockResolvedValue([]);
     vi.mocked(api.getRoles).mockResolvedValue([ownerRoleFixture, managerRoleFixture]);
@@ -2154,6 +2155,31 @@ describe("Team section (Settings, owner-only)", () => {
 
     expect(screen.queryByLabelText(/Назва ролі/)).not.toBeInTheDocument();
     expect(api.patchRole).not.toHaveBeenCalled();
+    expect(
+      screen.getByText("Системну роль не можна змінювати. Створіть власну роль"),
+    ).toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(
+      screen.queryByText("Системну роль не можна змінювати. Створіть власну роль"),
+    ).not.toBeInTheDocument();
+    vi.useRealTimers();
+  });
+
+  it("dismisses the system-role hint immediately when tapped", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.getRoles).mockResolvedValue([ownerRoleFixture, managerRoleFixture]);
+
+    render(<App />);
+    await goToSettings();
+    fireEvent.click(await screen.findByText("Менеджер"));
+
+    const hint = screen.getByText("Системну роль не можна змінювати. Створіть власну роль");
+    fireEvent.click(screen.getByRole("button", { name: "Закрити" }));
+    expect(hint).not.toBeInTheDocument();
   });
 
   it("edits a custom role's permissions via checkbox PATCH", async () => {
