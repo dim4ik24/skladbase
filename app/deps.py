@@ -35,6 +35,7 @@ from app.security.rate_limit import InMemoryRateLimiter, client_ip
 from app.services.bootstrap import bootstrap_shop, parse_invite_token
 
 __all__ = [
+    "effective_permission",
     "get_session",
     "require_api_key",
     "require_member",
@@ -145,18 +146,28 @@ async def require_writable(
     return membership
 
 
+def effective_permission(membership: Membership, perm: str) -> bool:
+    """Права ролі + nullable-відхилення поверх (фіча 3c). NULL на Membership
+    (self.<perm>) означає "як у ролі"; true/false — явний override для ЦІЄЇ
+    людини, який завжди перемагає роль. Callers MUST eager-load role_ref
+    (див. resolve_membership's selectinload) — lazy load тут перетнув би
+    async greenlet boundary з цієї sync-функції і впав би."""
+    override = getattr(membership, perm)
+    if override is not None:
+        return override
+    return getattr(membership.role_ref, perm, False)
+
+
 def _check_permission(membership: Membership, perm: str) -> None:
     """Pure sync check — exposed for direct testing without HTTP overhead.
 
-    owner role always passes (role_ref value irrelevant — owner override).
-    Reads role_ref, NOT the deprecated can_* columns on Membership itself —
-    callers MUST eager-load it (see resolve_membership's selectinload), a
-    lazy load here would cross the async greenlet boundary from this sync
-    function and crash.
+    owner role always passes (role_ref/override value irrelevant — owner
+    override), інакше читає effective_permission (роль + індивідуальний
+    override).
     """
     if membership.role == MemberRole.owner:
         return
-    if not getattr(membership.role_ref, perm, False):
+    if not effective_permission(membership, perm):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"permission denied: {perm}",

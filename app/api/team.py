@@ -1,14 +1,15 @@
 """
 SkladBase — команда: deep-link інвайти + керування учасниками (Стадія 2а) +
-кастомні ролі (Стадія 3b).
+кастомні ролі (Стадія 3b) + індивідуальні override поверх ролі (Стадія 3c).
 
 Усе тут — лише для owner (`require_owner`): менеджер не запрошує інших і не
 бачить/не редагує список команди чи ролі.
 
-Права читаються ТІЛЬКИ з Role (через Membership.role_ref) — індивідуальних
-per-person override більше нема. `PATCH /members/{id}/permissions`
-(чекбокси на людині) видалений; замість нього — `PATCH /members/{id}/role`
-(призначення ролі-сутності).
+Ефективні права людини = права її ролі (Membership.role_ref) + nullable
+override на самій Membership (`effective_permission`, app/deps.py). NULL —
+"як у ролі"; true/false — явний виняток для ЦІЄЇ людини, призначається через
+`PATCH /members/{id}/permissions`. Зміна ролі (`PATCH /members/{id}/role`)
+скидає всі override в NULL — передбачуваність (рішення власника продукту).
 """
 from __future__ import annotations
 
@@ -23,13 +24,28 @@ from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.db import get_session
-from app.deps import require_owner
+from app.deps import effective_permission, require_owner
 from app.models import Invite, MemberRole, Membership, Role, utcnow
 
 router = APIRouter(prefix="/api/team", tags=["team"])
 
 INVITE_TTL_HOURS = 48
 _TOKEN_BYTES = 32
+
+_PERM_COLS = [
+    "can_view_inventory",
+    "can_edit_products",
+    "can_manage_reservations",
+    "can_manage_stock",
+    "can_view_finance",
+    "can_manage_billing",
+]
+
+# Єдина роль, яку не можна редагувати (owner-override все одно ігнорує її
+# can_*, редагування лише заплутає) — "Менеджер" (теж is_system) редагується
+# як звичайна кастомна роль. DELETE лишається забороненим для ОБОХ системних
+# ролей (delete_role нижче — окрема, не пов'язана з цим перевірка).
+_OWNER_ROLE_NAME = "Власник"
 
 
 class InviteOut(BaseModel):
@@ -56,6 +72,7 @@ class MemberOut(BaseModel):
     can_manage_stock: bool
     can_view_finance: bool
     can_manage_billing: bool
+    overridden: list[str]
 
 
 class RoleOut(BaseModel):
@@ -95,16 +112,27 @@ class MemberRolePatch(BaseModel):
     role_id: int
 
 
+class MemberPermissionsPatch(BaseModel):
+    can_view_inventory: bool | None = None
+    can_edit_products: bool | None = None
+    can_manage_reservations: bool | None = None
+    can_manage_stock: bool | None = None
+    can_view_finance: bool | None = None
+    can_manage_billing: bool | None = None
+
+
 def _to_member_out(m: Membership) -> MemberOut:
+    overridden = [perm for perm in _PERM_COLS if getattr(m, perm) is not None]
     return MemberOut(
         id=m.id, tg_id=m.tg_id, display_name=m.display_name, role=m.role.value,
         role_id=m.role_id, role_name=m.role_ref.name,
-        can_view_inventory=m.role_ref.can_view_inventory,
-        can_edit_products=m.role_ref.can_edit_products,
-        can_manage_reservations=m.role_ref.can_manage_reservations,
-        can_manage_stock=m.role_ref.can_manage_stock,
-        can_view_finance=m.role_ref.can_view_finance,
-        can_manage_billing=m.role_ref.can_manage_billing,
+        can_view_inventory=effective_permission(m, "can_view_inventory"),
+        can_edit_products=effective_permission(m, "can_edit_products"),
+        can_manage_reservations=effective_permission(m, "can_manage_reservations"),
+        can_manage_stock=effective_permission(m, "can_manage_stock"),
+        can_view_finance=effective_permission(m, "can_view_finance"),
+        can_manage_billing=effective_permission(m, "can_manage_billing"),
+        overridden=overridden,
     )
 
 
@@ -258,8 +286,10 @@ async def update_role(
     role = await session.get(Role, role_id)
     if role is None or role.shop_id != membership.shop_id:
         raise HTTPException(status_code=404, detail="роль не знайдено")
-    if role.is_system:
-        raise HTTPException(status_code=403, detail="Системну роль не можна змінювати")
+    if role.name == _OWNER_ROLE_NAME:
+        raise HTTPException(
+            status_code=403, detail="Роль власника завжди має всі права"
+        )
 
     changes = payload.model_dump(exclude_unset=True)
     if "name" in changes and changes["name"] != role.name:
@@ -327,6 +357,36 @@ async def update_member_role(
         raise HTTPException(status_code=404, detail="роль не знайдено")
 
     target.role_ref = new_role
+    # Скидання overrides — та сама транзакція, що й призначення ролі (один
+    # commit нижче): передбачуваність (рішення власника продукту) означає,
+    # що між "нова роль призначена" й "старі override ще діють" немає ані
+    # проміжного стану в БД, ані вікна для гонки при паралельному PATCH
+    # /permissions на цього ж учасника.
+    for perm in _PERM_COLS:
+        setattr(target, perm, None)
+    await session.commit()
+    return _to_member_out(target)
+
+
+@router.patch("/members/{membership_id}/permissions", response_model=MemberOut)
+async def update_member_permissions(
+    membership_id: int,
+    payload: MemberPermissionsPatch,
+    membership: Membership = Depends(require_owner),
+    session: AsyncSession = Depends(get_session),
+) -> MemberOut:
+    target = await session.get(
+        Membership, membership_id, options=[selectinload(Membership.role_ref)]
+    )
+    if target is None or target.shop_id != membership.shop_id:
+        raise HTTPException(status_code=404, detail="учасника не знайдено")
+    if target.role == MemberRole.owner:
+        raise HTTPException(status_code=409, detail="права owner'а незмінні")
+
+    changes = payload.model_dump(exclude_unset=True)
+    for field_name, value in changes.items():
+        setattr(target, field_name, value)
+
     await session.commit()
     return _to_member_out(target)
 

@@ -72,7 +72,12 @@ export interface TeamMember extends RolePermissions {
   role: "owner" | "manager";
   role_id: number;
   role_name: string;
+  /** Поля з індивідуальним override поверх ролі (фіча 3c) — ключі RolePermissions. */
+  overridden: string[];
 }
+
+/** null у значенні поля — скинути override, права підуть за роллю. */
+export type MemberPermissionsPatch = Partial<Record<keyof RolePermissions, boolean | null>>;
 
 export interface Plan {
   code: string;

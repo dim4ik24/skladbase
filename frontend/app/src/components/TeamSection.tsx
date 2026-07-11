@@ -26,6 +26,23 @@ const DEFAULT_ROLE_PERMS: RolePermissions = {
   can_manage_billing: true,
 };
 
+// Єдина роль, яку не можна редагувати — "Менеджер" (теж is_system) тепер
+// відкривається на редагування як звичайна кастомна роль (бейдж "системна"
+// лишається — просто інформація, не блокер). Дзеркалить backend (team.py,
+// _OWNER_ROLE_NAME): DELETE лишається забороненим для ОБОХ системних ролей.
+const OWNER_ROLE_NAME = "Власник";
+
+function rolePermissions(role: Role): RolePermissions {
+  return {
+    can_view_inventory: role.can_view_inventory,
+    can_edit_products: role.can_edit_products,
+    can_manage_reservations: role.can_manage_reservations,
+    can_manage_stock: role.can_manage_stock,
+    can_view_finance: role.can_view_finance,
+    can_manage_billing: role.can_manage_billing,
+  };
+}
+
 function hoursLeft(expiresAt: string): number {
   const ms = new Date(expiresAt).getTime() - Date.now();
   return Math.max(0, Math.round(ms / (60 * 60 * 1000)));
@@ -60,13 +77,17 @@ export function TeamSection() {
   const [expandedRoleId, setExpandedRoleId] = useState<number | null>(null);
   const [roleNameDraft, setRoleNameDraft] = useState("");
   const [confirmDeleteRoleId, setConfirmDeleteRoleId] = useState<number | null>(null);
-  const [systemRoleHint, setSystemRoleHint] = useState(false);
+  const [ownerRoleHint, setOwnerRoleHint] = useState(false);
+  const [pendingRoleChange, setPendingRoleChange] = useState<{
+    memberId: number;
+    roleId: number;
+  } | null>(null);
 
   useEffect(() => {
-    if (!systemRoleHint) return;
-    const timer = setTimeout(() => setSystemRoleHint(false), 3000);
+    if (!ownerRoleHint) return;
+    const timer = setTimeout(() => setOwnerRoleHint(false), 3000);
     return () => clearTimeout(timer);
-  }, [systemRoleHint]);
+  }, [ownerRoleHint]);
 
   useEffect(() => {
     let mounted = true;
@@ -146,12 +167,11 @@ export function TeamSection() {
               ...m,
               role_id: nextRole.id,
               role_name: nextRole.name,
-              can_view_inventory: nextRole.can_view_inventory,
-              can_edit_products: nextRole.can_edit_products,
-              can_manage_reservations: nextRole.can_manage_reservations,
-              can_manage_stock: nextRole.can_manage_stock,
-              can_view_finance: nextRole.can_view_finance,
-              can_manage_billing: nextRole.can_manage_billing,
+              ...rolePermissions(nextRole),
+              // Backend скидає overrides в тій самій транзакції, що й
+              // призначення ролі (team.py, update_member_role) —
+              // дзеркалимо тут одразу, не чекаючи відповіді.
+              overridden: [],
             }
           : m,
       ),
@@ -162,6 +182,78 @@ export function TeamSection() {
     } catch (err) {
       setMembers((prev) => prev.map((m) => (m.id === memberId ? previous : m)));
       setError(errorMessage(err, "Не вдалося змінити роль"));
+    }
+  }
+
+  // Зміна ролі скидає всі індивідуальні override — якщо вони Є, підтверди
+  // (two-step, той самий патерн, що й Скасувати/Видалити роль вище).
+  function handleRoleRadioChange(member: TeamMember, roleId: number) {
+    if (roleId === member.role_id) return;
+    if (member.overridden.length > 0) {
+      setPendingRoleChange({ memberId: member.id, roleId });
+      return;
+    }
+    void handleMemberRoleChange(member.id, roleId);
+  }
+
+  async function confirmPendingRoleChange() {
+    if (!pendingRoleChange) return;
+    const { memberId, roleId } = pendingRoleChange;
+    setPendingRoleChange(null);
+    await handleMemberRoleChange(memberId, roleId);
+  }
+
+  async function handleMemberPermToggle(
+    memberId: number,
+    field: keyof RolePermissions,
+    value: boolean | null,
+  ) {
+    setError(null);
+    const previous = members.find((m) => m.id === memberId);
+    if (!previous) return;
+    const role = roles.find((r) => r.id === previous.role_id);
+    const effectiveValue = value === null ? (role?.[field] ?? false) : value;
+    const nextOverridden =
+      value === null
+        ? previous.overridden.filter((f) => f !== field)
+        : previous.overridden.includes(field)
+          ? previous.overridden
+          : [...previous.overridden, field];
+
+    setMembers((prev) =>
+      prev.map((m) =>
+        m.id === memberId ? { ...m, [field]: effectiveValue, overridden: nextOverridden } : m,
+      ),
+    );
+    try {
+      const updated = await api.patchMemberPermissions(memberId, { [field]: value });
+      setMembers((prev) => prev.map((m) => (m.id === memberId ? updated : m)));
+    } catch (err) {
+      setMembers((prev) => prev.map((m) => (m.id === memberId ? previous : m)));
+      setError(errorMessage(err, "Не вдалося оновити права"));
+    }
+  }
+
+  async function handleResetAllOverrides(memberId: number) {
+    setError(null);
+    const previous = members.find((m) => m.id === memberId);
+    if (!previous) return;
+    const role = roles.find((r) => r.id === previous.role_id);
+
+    setMembers((prev) =>
+      prev.map((m) =>
+        m.id === memberId
+          ? { ...m, ...(role ? rolePermissions(role) : {}), overridden: [] }
+          : m,
+      ),
+    );
+    try {
+      const resetPatch = Object.fromEntries(PERMISSION_FIELDS.map((f) => [f.key, null]));
+      const updated = await api.patchMemberPermissions(memberId, resetPatch);
+      setMembers((prev) => prev.map((m) => (m.id === memberId ? updated : m)));
+    } catch (err) {
+      setMembers((prev) => prev.map((m) => (m.id === memberId ? previous : m)));
+      setError(errorMessage(err, "Не вдалося скинути права"));
     }
   }
 
@@ -339,14 +431,14 @@ export function TeamSection() {
               Ролі
             </h4>
 
-            {systemRoleHint ? (
-              <div className="banner banner-neutral" onClick={() => setSystemRoleHint(false)}>
-                <span>Системну роль не можна змінювати. Створіть власну роль</span>
+            {ownerRoleHint ? (
+              <div className="banner banner-neutral" onClick={() => setOwnerRoleHint(false)}>
+                <span>Роль власника завжди має всі права</span>
                 <button
                   type="button"
                   className="banner-dismiss"
                   aria-label="Закрити"
-                  onClick={() => setSystemRoleHint(false)}
+                  onClick={() => setOwnerRoleHint(false)}
                 >
                   ×
                 </button>
@@ -356,17 +448,18 @@ export function TeamSection() {
             <ul className="flex flex-col gap-2">
               {roles.map((role) => {
                 const isExpanded = expandedRoleId === role.id;
+                const isLockedRole = role.name === OWNER_ROLE_NAME;
                 return (
                   <li
                     key={role.id}
                     className="rounded-xl bg-[var(--glass-bg)] border border-[var(--line)] overflow-hidden"
                   >
                     <div
-                      role={role.is_system ? undefined : "button"}
-                      tabIndex={role.is_system ? undefined : 0}
+                      role={isLockedRole ? undefined : "button"}
+                      tabIndex={isLockedRole ? undefined : 0}
                       onClick={() => {
-                        if (role.is_system) {
-                          setSystemRoleHint(true);
+                        if (isLockedRole) {
+                          setOwnerRoleHint(true);
                           return;
                         }
                         const next = expandedRoleId === role.id ? null : role.id;
@@ -374,7 +467,7 @@ export function TeamSection() {
                         setRoleNameDraft(next === role.id ? role.name : "");
                       }}
                       className={`flex items-center justify-between gap-2 px-3 py-2 ${
-                        role.is_system ? "" : "cursor-pointer"
+                        isLockedRole ? "" : "cursor-pointer"
                       }`}
                     >
                       <div className="min-w-0 flex items-center gap-2">
@@ -386,7 +479,7 @@ export function TeamSection() {
                       </span>
                     </div>
 
-                    {!role.is_system && isExpanded ? (
+                    {!isLockedRole && isExpanded ? (
                       <div
                         className="flex flex-col gap-2 px-3 pb-3 pt-2 border-t border-[var(--line)]"
                         onClick={(e) => e.stopPropagation()}
@@ -417,28 +510,30 @@ export function TeamSection() {
                           </label>
                         ))}
 
-                        {confirmDeleteRoleId === role.id ? (
-                          <div className="flex gap-2 mt-1">
-                            <button type="button" onClick={() => setConfirmDeleteRoleId(null)}>
-                              Ні
-                            </button>
+                        {!role.is_system ? (
+                          confirmDeleteRoleId === role.id ? (
+                            <div className="flex gap-2 mt-1">
+                              <button type="button" onClick={() => setConfirmDeleteRoleId(null)}>
+                                Ні
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-danger"
+                                onClick={() => void handleDeleteRole(role.id)}
+                              >
+                                Так, видалити
+                              </button>
+                            </div>
+                          ) : (
                             <button
                               type="button"
-                              className="btn-danger"
-                              onClick={() => void handleDeleteRole(role.id)}
+                              className="btn-danger-outline mt-1"
+                              onClick={() => setConfirmDeleteRoleId(role.id)}
                             >
-                              Так, видалити
+                              Видалити роль
                             </button>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            className="btn-danger-outline mt-1"
-                            onClick={() => setConfirmDeleteRoleId(role.id)}
-                          >
-                            Видалити роль
-                          </button>
-                        )}
+                          )
+                        ) : null}
                       </div>
                     ) : null}
                   </li>
@@ -524,8 +619,15 @@ export function TeamSection() {
                     }`}
                   >
                     <div className="min-w-0">
-                      <p className="text-sm text-text truncate">
+                      <p className="text-sm text-text truncate flex items-center gap-1.5">
                         {member.display_name ?? String(member.tg_id)}
+                        {member.overridden.length > 0 ? (
+                          <span
+                            className="perm-override-dot"
+                            aria-label="Змінені права"
+                            title="Змінені права"
+                          />
+                        ) : null}
                       </p>
                       <p className="text-xs text-text-soft">
                         {isOwner ? "повний доступ" : member.role_name}
@@ -580,12 +682,81 @@ export function TeamSection() {
                               type="radio"
                               name={`member-role-${member.id}`}
                               checked={member.role_id === role.id}
-                              onChange={() => void handleMemberRoleChange(member.id, role.id)}
+                              onChange={() => handleRoleRadioChange(member, role.id)}
                             />
                             {role.name}
                           </label>
                         ))}
                       </div>
+
+                      {pendingRoleChange?.memberId === member.id ? (
+                        <div className="flex flex-col gap-2 rounded-xl bg-[var(--bg)] p-2">
+                          <p className="text-xs text-text-soft">
+                            Індивідуальні права буде скинуто
+                          </p>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setPendingRoleChange(null)}
+                            >
+                              Скасувати
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-danger"
+                              onClick={() => void confirmPendingRoleChange()}
+                            >
+                              Так, змінити
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
+
+                      <div className="flex items-center justify-between mt-1">
+                        <p className="text-xs text-text-soft">Права</p>
+                        {member.overridden.length > 0 ? (
+                          <button
+                            type="button"
+                            className="link-button"
+                            onClick={() => void handleResetAllOverrides(member.id)}
+                          >
+                            Скинути до ролі
+                          </button>
+                        ) : null}
+                      </div>
+                      {PERMISSION_FIELDS.map((field) => {
+                        const isOverridden = member.overridden.includes(field.key);
+                        return (
+                          <label
+                            key={field.key}
+                            className="flex items-center gap-2 text-sm text-text"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={member[field.key]}
+                              onChange={(e) =>
+                                void handleMemberPermToggle(
+                                  member.id,
+                                  field.key,
+                                  e.target.checked,
+                                )
+                              }
+                            />
+                            {field.label}
+                            {isOverridden ? (
+                              <button
+                                type="button"
+                                className="perm-override-dot"
+                                aria-label={`Скинути "${field.label}" до ролі`}
+                                title="Змінено вручну — натисни, щоб скинути до ролі"
+                                onClick={() =>
+                                  void handleMemberPermToggle(member.id, field.key, null)
+                                }
+                              />
+                            ) : null}
+                          </label>
+                        );
+                      })}
                     </div>
                   ) : null}
                 </li>

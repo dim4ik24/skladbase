@@ -2332,6 +2332,24 @@ body {
   cursor: not-allowed;
 }
 
+/* ── Індивідуальні override прав (фіча 3c) — крапка "змінено вручну" ──── */
+.perm-override-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--state-low);
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  cursor: pointer;
+}
+
+/* На <span> (позначка в списку команди, не клікабельна) — прибираємо cursor. */
+span.perm-override-dot {
+  cursor: default;
+}
+
 /* ── Modal edit tabs (Варіанти / Інфо / Фото) ───────────────────────── */
 .modal-tabs {
   display: flex;

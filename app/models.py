@@ -226,16 +226,19 @@ class Membership(Base):
     role_id: Mapped[int] = mapped_column(ForeignKey("roles.id"), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
-    # Дозволи (Стадія 1) — ДЕПРЕКЕЙТ (фіча 3b): читання прав перейшло на
-    # role_ref (Role), ці 6 колонок більше НІКИМ не читаються. Лишені в
-    # схемі для безпечного відкату міграції custom-roles; дроп — окремою
-    # міграцією пізніше.
-    can_view_inventory: Mapped[bool] = mapped_column(Boolean, default=True)
-    can_edit_products: Mapped[bool] = mapped_column(Boolean, default=True)
-    can_manage_reservations: Mapped[bool] = mapped_column(Boolean, default=True)
-    can_manage_stock: Mapped[bool] = mapped_column(Boolean, default=True)
-    can_view_finance: Mapped[bool] = mapped_column(Boolean, default=True)
-    can_manage_billing: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Індивідуальні override поверх ролі (фіча 3c): NULL = "як у role_ref",
+    # True/False = явний виняток для ЦІЄЇ людини. Раніше (фіча 3b) ці 6
+    # колонок були "деприкейт, ніким не читались" з дефолтом True — тепер
+    # знову активні, але з ІНШОЮ семантикою (override, не джерело правди).
+    # default=None навмисно (не True!): без нього SQLAlchemy проставляв би
+    # True на кожен новий Membership і override був би невиразним від "OFF".
+    # effective_permission() у app/deps.py — єдине місце, де це читається.
+    can_view_inventory: Mapped[bool | None] = mapped_column(Boolean, default=None)
+    can_edit_products: Mapped[bool | None] = mapped_column(Boolean, default=None)
+    can_manage_reservations: Mapped[bool | None] = mapped_column(Boolean, default=None)
+    can_manage_stock: Mapped[bool | None] = mapped_column(Boolean, default=None)
+    can_view_finance: Mapped[bool | None] = mapped_column(Boolean, default=None)
+    can_manage_billing: Mapped[bool | None] = mapped_column(Boolean, default=None)
 
     shop: Mapped["Shop"] = relationship(back_populates="members")
     role_ref: Mapped["Role"] = relationship()

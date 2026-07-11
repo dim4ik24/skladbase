@@ -10,6 +10,7 @@ from __future__ import annotations
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import func, select
+from sqlalchemy.orm import selectinload
 
 from app import db
 from app.models import MemberRole, Membership, Role
@@ -124,14 +125,18 @@ async def test_existing_owner_joins_another_shop_via_invite(client: AsyncClient)
 
     async with db.async_session() as s:
         new_membership = await s.scalar(
-            select(Membership).where(
-                Membership.tg_id == 5020, Membership.shop_id == owner_b_me["shop_id"]
-            )
+            select(Membership)
+            .options(selectinload(Membership.role_ref))
+            .where(Membership.tg_id == 5020, Membership.shop_id == owner_b_me["shop_id"])
         )
     assert new_membership is not None
     assert new_membership.role == MemberRole.manager
+    # Фіча 3c: ці 6 колонок на Membership тепер override (NULL за замовчуванням
+    # для щойно створеного членства, не True) — ефективні права йдуть через
+    # роль "Менеджер" (role_ref), яка всі 6 дозволяє.
     for perm in _ALL_PERMS:
-        assert getattr(new_membership, perm) is True
+        assert getattr(new_membership, perm) is None
+        assert getattr(new_membership.role_ref, perm) is True
 
     # Власний магазин лишається — це ДОДАТКОВЕ членство, не заміна.
     async with db.async_session() as s:

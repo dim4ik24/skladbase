@@ -60,6 +60,7 @@ vi.mock("../api", () => ({
   patchRole: vi.fn(),
   deleteRole: vi.fn(),
   setMemberRole: vi.fn(),
+  patchMemberPermissions: vi.fn(),
   setActiveShopId: vi.fn(),
   getNpStatus: vi.fn(),
   putNpKey: vi.fn(),
@@ -245,6 +246,7 @@ beforeEach(() => {
   vi.mocked(api.patchRole).mockReset();
   vi.mocked(api.deleteRole).mockReset();
   vi.mocked(api.setMemberRole).mockReset();
+  vi.mocked(api.patchMemberPermissions).mockReset();
   vi.mocked(api.setActiveShopId).mockReset();
   vi.mocked(api.getNpStatus).mockReset().mockResolvedValue({ connected: false });
   vi.mocked(api.putNpKey).mockReset();
@@ -1915,12 +1917,14 @@ describe("Team section (Settings, owner-only)", () => {
         role_id: 10, role_name: "Власник",
         can_view_inventory: true, can_edit_products: true, can_manage_reservations: true,
         can_manage_stock: true, can_view_finance: true, can_manage_billing: true,
+        overridden: [],
       },
       {
         id: 2, tg_id: 1002, display_name: "Менеджер Іван", role: "manager",
         role_id: 20, role_name: "Менеджер",
         can_view_inventory: true, can_edit_products: true, can_manage_reservations: true,
         can_manage_stock: true, can_view_finance: true, can_manage_billing: true,
+        overridden: [],
       },
     ]);
     vi.mocked(api.removeMember).mockResolvedValue(undefined);
@@ -1949,6 +1953,7 @@ describe("Team section (Settings, owner-only)", () => {
         role_id: 10, role_name: "Власник",
         can_view_inventory: true, can_edit_products: true, can_manage_reservations: true,
         can_manage_stock: true, can_view_finance: true, can_manage_billing: true,
+        overridden: [],
       },
     ]);
 
@@ -1971,6 +1976,7 @@ describe("Team section (Settings, owner-only)", () => {
         role_id: 10, role_name: "Власник",
         can_view_inventory: true, can_edit_products: true, can_manage_reservations: true,
         can_manage_stock: true, can_view_finance: true, can_manage_billing: true,
+        overridden: [],
       },
     ]);
 
@@ -1989,6 +1995,7 @@ describe("Team section (Settings, owner-only)", () => {
         role_id: 10, role_name: "Власник",
         can_view_inventory: true, can_edit_products: true, can_manage_reservations: true,
         can_manage_stock: true, can_view_finance: true, can_manage_billing: true,
+        overridden: [],
       },
     ]);
     vi.mocked(api.getRoles).mockResolvedValue([ownerRoleFixture, managerRoleFixture]);
@@ -2015,6 +2022,7 @@ describe("Team section (Settings, owner-only)", () => {
         role_id: 20, role_name: "Менеджер",
         can_view_inventory: true, can_edit_products: true, can_manage_reservations: true,
         can_manage_stock: true, can_view_finance: true, can_manage_billing: true,
+        overridden: [],
       },
     ]);
     vi.mocked(api.getRoles).mockResolvedValue([ownerRoleFixture, managerRoleFixture, noFinanceRole]);
@@ -2023,6 +2031,7 @@ describe("Team section (Settings, owner-only)", () => {
       role_id: 30, role_name: "Без фінансів",
       can_view_inventory: true, can_edit_products: true, can_manage_reservations: true,
       can_manage_stock: true, can_view_finance: false, can_manage_billing: true,
+      overridden: [],
     });
 
     render(<App />);
@@ -2055,6 +2064,7 @@ describe("Team section (Settings, owner-only)", () => {
         role_id: 20, role_name: "Менеджер",
         can_view_inventory: true, can_edit_products: true, can_manage_reservations: true,
         can_manage_stock: true, can_view_finance: true, can_manage_billing: true,
+        overridden: [],
       },
     ]);
     vi.mocked(api.getRoles).mockResolvedValue([ownerRoleFixture, managerRoleFixture, noFinanceRole]);
@@ -2072,6 +2082,247 @@ describe("Team section (Settings, owner-only)", () => {
       expect(targetRoleRadio.checked).toBe(false);
     });
     expect(await screen.findByText("боляче")).toBeInTheDocument();
+  });
+
+  it("shows an override marker next to the member's name in the collapsed list", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.getRoles).mockResolvedValue([ownerRoleFixture, managerRoleFixture]);
+    vi.mocked(api.listMembers).mockResolvedValue([
+      {
+        id: 2, tg_id: 1002, display_name: "Менеджер Іван", role: "manager",
+        role_id: 20, role_name: "Менеджер",
+        can_view_inventory: true, can_edit_products: true, can_manage_reservations: true,
+        can_manage_stock: true, can_view_finance: false, can_manage_billing: true,
+        overridden: ["can_view_finance"],
+      },
+      {
+        id: 3, tg_id: 1003, display_name: "Менеджер Петро", role: "manager",
+        role_id: 20, role_name: "Менеджер",
+        can_view_inventory: true, can_edit_products: true, can_manage_reservations: true,
+        can_manage_stock: true, can_view_finance: true, can_manage_billing: true,
+        overridden: [],
+      },
+    ]);
+
+    render(<App />);
+    await goToSettings();
+
+    const ivanRow = (await screen.findByText("Менеджер Іван")).closest("li") as HTMLElement;
+    const petroRow = (await screen.findByText("Менеджер Петро")).closest("li") as HTMLElement;
+    expect(within(ivanRow).getByLabelText("Змінені права")).toBeInTheDocument();
+    expect(within(petroRow).queryByLabelText("Змінені права")).not.toBeInTheDocument();
+  });
+
+  it("highlights an overridden permission checkbox and lets others be toggled normally", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.getRoles).mockResolvedValue([ownerRoleFixture, managerRoleFixture]);
+    vi.mocked(api.listMembers).mockResolvedValue([
+      {
+        id: 2, tg_id: 1002, display_name: "Менеджер Іван", role: "manager",
+        role_id: 20, role_name: "Менеджер",
+        can_view_inventory: true, can_edit_products: true, can_manage_reservations: true,
+        can_manage_stock: true, can_view_finance: false, can_manage_billing: true,
+        overridden: ["can_view_finance"],
+      },
+    ]);
+    vi.mocked(api.patchMemberPermissions).mockResolvedValue({
+      id: 2, tg_id: 1002, display_name: "Менеджер Іван", role: "manager",
+      role_id: 20, role_name: "Менеджер",
+      can_view_inventory: true, can_edit_products: true, can_manage_reservations: true,
+      can_manage_stock: true, can_view_finance: false, can_manage_billing: false,
+      overridden: ["can_view_finance", "can_manage_billing"],
+    });
+
+    render(<App />);
+    await goToSettings();
+    fireEvent.click(await screen.findByText("Менеджер Іван"));
+
+    const financeCheckbox = screen.getByLabelText("Фінанси") as HTMLInputElement;
+    expect(financeCheckbox.checked).toBe(false); // override, не роль (роль дозволяє)
+    expect(screen.getByLabelText('Скинути "Фінанси" до ролі')).toBeInTheDocument();
+    // Неторкнуте поле — без крапки override.
+    expect(screen.queryByLabelText('Скинути "Оплата й тариф" до ролі')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText("Оплата й тариф"));
+
+    await waitFor(() => {
+      expect(api.patchMemberPermissions).toHaveBeenCalledWith(2, { can_manage_billing: false });
+    });
+  });
+
+  it("clicking the override dot resets that field to the role's value (PATCH null)", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.getRoles).mockResolvedValue([ownerRoleFixture, managerRoleFixture]);
+    vi.mocked(api.listMembers).mockResolvedValue([
+      {
+        id: 2, tg_id: 1002, display_name: "Менеджер Іван", role: "manager",
+        role_id: 20, role_name: "Менеджер",
+        can_view_inventory: true, can_edit_products: true, can_manage_reservations: true,
+        can_manage_stock: true, can_view_finance: false, can_manage_billing: true,
+        overridden: ["can_view_finance"],
+      },
+    ]);
+    vi.mocked(api.patchMemberPermissions).mockResolvedValue({
+      id: 2, tg_id: 1002, display_name: "Менеджер Іван", role: "manager",
+      role_id: 20, role_name: "Менеджер",
+      can_view_inventory: true, can_edit_products: true, can_manage_reservations: true,
+      can_manage_stock: true, can_view_finance: true, can_manage_billing: true,
+      overridden: [],
+    });
+
+    render(<App />);
+    await goToSettings();
+    fireEvent.click(await screen.findByText("Менеджер Іван"));
+
+    fireEvent.click(screen.getByLabelText('Скинути "Фінанси" до ролі'));
+
+    await waitFor(() => {
+      expect(api.patchMemberPermissions).toHaveBeenCalledWith(2, { can_view_finance: null });
+    });
+    expect(await screen.findByLabelText("Фінанси")).toBeChecked();
+    expect(screen.queryByLabelText('Скинути "Фінанси" до ролі')).not.toBeInTheDocument();
+  });
+
+  it("'Скинути до ролі' is visible only with overrides and resets all fields to null", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.getRoles).mockResolvedValue([ownerRoleFixture, managerRoleFixture]);
+    vi.mocked(api.listMembers).mockResolvedValue([
+      {
+        id: 2, tg_id: 1002, display_name: "Менеджер Іван", role: "manager",
+        role_id: 20, role_name: "Менеджер",
+        can_view_inventory: true, can_edit_products: true, can_manage_reservations: true,
+        can_manage_stock: true, can_view_finance: false, can_manage_billing: false,
+        overridden: ["can_view_finance", "can_manage_billing"],
+      },
+    ]);
+    vi.mocked(api.patchMemberPermissions).mockResolvedValue({
+      id: 2, tg_id: 1002, display_name: "Менеджер Іван", role: "manager",
+      role_id: 20, role_name: "Менеджер",
+      can_view_inventory: true, can_edit_products: true, can_manage_reservations: true,
+      can_manage_stock: true, can_view_finance: true, can_manage_billing: true,
+      overridden: [],
+    });
+
+    render(<App />);
+    await goToSettings();
+    fireEvent.click(await screen.findByText("Менеджер Іван"));
+
+    const resetButton = screen.getByRole("button", { name: "Скинути до ролі" });
+    fireEvent.click(resetButton);
+
+    await waitFor(() => {
+      expect(api.patchMemberPermissions).toHaveBeenCalledWith(2, {
+        can_view_inventory: null,
+        can_edit_products: null,
+        can_manage_reservations: null,
+        can_manage_stock: null,
+        can_view_finance: null,
+        can_manage_billing: null,
+      });
+    });
+    expect(
+      await screen.findByRole("checkbox", { name: "Фінанси" }),
+    ).toBeChecked();
+    expect(screen.queryByRole("button", { name: "Скинути до ролі" })).not.toBeInTheDocument();
+  });
+
+  it("does not show 'Скинути до ролі' when the member has no overrides", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.getRoles).mockResolvedValue([ownerRoleFixture, managerRoleFixture]);
+    vi.mocked(api.listMembers).mockResolvedValue([
+      {
+        id: 2, tg_id: 1002, display_name: "Менеджер Іван", role: "manager",
+        role_id: 20, role_name: "Менеджер",
+        can_view_inventory: true, can_edit_products: true, can_manage_reservations: true,
+        can_manage_stock: true, can_view_finance: true, can_manage_billing: true,
+        overridden: [],
+      },
+    ]);
+
+    render(<App />);
+    await goToSettings();
+    fireEvent.click(await screen.findByText("Менеджер Іван"));
+
+    expect(screen.queryByRole("button", { name: "Скинути до ролі" })).not.toBeInTheDocument();
+  });
+
+  it("asks for confirmation before changing role when the member has overrides", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    const noFinanceRole: Role = {
+      id: 30, name: "Без фінансів", is_system: false, members_count: 0,
+      can_view_inventory: true, can_edit_products: true, can_manage_reservations: true,
+      can_manage_stock: true, can_view_finance: false, can_manage_billing: true,
+    };
+    vi.mocked(api.getRoles).mockResolvedValue([ownerRoleFixture, managerRoleFixture, noFinanceRole]);
+    vi.mocked(api.listMembers).mockResolvedValue([
+      {
+        id: 2, tg_id: 1002, display_name: "Менеджер Іван", role: "manager",
+        role_id: 20, role_name: "Менеджер",
+        can_view_inventory: true, can_edit_products: true, can_manage_reservations: true,
+        can_manage_stock: true, can_view_finance: false, can_manage_billing: true,
+        overridden: ["can_view_finance"],
+      },
+    ]);
+    vi.mocked(api.setMemberRole).mockResolvedValue({
+      id: 2, tg_id: 1002, display_name: "Менеджер Іван", role: "manager",
+      role_id: 30, role_name: "Без фінансів",
+      can_view_inventory: true, can_edit_products: true, can_manage_reservations: true,
+      can_manage_stock: true, can_view_finance: false, can_manage_billing: true,
+      overridden: [],
+    });
+
+    render(<App />);
+    await goToSettings();
+    fireEvent.click(await screen.findByText("Менеджер Іван"));
+
+    fireEvent.click(screen.getByLabelText("Без фінансів"));
+
+    expect(screen.getByText("Індивідуальні права буде скинуто")).toBeInTheDocument();
+    expect(api.setMemberRole).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Так, змінити" }));
+
+    await waitFor(() => {
+      expect(api.setMemberRole).toHaveBeenCalledWith(2, 30);
+    });
+  });
+
+  it("cancelling the role-change confirmation does not call the API", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    const noFinanceRole: Role = {
+      id: 30, name: "Без фінансів", is_system: false, members_count: 0,
+      can_view_inventory: true, can_edit_products: true, can_manage_reservations: true,
+      can_manage_stock: true, can_view_finance: false, can_manage_billing: true,
+    };
+    vi.mocked(api.getRoles).mockResolvedValue([ownerRoleFixture, managerRoleFixture, noFinanceRole]);
+    vi.mocked(api.listMembers).mockResolvedValue([
+      {
+        id: 2, tg_id: 1002, display_name: "Менеджер Іван", role: "manager",
+        role_id: 20, role_name: "Менеджер",
+        can_view_inventory: true, can_edit_products: true, can_manage_reservations: true,
+        can_manage_stock: true, can_view_finance: false, can_manage_billing: true,
+        overridden: ["can_view_finance"],
+      },
+    ]);
+
+    render(<App />);
+    await goToSettings();
+    fireEvent.click(await screen.findByText("Менеджер Іван"));
+
+    fireEvent.click(screen.getByLabelText("Без фінансів"));
+    fireEvent.click(screen.getByRole("button", { name: "Скасувати" }));
+
+    expect(screen.queryByText("Індивідуальні права буде скинуто")).not.toBeInTheDocument();
+    expect(api.setMemberRole).not.toHaveBeenCalled();
+    // Радіо лишається на попередній ролі — зміна не відбулась.
+    expect((screen.getByLabelText("Менеджер") as HTMLInputElement).checked).toBe(true);
   });
 
   it("renders the roles list with member counts and a system badge", async () => {
@@ -2143,7 +2394,10 @@ describe("Team section (Settings, owner-only)", () => {
     expect(await screen.findByText("Роль з такою назвою вже є")).toBeInTheDocument();
   });
 
-  it("does not expand a system role for editing, and shows a self-dismissing hint instead", async () => {
+  it("does not expand the Власник role for editing, and shows a self-dismissing hint instead", async () => {
+    // Розворот рішення (фіча 3c): "Менеджер" — теж is_system, але тепер
+    // редагується як звичайна кастомна роль. Незмінна лишається тільки
+    // "Власник" — саме на ній тепер тост.
     vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.mocked(api.getMe).mockResolvedValue(shopFixture);
     vi.mocked(api.getProducts).mockResolvedValue([]);
@@ -2151,35 +2405,58 @@ describe("Team section (Settings, owner-only)", () => {
 
     render(<App />);
     await goToSettings();
-    fireEvent.click(await screen.findByText("Менеджер"));
+    fireEvent.click(await screen.findByText("Власник"));
 
     expect(screen.queryByLabelText(/Назва ролі/)).not.toBeInTheDocument();
     expect(api.patchRole).not.toHaveBeenCalled();
-    expect(
-      screen.getByText("Системну роль не можна змінювати. Створіть власну роль"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Роль власника завжди має всі права")).toBeInTheDocument();
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(3000);
     });
-    expect(
-      screen.queryByText("Системну роль не можна змінювати. Створіть власну роль"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Роль власника завжди має всі права")).not.toBeInTheDocument();
     vi.useRealTimers();
   });
 
-  it("dismisses the system-role hint immediately when tapped", async () => {
+  it("dismisses the owner-role hint immediately when tapped", async () => {
     vi.mocked(api.getMe).mockResolvedValue(shopFixture);
     vi.mocked(api.getProducts).mockResolvedValue([]);
     vi.mocked(api.getRoles).mockResolvedValue([ownerRoleFixture, managerRoleFixture]);
 
     render(<App />);
     await goToSettings();
-    fireEvent.click(await screen.findByText("Менеджер"));
+    fireEvent.click(await screen.findByText("Власник"));
 
-    const hint = screen.getByText("Системну роль не можна змінювати. Створіть власну роль");
+    const hint = screen.getByText("Роль власника завжди має всі права");
     fireEvent.click(screen.getByRole("button", { name: "Закрити" }));
     expect(hint).not.toBeInTheDocument();
+  });
+
+  it("expands the Менеджер role for editing like a custom role (badge stays, just not locked)", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.getRoles).mockResolvedValue([ownerRoleFixture, managerRoleFixture]);
+    vi.mocked(api.patchRole).mockResolvedValue({ ...managerRoleFixture, can_view_finance: false });
+
+    render(<App />);
+    await goToSettings();
+    const roleRow = (await screen.findByText("Менеджер")).closest("li");
+    expect(roleRow).not.toBeNull();
+
+    fireEvent.click(screen.getByText("Менеджер"));
+
+    expect(within(roleRow as HTMLElement).getByText("системна")).toBeInTheDocument();
+    expect(screen.queryByText("Роль власника завжди має всі права")).not.toBeInTheDocument();
+    const financeCheckbox = within(roleRow as HTMLElement).getByLabelText("Фінанси");
+    fireEvent.click(financeCheckbox);
+
+    await waitFor(() => {
+      expect(api.patchRole).toHaveBeenCalledWith(managerRoleFixture.id, { can_view_finance: false });
+    });
+    // "Менеджер" — все одно системна, тож без кнопки видалення.
+    expect(
+      within(roleRow as HTMLElement).queryByRole("button", { name: "Видалити роль" }),
+    ).not.toBeInTheDocument();
   });
 
   it("edits a custom role's permissions via checkbox PATCH", async () => {

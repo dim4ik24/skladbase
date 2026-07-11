@@ -440,7 +440,173 @@ async def test_editing_role_changes_all_holders_effective_permissions(
 
 
 @pytest.mark.asyncio
-async def test_patch_system_role_returns_403(client: AsyncClient) -> None:
+async def test_editing_role_does_not_touch_overridden_member_fields(
+    client: AsyncClient,
+) -> None:
+    """Фіча 3c, п.4 ТЗ: редагування ролі змінює ефективні права носіїв КРІМ
+    полів з індивідуальним override — той override завжди перемагає, хоч би
+    що сталось з роллю."""
+    owner_init, owner_me = await _bootstrap(client, 3283)
+    await _make_manager(owner_me["shop_id"], 3284)
+    role = await _create_role(client, owner_init, name="Спільна роль 2", can_view_finance=True)
+
+    async with db.async_session() as s:
+        member = await s.scalar(select(Membership).where(Membership.tg_id == 3284))
+
+    r = await client.patch(
+        f"/api/team/members/{member.id}/role",
+        headers={HEADER: owner_init},
+        json={"role_id": role["id"]},
+    )
+    assert r.status_code == 200, r.text
+
+    # Override: ЦІЙ людині фінанси заборонені, попри те що роль дозволяє.
+    r = await client.patch(
+        f"/api/team/members/{member.id}/permissions",
+        headers={HEADER: owner_init},
+        json={"can_view_finance": False},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["can_view_finance"] is False
+    assert "can_view_finance" in r.json()["overridden"]
+
+    # Роль тепер теж забороняє фінанси — override все одно False (не зміна,
+    # бо вже був False), але важливо, що can_edit_products (без override)
+    # МІНЯЄТЬСЯ разом з роллю.
+    r = await client.patch(
+        f"/api/team/roles/{role['id']}",
+        headers={HEADER: owner_init},
+        json={"can_view_finance": False, "can_edit_products": False},
+    )
+    assert r.status_code == 200, r.text
+
+    r = await client.get("/api/team/members", headers={HEADER: owner_init})
+    member_out = next(m for m in r.json() if m["tg_id"] == 3284)
+    assert member_out["can_view_finance"] is False  # override, лишається False
+    assert member_out["can_edit_products"] is False  # не override — пішло за роллю
+    assert member_out["overridden"] == ["can_view_finance"]
+
+    # Тепер роль повертає фінанси і редагування товарів назад у True —
+    # override все одно тримає can_view_finance у False.
+    r = await client.patch(
+        f"/api/team/roles/{role['id']}",
+        headers={HEADER: owner_init},
+        json={"can_view_finance": True, "can_edit_products": True},
+    )
+    assert r.status_code == 200, r.text
+
+    r = await client.get("/api/team/members", headers={HEADER: owner_init})
+    member_out = next(m for m in r.json() if m["tg_id"] == 3284)
+    assert member_out["can_view_finance"] is False  # override все одно перемагає
+    assert member_out["can_edit_products"] is True  # роль повернула True — і це теж
+
+
+@pytest.mark.asyncio
+async def test_patch_member_permissions_sets_override(client: AsyncClient) -> None:
+    owner_init, owner_me = await _bootstrap(client, 3285)
+    manager_init = await _make_manager(owner_me["shop_id"], 3286)
+
+    async with db.async_session() as s:
+        member = await s.scalar(select(Membership).where(Membership.tg_id == 3286))
+
+    r = await client.patch(
+        f"/api/team/members/{member.id}/permissions",
+        headers={HEADER: owner_init},
+        json={"can_view_finance": False},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["can_view_finance"] is False
+    assert body["overridden"] == ["can_view_finance"]
+    # Решта прав лишились роль-дефолтними (True) — override torкнувся лише
+    # цього одного поля.
+    assert body["can_edit_products"] is True
+
+    r = await client.get("/api/finance/summary", headers={HEADER: manager_init})
+    assert r.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_patch_member_permissions_null_resets_to_role(client: AsyncClient) -> None:
+    owner_init, owner_me = await _bootstrap(client, 3287)
+    await _make_manager(owner_me["shop_id"], 3288)
+
+    async with db.async_session() as s:
+        member = await s.scalar(select(Membership).where(Membership.tg_id == 3288))
+
+    r = await client.patch(
+        f"/api/team/members/{member.id}/permissions",
+        headers={HEADER: owner_init},
+        json={"can_view_finance": False},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["overridden"] == ["can_view_finance"]
+
+    r = await client.patch(
+        f"/api/team/members/{member.id}/permissions",
+        headers={HEADER: owner_init},
+        json={"can_view_finance": None},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["can_view_finance"] is True  # роль "Менеджер" дозволяє
+    assert body["overridden"] == []
+
+
+@pytest.mark.asyncio
+async def test_patch_member_permissions_on_owner_returns_409(client: AsyncClient) -> None:
+    owner_init, _owner_me = await _bootstrap(client, 3289)
+
+    r = await client.get("/api/team/members", headers={HEADER: owner_init})
+    owner_membership_id = next(m["id"] for m in r.json() if m["tg_id"] == 3289)
+
+    r = await client.patch(
+        f"/api/team/members/{owner_membership_id}/permissions",
+        headers={HEADER: owner_init},
+        json={"can_view_finance": False},
+    )
+    assert r.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_changing_role_resets_overrides(client: AsyncClient) -> None:
+    owner_init, owner_me = await _bootstrap(client, 3292)
+    manager_init = await _make_manager(owner_me["shop_id"], 3293)
+    role = await _create_role(client, owner_init, name="Нова роль", can_view_finance=True)
+
+    async with db.async_session() as s:
+        member = await s.scalar(select(Membership).where(Membership.tg_id == 3293))
+
+    r = await client.patch(
+        f"/api/team/members/{member.id}/permissions",
+        headers={HEADER: owner_init},
+        json={"can_view_finance": False},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["overridden"] == ["can_view_finance"]
+
+    r = await client.get("/api/finance/summary", headers={HEADER: manager_init})
+    assert r.status_code == 403  # override діє
+
+    r = await client.patch(
+        f"/api/team/members/{member.id}/role",
+        headers={HEADER: owner_init},
+        json={"role_id": role["id"]},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["overridden"] == []  # скинуто одночасно з призначенням ролі
+    assert body["can_view_finance"] is True  # нова роль дозволяє, override зник
+
+    r = await client.get("/api/finance/summary", headers={HEADER: manager_init})
+    assert r.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_patch_manager_system_role_returns_200(client: AsyncClient) -> None:
+    """Розворот рішення (фіча 3c): 'Менеджер' — теж is_system=True, але тепер
+    редагується як звичайна кастомна роль. Незмінна лишається тільки
+    'Власник'."""
     owner_init, _owner_me = await _bootstrap(client, 3290)
 
     r = await client.get("/api/team/roles", headers={HEADER: owner_init})
@@ -450,6 +616,31 @@ async def test_patch_system_role_returns_403(client: AsyncClient) -> None:
         f"/api/team/roles/{manager_role_id}",
         headers={HEADER: owner_init},
         json={"can_view_finance": False},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["is_system"] is True  # лишається системною (бейдж), просто не заблокована
+    assert body["can_view_finance"] is False
+
+
+@pytest.mark.asyncio
+async def test_patch_owner_role_returns_403(client: AsyncClient) -> None:
+    owner_init, _owner_me = await _bootstrap(client, 3291)
+
+    r = await client.get("/api/team/roles", headers={HEADER: owner_init})
+    owner_role_id = next(role["id"] for role in r.json() if role["name"] == "Власник")
+
+    r = await client.patch(
+        f"/api/team/roles/{owner_role_id}",
+        headers={HEADER: owner_init},
+        json={"can_view_finance": False},
+    )
+    assert r.status_code == 403
+
+    r = await client.patch(
+        f"/api/team/roles/{owner_role_id}",
+        headers={HEADER: owner_init},
+        json={"name": "Перейменована"},
     )
     assert r.status_code == 403
 
@@ -538,13 +729,18 @@ async def test_manager_cannot_patch_member_role(client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_delete_system_role_returns_409(client: AsyncClient) -> None:
+    """DELETE лишається забороненим для ОБОХ системних ролей (на відміну
+    від PATCH, де тепер дозволено 'Менеджер' — тільки не 'Власник')."""
     owner_init, _owner_me = await _bootstrap(client, 3300)
 
     r = await client.get("/api/team/roles", headers={HEADER: owner_init})
-    manager_role_id = next(role["id"] for role in r.json() if role["name"] == "Менеджер")
+    roles_by_name = {role["name"]: role["id"] for role in r.json()}
 
-    r = await client.delete(f"/api/team/roles/{manager_role_id}", headers={HEADER: owner_init})
-    assert r.status_code == 409
+    for name in ("Менеджер", "Власник"):
+        r = await client.delete(
+            f"/api/team/roles/{roles_by_name[name]}", headers={HEADER: owner_init}
+        )
+        assert r.status_code == 409, f"{name}: {r.text}"
 
 
 @pytest.mark.asyncio

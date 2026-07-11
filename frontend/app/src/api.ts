@@ -13,6 +13,7 @@ import type {
   FinanceSummary,
   HistoryEvent,
   Invite,
+  MemberPermissionsPatch,
   NotPickedUpPayload,
   NpCity,
   NpKeyStatus,
@@ -365,5 +366,15 @@ export function setMemberRole(membershipId: number, roleId: number): Promise<Tea
   return request<TeamMember>(`/api/team/members/${membershipId}/role`, {
     method: "PATCH",
     body: JSON.stringify({ role_id: roleId }),
+  });
+}
+
+export function patchMemberPermissions(
+  membershipId: number,
+  patch: MemberPermissionsPatch,
+): Promise<TeamMember> {
+  return request<TeamMember>(`/api/team/members/${membershipId}/permissions`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
   });
 }

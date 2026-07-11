@@ -22,7 +22,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app import db
-from app.deps import _check_permission, _check_writable
+from app.deps import _check_permission, _check_writable, effective_permission
 from app.models import MemberRole, Membership, Role
 from tests.conftest import make_init_data
 
@@ -162,3 +162,50 @@ async def test_bootstrap_membership_has_all_perms_true(client: AsyncClient) -> N
             assert getattr(membership.role_ref, perm) is True, (
                 f"{perm} should be True after bootstrap"
             )
+
+
+# --------------------------------------------------------------------------- #
+#  Test 7: effective_permission — роль + nullable override поверх (фіча 3c)
+# --------------------------------------------------------------------------- #
+
+def test_effective_permission_override_false_beats_role_true() -> None:
+    m = _make_membership(MemberRole.manager, can_view_finance=True)
+    m.can_view_finance = False  # явний override, перемагає роль
+    assert effective_permission(m, "can_view_finance") is False
+
+
+def test_effective_permission_override_true_beats_role_false() -> None:
+    m = _make_membership(MemberRole.manager, can_view_finance=False)
+    m.can_view_finance = True
+    assert effective_permission(m, "can_view_finance") is True
+
+
+def test_effective_permission_null_override_falls_back_to_role() -> None:
+    m = _make_membership(MemberRole.manager, can_view_finance=True)
+    m.can_view_finance = None  # немає override — "як у ролі"
+    assert effective_permission(m, "can_view_finance") is True
+
+    m2 = _make_membership(MemberRole.manager, can_view_finance=False)
+    m2.can_view_finance = None
+    assert effective_permission(m2, "can_view_finance") is False
+
+
+def test_effective_permission_unset_override_defaults_to_role() -> None:
+    """_make_membership не чіпає can_*-поля Membership взагалі (лишень
+    role_ref) — так само, як щойно завантажений з БД рядок без override."""
+    m = _make_membership(MemberRole.manager, can_view_finance=True)
+    assert effective_permission(m, "can_view_finance") is True
+
+
+def test_check_permission_respects_override_over_role() -> None:
+    """_check_permission (403-гейт) читає через effective_permission, не
+    напряму role_ref — override має так само перемагати роль тут."""
+    m = _make_membership(MemberRole.manager, can_view_finance=True)
+    m.can_view_finance = False
+    with pytest.raises(HTTPException) as exc_info:
+        _check_permission(m, "can_view_finance")
+    assert exc_info.value.status_code == 403
+
+    m2 = _make_membership(MemberRole.manager, can_view_finance=False)
+    m2.can_view_finance = True
+    _check_permission(m2, "can_view_finance")  # override=True — must not raise
