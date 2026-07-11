@@ -9,6 +9,7 @@ import { ScrollFloat } from "../components/ScrollFloat";
 import { Panel } from "../components/ui/Panel";
 import { RELEASE_REASON_LABELS, RETURN_REASON_LABELS, reasonLabel } from "../lib/financeReasons";
 import { lazyWithRetry } from "../lib/lazyWithRetry";
+import { resolveProductPhoto } from "../lib/productPhoto";
 import type {
   CreateTtnPayload,
   CreateTtnResult,
@@ -61,6 +62,8 @@ interface DashboardScreenProps {
   onNavigateToSettings: () => void;
   onNavigateToSklad: () => void;
   scrollContainerRef: RefObject<HTMLDivElement | null>;
+  products: Product[];
+  onOpenProduct: (productId: number) => void;
 }
 
 export function DashboardScreen({
@@ -82,6 +85,8 @@ export function DashboardScreen({
   onNavigateToSettings,
   onNavigateToSklad,
   scrollContainerRef,
+  products,
+  onOpenProduct,
 }: DashboardScreenProps) {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyDate, setHistoryDate] = useState<string | undefined>(undefined);
@@ -217,14 +222,33 @@ export function DashboardScreen({
           <h2 className="section-title mb-2">Топ товарів</h2>
           <div className="finance-top-products">
             <ul>
-              {finance.top_products.map((product) => (
-                <li key={product.product_id} className="finance-top-product-row">
-                  <span className="finance-top-product-name">{product.name}</span>
-                  <span className="finance-top-product-value">
-                    {formatUah(product.revenue_uah)} · {product.units} шт.
-                  </span>
-                </li>
-              ))}
+              {finance.top_products.map((topProduct) => {
+                const product = products.find((p) => p.id === topProduct.product_id);
+                const { photoUrl, letter } = resolveProductPhoto(product, topProduct.name);
+                return (
+                  <li
+                    key={topProduct.product_id}
+                    role={product ? "button" : undefined}
+                    tabIndex={product ? 0 : undefined}
+                    onClick={product ? () => onOpenProduct(topProduct.product_id) : undefined}
+                    className={`finance-top-product-row${
+                      product ? " finance-top-product-row--clickable" : ""
+                    }`}
+                  >
+                    {photoUrl ? (
+                      <img src={photoUrl} alt="" className="finance-top-product-photo" />
+                    ) : (
+                      <span className="finance-top-product-photo finance-top-product-photo--neutral">
+                        {letter}
+                      </span>
+                    )}
+                    <span className="finance-top-product-name">{topProduct.name}</span>
+                    <span className="finance-top-product-value">
+                      {formatUah(topProduct.revenue_uah)} · {topProduct.units} шт.
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           </div>
         </div>
@@ -235,6 +259,7 @@ export function DashboardScreen({
           <HistorySheet
             period={financePeriod}
             date={historyDate}
+            products={products}
             onClose={() => setHistoryOpen(false)}
           />
         </Suspense>

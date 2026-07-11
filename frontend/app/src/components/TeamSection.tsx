@@ -446,9 +446,10 @@ export function TeamSection() {
                     {field.label}
                   </label>
                 ))}
-                <div className="flex gap-2 mt-1">
+                <div className="role-form-actions">
                   <button
                     type="button"
+                    className="role-form-cancel-btn"
                     onClick={() => {
                       setShowCreateRole(false);
                       setRoleFormError(null);
@@ -457,7 +458,11 @@ export function TeamSection() {
                   >
                     Скасувати
                   </button>
-                  <button type="submit" disabled={creatingRole || !newRoleName.trim()}>
+                  <button
+                    type="submit"
+                    className="sheet-reserve-btn"
+                    disabled={creatingRole || !newRoleName.trim()}
+                  >
                     {creatingRole ? "Створюємо…" : "Створити"}
                   </button>
                 </div>

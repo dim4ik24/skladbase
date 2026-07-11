@@ -2919,6 +2919,36 @@ describe("Finance summary (Dashboard)", () => {
     expect(screen.getByText(/900.00 ₴/)).toBeInTheDocument();
   });
 
+  it("History sheet shows a colored event-type badge and resolves the product photo/chip", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([
+      makeProduct({
+        id: 1,
+        name: "Футболка",
+        photos: [{ id: 1, url: "https://cdn.example.test/tshirt.webp", position: 0 }],
+      }),
+    ]);
+    vi.mocked(api.getFinanceHistory).mockResolvedValue([
+      makeHistoryEvent({ id: 1, type: "sale", product_name: "Футболка" }),
+      makeHistoryEvent({ id: 2, type: "return", product_name: "Футболка" }),
+      makeHistoryEvent({ id: 3, type: "release", product_name: "Невідомий товар" }),
+    ]);
+
+    render(<App />);
+    await screen.findByText("Фінанси");
+    fireEvent.click(screen.getByRole("button", { name: "Історія" }));
+
+    expect(await screen.findByText("Продано")).toHaveClass("badge-event-sale");
+    expect(screen.getByText("Повернено")).toHaveClass("badge-event-return");
+    expect(screen.getByText("Знято")).toHaveClass("badge-event-release");
+
+    // HistorySheet рендериться через createPortal у document.body — RTL's
+    // container його не бачить, шукаємо напряму по document.
+    const photoImg = document.querySelector<HTMLImageElement>("img.history-row-photo");
+    expect(photoImg?.src).toBe("https://cdn.example.test/tshirt.webp");
+    expect(screen.getByText("Н")).toHaveClass("history-row-photo--neutral");
+  });
+
   it("History sheet shows 'Немає подій' when there are none", async () => {
     vi.mocked(api.getMe).mockResolvedValue(shopFixture);
     vi.mocked(api.getProducts).mockResolvedValue([]);
@@ -3063,6 +3093,33 @@ describe("Finance summary (Dashboard)", () => {
     expect(topProductsCard).not.toBeNull();
     expect(topProductsCard).not.toBe(financeCard);
     expect(financeCard?.contains(topProductsHeading)).toBe(false);
+  });
+
+  it("opens ProductModal when clicking a top product row; a deleted product's row is not clickable", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([makeProduct({ id: 1, name: "Кепка" })]);
+    vi.mocked(api.getFinanceSummary).mockResolvedValue(
+      makeFinance({
+        top_products: [
+          { product_id: 1, name: "Кепка", revenue_uah: "500.00", units: 1 },
+          { product_id: 99, name: "Видалений товар", revenue_uah: "10.00", units: 1 },
+        ],
+      }),
+    );
+
+    render(<App />);
+    await screen.findByText("Топ товарів");
+
+    const deletedRow = screen.getByText("Видалений товар").closest("li");
+    expect(deletedRow).not.toHaveAttribute("role", "button");
+    fireEvent.click(screen.getByText("Видалений товар"));
+    expect(screen.queryByRole("dialog", { name: "Редагувати товар" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Кепка"));
+
+    expect(await screen.findByRole("dialog", { name: "Редагувати товар" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Інфо" }));
+    expect(screen.getByLabelText("Назва")).toHaveValue("Кепка");
   });
 });
 

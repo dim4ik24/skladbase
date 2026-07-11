@@ -3,13 +3,21 @@ import { createPortal } from "react-dom";
 import * as api from "../api";
 import { errorMessage } from "../errors";
 import { RELEASE_REASON_LABELS, RETURN_REASON_LABELS, reasonLabel } from "../lib/financeReasons";
-import type { FinancePeriod, HistoryEvent } from "../types";
+import { resolveProductPhoto } from "../lib/productPhoto";
+import type { FinancePeriod, HistoryEvent, Product } from "../types";
 
 interface HistorySheetProps {
   period: FinancePeriod;
   date?: string;
+  products: Product[];
   onClose: () => void;
 }
+
+const EVENT_BADGE: Record<HistoryEvent["type"], { label: string; className: string }> = {
+  sale: { label: "Продано", className: "badge-event-sale" },
+  return: { label: "Повернено", className: "badge-event-return" },
+  release: { label: "Знято", className: "badge-event-release" },
+};
 
 function formatEventDate(iso: string): string {
   const d = new Date(iso);
@@ -20,19 +28,13 @@ function formatEventDate(iso: string): string {
   return `${dd}.${mm} ${hh}:${min}`;
 }
 
-function eventIcon(type: HistoryEvent["type"]): string {
-  if (type === "sale") return "💰";
-  if (type === "return") return "↩️";
-  return "✖";
-}
-
 function eventReasonLabel(event: HistoryEvent): string | null {
   if (!event.reason) return null;
   const map = event.type === "return" ? RETURN_REASON_LABELS : RELEASE_REASON_LABELS;
   return reasonLabel(map, event.reason);
 }
 
-export function HistorySheet({ period, date, onClose }: HistorySheetProps) {
+export function HistorySheet({ period, date, products, onClose }: HistorySheetProps) {
   const [isClosing, setIsClosing] = useState(false);
   const [dayFilter, setDayFilter] = useState(date);
   const [events, setEvents] = useState<HistoryEvent[] | null>(null);
@@ -104,16 +106,25 @@ export function HistorySheet({ period, date, onClose }: HistorySheetProps) {
                 event.customer,
               ].filter((part): part is string => Boolean(part));
 
+              const product = products.find((p) => p.name === event.product_name);
+              const { photoUrl, letter } = resolveProductPhoto(product, event.product_name);
+              const badge = EVENT_BADGE[event.type];
+
               return (
                 <li key={event.id} className="history-row">
-                  <span className="history-row-icon" aria-hidden="true">
-                    {eventIcon(event.type)}
-                  </span>
+                  {photoUrl ? (
+                    <img src={photoUrl} alt="" className="history-row-photo" />
+                  ) : (
+                    <span className="history-row-photo history-row-photo--neutral">{letter}</span>
+                  )}
                   <div className="history-row-center">
-                    <span className="history-row-title">
-                      {event.product_name}
-                      {event.variant_label ? ` · ${event.variant_label}` : ""} · {event.qty} шт
-                    </span>
+                    <div className="history-row-top">
+                      <span className="history-row-title">
+                        {event.product_name}
+                        {event.variant_label ? ` · ${event.variant_label}` : ""} · {event.qty} шт
+                      </span>
+                      <span className={`badge ${badge.className}`}>{badge.label}</span>
+                    </div>
                     {metaParts.length > 0 ? (
                       <span className="history-row-meta">{metaParts.join(" · ")}</span>
                     ) : null}

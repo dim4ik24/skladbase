@@ -114,6 +114,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [clearingDemos, setClearingDemos] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>("dashboard");
+  const [openProductId, setOpenProductId] = useState<number | null>(null);
   const [showPaywall, setShowPaywall] = useState(false);
   const [upgradePrompt, setUpgradePrompt] = useState<{ message: string } | null>(null);
   const [inviteBanner, setInviteBanner] = useState<{ status: string; shopName: string } | null>(
@@ -133,6 +134,11 @@ export default function App() {
     } catch (err) {
       console.error("[App] finance fetch failed:", err);
     }
+  }
+
+  function handleOpenProduct(productId: number) {
+    setActiveTab("sklad");
+    setOpenProductId(productId);
   }
 
   async function handleFinancePeriodChange(period: FinancePeriod) {
@@ -730,6 +736,8 @@ export default function App() {
               onPatchVariant={handlePatchVariant}
               onAddVariant={handleAddVariant}
               onDeleteVariant={handleDeleteVariant}
+              openProductId={openProductId}
+              onProductOpened={() => setOpenProductId(null)}
             />
           ) : activeTab === "dashboard" ? (
             <DashboardScreen
@@ -751,6 +759,8 @@ export default function App() {
               onNavigateToSettings={() => setActiveTab("settings")}
               onNavigateToSklad={() => setActiveTab("sklad")}
               scrollContainerRef={scrollContainerRef}
+              products={products}
+              onOpenProduct={handleOpenProduct}
             />
           ) : (
             <SettingsScreen

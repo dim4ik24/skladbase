@@ -1,6 +1,6 @@
 import gsap from "gsap";
 import { Flip } from "gsap/Flip";
-import { Suspense, useLayoutEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { LazyOverlayFallback } from "../components/LazyFallback";
 import { ProductCard } from "../components/ProductCard";
@@ -74,6 +74,8 @@ interface SkladScreenProps {
   onPatchVariant: (variantId: number, patch: import("../types").VariantPatchPayload) => Promise<void>;
   onAddVariant: (productId: number, payload: import("../types").VariantAddPayload) => Promise<import("../types").Variant>;
   onDeleteVariant: (variantId: number) => Promise<void>;
+  openProductId?: number | null;
+  onProductOpened?: () => void;
 }
 
 export function SkladScreen({
@@ -111,6 +113,8 @@ export function SkladScreen({
   onPatchVariant,
   onAddVariant,
   onDeleteVariant,
+  openProductId,
+  onProductOpened,
 }: SkladScreenProps) {
   const [query, setQuery] = useState("");
   const [sortField, setSortField] = useState<SortField>("date");
@@ -119,6 +123,16 @@ export function SkladScreen({
 
   // null = modal closed; "create" = create mode; Product = edit mode
   const [modalProduct, setModalProduct] = useState<Product | "create" | null>(null);
+
+  // Дашборд відкриває товар через onOpenProduct (App перемикає таб і кладе
+  // сюди id); products тут — джерело правди, тож видалений товар просто
+  // не знайдеться і модалка не відкриється.
+  useEffect(() => {
+    if (openProductId == null) return;
+    const product = products.find((p) => p.id === openProductId);
+    if (product) setModalProduct(product);
+    onProductOpened?.();
+  }, [openProductId, products, onProductOpened]);
 
   const wrapperRef = useRef<HTMLDivElement>(null);
   const flipStateRef = useRef<ReturnType<typeof Flip.getState> | null>(null);

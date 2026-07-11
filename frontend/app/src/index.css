@@ -871,6 +871,25 @@ body {
   color: var(--text-soft);
 }
 
+/* ── Історія — бейдж типу події ────────────────────────────────────────── */
+.badge-event-sale {
+  flex-shrink: 0;
+  background: var(--green);
+  color: #fff;
+}
+
+.badge-event-return {
+  flex-shrink: 0;
+  background: var(--state-low);
+  color: #c0392b;
+}
+
+.badge-event-release {
+  flex-shrink: 0;
+  background: var(--surface);
+  color: var(--text-soft);
+}
+
 .variant-stock-trio {
   display: flex;
   align-items: center;
@@ -1778,6 +1797,10 @@ body {
   gap: 4px;
 }
 
+.finance-top-products ul {
+  gap: 0;
+}
+
 .finance-reason-block li {
   font-size: 13px;
   color: var(--text-soft);
@@ -1786,12 +1809,40 @@ body {
 .finance-top-product-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
+  padding: 8px 0;
   font-size: 13px;
 }
 
+.finance-top-product-row:not(:last-child) {
+  border-bottom: 1px solid var(--line);
+}
+
+.finance-top-product-row--clickable {
+  cursor: pointer;
+}
+
+.finance-top-product-photo {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  object-fit: cover;
+}
+
+.finance-top-product-photo--neutral {
+  background: var(--pastel-lavender);
+}
+
 .finance-top-product-name {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1831,9 +1882,22 @@ body {
   background: var(--bg);
 }
 
-.history-row-icon {
-  font-size: 16px;
+.history-row-photo {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  object-fit: cover;
+}
+
+.history-row-photo--neutral {
+  background: var(--pastel-lavender);
 }
 
 .history-row-center {
@@ -1842,6 +1906,21 @@ body {
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+.history-row-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.history-row-top .history-row-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .history-row-title {
@@ -2221,6 +2300,36 @@ body {
   opacity: 0.45;
   cursor: not-allowed;
   box-shadow: none;
+}
+
+/* ── Форма ролі (TeamSection) — той самий ритм відступів, що й modal-actions */
+.role-form-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.role-form-cancel-btn {
+  flex: 1;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  color: var(--text-soft);
+  font-family: "Manrope", system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.role-form-cancel-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 /* ── Modal edit tabs (Варіанти / Інфо / Фото) ───────────────────────── */
