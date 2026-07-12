@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import type { Photo } from "../types";
 
 interface PhotoViewerProps {
@@ -11,6 +12,7 @@ interface PhotoViewerProps {
 const SWIPE_THRESHOLD_PX = 40;
 
 export function PhotoViewer({ photos, initialIndex, onClose }: PhotoViewerProps) {
+  const { t } = useTranslation();
   const [index, setIndex] = useState(initialIndex);
   const touchStartX = useRef<number | null>(null);
 
@@ -42,10 +44,15 @@ export function PhotoViewer({ photos, initialIndex, onClose }: PhotoViewerProps)
     <div
       className="photo-viewer-overlay"
       role="dialog"
-      aria-label="Перегляд фото"
+      aria-label={t("product.photo.viewerAriaLabel")}
       onClick={onClose}
     >
-      <button type="button" className="photo-viewer-close" aria-label="Закрити" onClick={onClose}>
+      <button
+        type="button"
+        className="photo-viewer-close"
+        aria-label={t("common.close")}
+        onClick={onClose}
+      >
         ✕
       </button>
 
@@ -53,7 +60,7 @@ export function PhotoViewer({ photos, initialIndex, onClose }: PhotoViewerProps)
         <button
           type="button"
           className="photo-viewer-arrow photo-viewer-arrow--prev"
-          aria-label="Попереднє фото"
+          aria-label={t("product.photo.prevAriaLabel")}
           onClick={(e) => {
             e.stopPropagation();
             goPrev();
@@ -76,7 +83,7 @@ export function PhotoViewer({ photos, initialIndex, onClose }: PhotoViewerProps)
         <button
           type="button"
           className="photo-viewer-arrow photo-viewer-arrow--next"
-          aria-label="Наступне фото"
+          aria-label={t("product.photo.nextAriaLabel")}
           onClick={(e) => {
             e.stopPropagation();
             goNext();

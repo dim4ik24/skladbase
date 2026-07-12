@@ -1,4 +1,5 @@
 import { Pencil } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { Product } from "../types";
 
 interface ProductCardProps {
@@ -9,12 +10,6 @@ interface ProductCardProps {
   onEdit: (product: Product) => void;
 }
 
-function variantBadge(n: number): string {
-  if (n % 10 === 1 && n % 100 !== 11) return `${n} варіант`;
-  if (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) return `${n} варіанти`;
-  return `${n} варіантів`;
-}
-
 export function ProductCard({
   product,
   writable,
@@ -22,6 +17,7 @@ export function ProductCard({
   index = 0,
   onEdit,
 }: ProductCardProps) {
+  const { t } = useTranslation();
   const sortedPhotos = [...product.photos].sort((a, b) => a.position - b.position);
   const coverUrl =
     sortedPhotos[0]?.url ??
@@ -59,7 +55,7 @@ export function ProductCard({
       {isFrozen ? (
         <span className="frozen-badge">
           <span aria-hidden="true">🔒</span>
-          {" "}Заморожено
+          {" "}{t("product.frozenBadge")}
         </span>
       ) : null}
 
@@ -68,7 +64,7 @@ export function ProductCard({
         <button
           type="button"
           disabled={!writable}
-          aria-label={`Редагувати товар: ${product.name}`}
+          aria-label={t("product.editCardAriaLabel", { name: product.name })}
           onClick={() => onEdit(product)}
           className="shrink-0 rounded-lg p-1 text-green-deep/40 transition-colors hover:bg-green/[0.08] hover:text-green-deep disabled:cursor-not-allowed disabled:opacity-30"
         >
@@ -79,8 +75,12 @@ export function ProductCard({
       <div className="product-card-meta">
         <span className="pcard-price">{priceLabel}</span>
         <div className="pcard-substats">
-          <span className="pcard-stock">{totalAvailable} шт.</span>
-          <span className="pcard-variants">{variantBadge(product.variants.length)}</span>
+          <span className="pcard-stock">
+            {totalAvailable} {t("common.unitsShort")}
+          </span>
+          <span className="pcard-variants">
+            {t("product.variantsCount", { count: product.variants.length })}
+          </span>
         </div>
       </div>
     </article>

@@ -1,4 +1,5 @@
 import { Suspense, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ApiError } from "../api";
 import { lazyWithRetry } from "../lib/lazyWithRetry";
 import { LazyOverlayFallback } from "./LazyFallback";
@@ -21,6 +22,7 @@ export function ProductPhotoGallery({
   onUpload,
   onDelete,
 }: ProductPhotoGalleryProps) {
+  const { t } = useTranslation();
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
@@ -40,12 +42,12 @@ export function ProductPhotoGallery({
       await onUpload(file);
     } catch (err) {
       if (err instanceof ApiError) {
-        if (err.status === 409) setError("Максимум 10 фото на товар");
-        else if (err.status === 413) setError("Файл занадто великий");
+        if (err.status === 409) setError(t("product.photo.maxReached"));
+        else if (err.status === 413) setError(t("product.photo.tooLarge"));
         else if (err.status !== 402) setError(err.detail);
         // 402 — already shown by App as UpgradePrompt
       } else {
-        setError("Помилка завантаження");
+        setError(t("product.photo.uploadFailed"));
       }
     } finally {
       setUploading(false);
@@ -58,21 +60,19 @@ export function ProductPhotoGallery({
       await onDelete(photoId);
     } catch (err) {
       if (err instanceof ApiError) setError(err.detail);
-      else setError("Помилка видалення");
+      else setError(t("product.photo.deleteFailed"));
     }
   }
 
   return (
     <div className="photo-gallery-section">
       <p className="photo-gallery-title">
-        Фото товару{" "}
+        {t("product.photo.title")}{" "}
         <span className="photo-count">{count}/10</span>
       </p>
 
       {!photosAllowed ? (
-        <p className="photo-blocked-notice">
-          Фото доступні на тарифі Basic+. Видалення наявних дозволено.
-        </p>
+        <p className="photo-blocked-notice">{t("product.photo.blockedNotice")}</p>
       ) : null}
 
       <div className="photo-grid">
@@ -82,7 +82,7 @@ export function ProductPhotoGallery({
             <button
               type="button"
               className="photo-thumb__remove"
-              aria-label="Видалити фото"
+              aria-label={t("product.photo.deleteAriaLabel")}
               onClick={() => void handleDelete(photo.id)}
             >
               ✕
@@ -96,7 +96,7 @@ export function ProductPhotoGallery({
               type="button"
               className="photo-add-btn"
               disabled={uploading || count >= 10}
-              aria-label="Додати фото товару"
+              aria-label={t("product.photo.addAriaLabel")}
               onClick={() => fileInputRef.current?.click()}
             >
               {uploading ? "…" : "+"}

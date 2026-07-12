@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { chipLetter, resolveChipColor } from "../lib/variantColor";
 import type { TemplateField, Variant } from "../types";
 
@@ -14,6 +15,7 @@ function fmt(p: string): string {
 }
 
 export function VariantTag({ variant, axes, photoUrl, onClick }: VariantTagProps) {
+  const { t } = useTranslation();
   const axisLabel = Object.values(variant.axis_values).filter(Boolean).join(" / ");
   const chipColor = resolveChipColor(axes, variant.axis_values);
   const letter = chipLetter(axes, variant.axis_values);
@@ -29,7 +31,7 @@ export function VariantTag({ variant, axes, photoUrl, onClick }: VariantTagProps
       type="button"
       className="variant-tag"
       onClick={onClick}
-      aria-label={`Варіант: ${axisLabel || variant.sku || String(variant.id)}`}
+      aria-label={t("variant.ariaLabel", { label: axisLabel || variant.sku || String(variant.id) })}
     >
       {chipColor !== null ? (
         <span
@@ -59,12 +61,12 @@ export function VariantTag({ variant, axes, photoUrl, onClick }: VariantTagProps
           className="stock-count"
           data-testid={`available-${variant.id}`}
         >
-          {variant.available} шт.
+          {variant.available} {t("common.unitsShort")}
         </span>
         {variant.available === 0 ? (
-          <span className="badge badge-out">нема</span>
+          <span className="badge badge-out">{t("variant.outOfStock")}</span>
         ) : variant.available <= variant.low_stock_threshold ? (
-          <span className="badge badge-low">мало</span>
+          <span className="badge badge-low">{t("variant.lowStock")}</span>
         ) : null}
       </span>
     </button>

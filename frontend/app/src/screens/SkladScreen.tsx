@@ -2,6 +2,7 @@ import gsap from "gsap";
 import { Flip } from "gsap/Flip";
 import { Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
+import { useTranslation } from "react-i18next";
 import { LazyOverlayFallback } from "../components/LazyFallback";
 import { ProductCard } from "../components/ProductCard";
 import { ReservationsPanel } from "../components/ReservationsPanel";
@@ -32,11 +33,11 @@ const ProductModal = lazyWithRetry(() =>
 
 type SortField = "name" | "price" | "stock" | "date";
 
-const SORT_LABELS: Record<SortField, string> = {
-  name: "Назва",
-  price: "Ціна",
-  stock: "Залишок",
-  date: "Дата",
+const SORT_LABEL_KEYS: Record<SortField, string> = {
+  name: "sklad.sort.name",
+  price: "sklad.sort.price",
+  stock: "sklad.sort.stock",
+  date: "sklad.sort.date",
 };
 
 interface SkladScreenProps {
@@ -116,6 +117,7 @@ export function SkladScreen({
   openProductId,
   onProductOpened,
 }: SkladScreenProps) {
+  const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const [sortField, setSortField] = useState<SortField>("date");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -222,17 +224,19 @@ export function SkladScreen({
   return (
     <>
       {maxProducts !== null ? (
-        <p className="slot-counter">{activeCount}/{maxProducts} активних</p>
+        <p className="slot-counter">
+          {t("sklad.slotCounter", { active: activeCount, max: maxProducts })}
+        </p>
       ) : null}
 
       <div className="toolbar">
         <input
           className="search-input"
           type="search"
-          placeholder="Пошук товарів..."
+          placeholder={t("sklad.searchPlaceholder")}
           value={query}
           onChange={handleSearchChange}
-          aria-label="Пошук товарів"
+          aria-label={t("sklad.searchAriaLabel")}
         />
         <button
           type="button"
@@ -242,15 +246,15 @@ export function SkladScreen({
             setModalProduct("create");
           }}
         >
-          Додати товар
+          {t("product.addTitle")}
         </button>
         <button type="button" onClick={() => setShowReservations((prev) => !prev)}>
-          Резерви ({reservations.length})
+          {t("sklad.reservationsButton", { count: reservations.length })}
         </button>
       </div>
 
-      <div className="sort-bar" role="group" aria-label="Сортування">
-        {(Object.keys(SORT_LABELS) as SortField[]).map((field) => (
+      <div className="sort-bar" role="group" aria-label={t("sklad.sortAriaLabel")}>
+        {(Object.keys(SORT_LABEL_KEYS) as SortField[]).map((field) => (
           <button
             key={field}
             type="button"
@@ -258,7 +262,7 @@ export function SkladScreen({
             onClick={() => handleSortClick(field)}
             aria-pressed={sortField === field}
           >
-            {SORT_LABELS[field]}
+            {t(SORT_LABEL_KEYS[field])}
             {sortField === field ? (sortDir === "asc" ? " ↑" : " ↓") : null}
           </button>
         ))}
@@ -271,7 +275,7 @@ export function SkladScreen({
             className="section-title px-4 pt-4"
             scrollContainerRef={scrollContainerRef}
           >
-            Резерви
+            {t("reservations.title")}
           </ScrollFloat>
           <div className="px-4 pb-4">
             <ReservationsPanel
@@ -291,13 +295,13 @@ export function SkladScreen({
       ) : null}
 
       <ScrollFloat as="h2" className="section-title" scrollContainerRef={scrollContainerRef}>
-        Каталог
+        {t("sklad.catalogTitle")}
       </ScrollFloat>
 
       {loading ? (
-        <p className="status-text">Завантаження…</p>
+        <p className="status-text">{t("common.loading")}</p>
       ) : sortedProducts.length === 0 ? (
-        <p className="status-text">Нічого не знайдено</p>
+        <p className="status-text">{t("sklad.empty")}</p>
       ) : (
         <div className="product-grid" ref={wrapperRef}>
           {sortedProducts.map((product, index) => (

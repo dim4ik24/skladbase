@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
+import { useTranslation } from "react-i18next";
 import { errorMessage } from "../errors";
 import type { ReserveInput } from "../types";
 
@@ -11,6 +12,7 @@ interface ReserveFormProps {
 }
 
 export function ReserveForm({ variantId, maxQty, onSubmit, onCancel }: ReserveFormProps) {
+  const { t } = useTranslation();
   const [qty, setQty] = useState("1");
   const [customerNote, setCustomerNote] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
@@ -23,7 +25,7 @@ export function ReserveForm({ variantId, maxQty, onSubmit, onCancel }: ReserveFo
 
     const qtyNumber = Number(qty);
     if (!Number.isInteger(qtyNumber) || qtyNumber <= 0) {
-      setError("Кількість має бути додатнім числом");
+      setError(t("common.qtyPositive"));
       return;
     }
 
@@ -35,7 +37,7 @@ export function ReserveForm({ variantId, maxQty, onSubmit, onCancel }: ReserveFo
         expires_at: expiresAt ? new Date(expiresAt).toISOString() : undefined,
       });
     } catch (err) {
-      setError(errorMessage(err, "Не вдалося зарезервувати товар"));
+      setError(errorMessage(err, t("reservations.form.failed")));
     } finally {
       setSubmitting(false);
     }
@@ -46,7 +48,7 @@ export function ReserveForm({ variantId, maxQty, onSubmit, onCancel }: ReserveFo
       {error ? <p className="error-banner">{error}</p> : null}
 
       <label className="form-field">
-        <span>Кількість (доступно {maxQty})</span>
+        <span>{t("common.qtyAvailable", { max: maxQty })}</span>
         <input
           type="number"
           min="1"
@@ -58,17 +60,17 @@ export function ReserveForm({ variantId, maxQty, onSubmit, onCancel }: ReserveFo
       </label>
 
       <label className="form-field">
-        <span>Нотатка про клієнта</span>
+        <span>{t("reservations.form.customerNoteLabel")}</span>
         <input
           type="text"
           value={customerNote}
           onChange={(event) => setCustomerNote(event.target.value)}
-          placeholder="Ім'я / телефон"
+          placeholder={t("reservations.form.customerNotePlaceholder")}
         />
       </label>
 
       <label className="form-field">
-        <span>Тримати до (опц.)</span>
+        <span>{t("reservations.form.expiresLabel")}</span>
         <input
           type="datetime-local"
           value={expiresAt}
@@ -78,10 +80,10 @@ export function ReserveForm({ variantId, maxQty, onSubmit, onCancel }: ReserveFo
 
       <div className="modal-actions">
         <button type="button" onClick={onCancel} disabled={submitting}>
-          Скасувати
+          {t("common.cancel")}
         </button>
         <button type="submit" disabled={submitting}>
-          {submitting ? "Зберігаємо..." : "Відкласти"}
+          {submitting ? t("reservations.form.submitting") : t("reservations.form.submitButton")}
         </button>
       </div>
     </form>

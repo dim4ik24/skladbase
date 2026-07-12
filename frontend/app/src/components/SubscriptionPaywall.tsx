@@ -3,6 +3,8 @@ import { useState } from "react";
 import { Check, Lock, X } from "lucide-react";
 import NumberFlow from "@number-flow/react";
 import { motion, useReducedMotion } from "motion/react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { errorMessage } from "../errors";
 import { openInvoice } from "../telegram";
 import type { Plan } from "../types";
@@ -17,16 +19,16 @@ interface SubscriptionPaywallProps {
   onDismiss?: () => void;
 }
 
-function planFeatures(limits: Record<string, unknown>): string[] {
+function planFeatures(limits: Record<string, unknown>, t: TFunction): string[] {
   const features: string[] = [];
   const maxProducts = limits.max_products;
   if (maxProducts === null || maxProducts === undefined) {
-    features.push("Необмежена кількість товарів");
+    features.push(t("paywall.unlimitedProducts"));
   } else if (typeof maxProducts === "number") {
-    features.push(`До ${maxProducts} товарів`);
+    features.push(t("paywall.maxProducts", { count: maxProducts }));
   }
-  if (limits.photos) features.push("Фото товарів");
-  if (limits.integrations) features.push("Інтеграція з сайтом");
+  if (limits.photos) features.push(t("paywall.photosFeature"));
+  if (limits.integrations) features.push(t("paywall.integrationsFeature"));
   return features;
 }
 
@@ -38,6 +40,7 @@ export function SubscriptionPaywall({
   onRedeemPromo,
   onDismiss,
 }: SubscriptionPaywallProps) {
+  const { t } = useTranslation();
   const [checkingOutCode, setCheckingOutCode] = useState<string | null>(null);
   const [fallbackLink, setFallbackLink] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -56,7 +59,7 @@ export function SubscriptionPaywall({
         setFallbackLink(invoice_link);
       }
     } catch (err) {
-      setError(errorMessage(err, "Не вдалося оформити підписку"));
+      setError(errorMessage(err, t("paywall.checkoutFailed")));
     } finally {
       setCheckingOutCode(null);
     }
@@ -71,7 +74,7 @@ export function SubscriptionPaywall({
       await onRedeemPromo(trimmed);
       // Успіх закриває paywall (App.tsx) — тут нічого прибирати не треба.
     } catch (err) {
-      setPromoError(errorMessage(err, "Не вдалося активувати промокод"));
+      setPromoError(errorMessage(err, t("paywall.promoFailed")));
     } finally {
       setRedeemingPromo(false);
     }
@@ -91,11 +94,9 @@ export function SubscriptionPaywall({
       </div>
       <div>
         <h2 className="font-sans text-xl font-bold text-text mb-2 text-balance">
-          Підписку призупинено
+          {t("paywall.managerTitle")}
         </h2>
-        <p className="text-sm text-text-soft">
-          Оформлення доступне лише власнику магазину.
-        </p>
+        <p className="text-sm text-text-soft">{t("paywall.managerSubtitle")}</p>
       </div>
     </div>
   );
@@ -110,17 +111,15 @@ export function SubscriptionPaywall({
           </div>
         </div>
         <h2 className="font-sans text-xl font-bold text-text mb-1.5 text-balance">
-          Оберіть тариф
+          {t("paywall.title")}
         </h2>
-        <p className="text-sm text-text-soft">
-          Пробний період завершився — оберіть план, щоб продовжити.
-        </p>
+        <p className="text-sm text-text-soft">{t("paywall.subtitle")}</p>
       </div>
 
       {error ? <p className="error-banner">{error}</p> : null}
       {fallbackLink ? (
         <p className="paywall-fallback">
-          Відкрийте посилання в Telegram:{" "}
+          {t("paywall.openInTelegram")}{" "}
           <a href={fallbackLink} target="_blank" rel="noreferrer">
             {fallbackLink}
           </a>
@@ -132,7 +131,7 @@ export function SubscriptionPaywall({
           const isCurrent = plan.code === currentPlanCode;
           const isFeatured = plan.code === featuredCode;
           const isFree = plan.price_stars === 0 || Number(plan.price_uah) === 0;
-          const features = planFeatures(plan.limits);
+          const features = planFeatures(plan.limits, t);
 
           return (
             <Reveal key={plan.code} index={index}>
@@ -151,17 +150,17 @@ export function SubscriptionPaywall({
                       </h3>
                       {isCurrent ? (
                         <span className="rounded-full bg-[var(--state-ok)] px-2 py-0.5 text-[10px] font-bold text-green-deep shrink-0">
-                          Поточний
+                          {t("paywall.current")}
                         </span>
                       ) : isFeatured ? (
                         <span className="rounded-full bg-green px-2 py-0.5 text-[10px] font-bold text-white shrink-0">
-                          Рекомендовано
+                          {t("paywall.recommended")}
                         </span>
                       ) : null}
                     </div>
                     {!isFree ? (
                       <p className="font-mono-price text-[11px] text-text-soft">
-                        або {plan.price_stars}&nbsp;⭐
+                        {t("paywall.orStars", { stars: plan.price_stars })}
                       </p>
                     ) : null}
                   </div>
@@ -173,7 +172,7 @@ export function SubscriptionPaywall({
                       className="font-sans text-3xl font-bold text-text block"
                     />
                     <p className="font-mono-price text-[11px] text-text-soft mt-0.5">
-                      /{plan.period === "year" ? "рік" : "міс"}
+                      /{plan.period === "year" ? t("paywall.periodYear") : t("paywall.periodMonth")}
                     </p>
                   </div>
                 </div>
@@ -198,7 +197,7 @@ export function SubscriptionPaywall({
                     disabled
                     className="w-full rounded-xl bg-bg py-2.5 text-sm font-semibold text-text-soft"
                   >
-                    Поточний план
+                    {t("paywall.currentPlanButton")}
                   </button>
                 ) : isFree ? (
                   <button
@@ -206,7 +205,7 @@ export function SubscriptionPaywall({
                     disabled
                     className="w-full rounded-xl bg-bg py-2.5 text-sm font-semibold text-text-soft"
                   >
-                    Безкоштовний
+                    {t("paywall.freeButton")}
                   </button>
                 ) : (
                   <button
@@ -219,7 +218,9 @@ export function SubscriptionPaywall({
                         : "w-full rounded-xl border border-[var(--line)] py-2.5 text-sm font-semibold text-text transition-opacity duration-150 hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green disabled:opacity-50"
                     }
                   >
-                    {checkingOutCode === plan.code ? "Оформлюємо…" : "Оформити через Stars"}
+                    {checkingOutCode === plan.code
+                      ? t("paywall.checkingOut")
+                      : t("paywall.checkoutButton")}
                   </button>
                 )}
               </div>
@@ -230,13 +231,13 @@ export function SubscriptionPaywall({
 
       <div className="mt-4 pt-4 border-t border-[var(--line)]">
         <label className="form-field">
-          <span>Промокод</span>
+          <span>{t("paywall.promoLabel")}</span>
           <input
             type="text"
             value={promoCode}
             onChange={(e) => setPromoCode(e.target.value)}
-            placeholder="Введіть код"
-            aria-label="Промокод"
+            placeholder={t("paywall.promoPlaceholder")}
+            aria-label={t("paywall.promoLabel")}
           />
         </label>
         {promoError ? <p className="error-banner">{promoError}</p> : null}
@@ -246,7 +247,7 @@ export function SubscriptionPaywall({
           onClick={() => void handleRedeemPromo()}
           className="mt-2 w-full rounded-xl border border-[var(--line)] py-2.5 text-sm font-semibold text-text transition-opacity duration-150 hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green disabled:opacity-50"
         >
-          {redeemingPromo ? "Активуємо…" : "Активувати"}
+          {redeemingPromo ? t("paywall.redeeming") : t("paywall.redeemButton")}
         </button>
       </div>
     </>
@@ -258,7 +259,7 @@ export function SubscriptionPaywall({
       className="paywall-overlay"
       role="dialog"
       aria-modal="true"
-      aria-label="Оберіть тариф"
+      aria-label={t("paywall.title")}
       onClick={onDismiss}
     >
       <motion.div
@@ -275,12 +276,12 @@ export function SubscriptionPaywall({
         <div className="flex justify-end mb-3">
           <button
             type="button"
-            aria-label="Закрити"
+            aria-label={t("common.close")}
             onClick={onDismiss}
             className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold text-text-soft transition-colors duration-150 hover:bg-bg hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green"
           >
             <X size={13} aria-hidden="true" />
-            Закрити
+            {t("common.close")}
           </button>
         </div>
 

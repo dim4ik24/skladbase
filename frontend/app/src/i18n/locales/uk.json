@@ -7,7 +7,10 @@
     "ellipsis": "...",
     "unitsShort": "шт.",
     "roleOwner": "Власник",
-    "roleManager": "Менеджер"
+    "roleManager": "Менеджер",
+    "qtyAvailable": "Кількість (доступно {{max}})",
+    "qtyPositive": "Кількість має бути додатнім числом",
+    "qtyRange": "Кількість має бути від 1 до {{max}}"
   },
   "nav": {
     "dashboard": "Дашборд",
@@ -23,7 +26,21 @@
     "demoClearing": "Очищаємо...",
     "demoClear": "Очистити приклади"
   },
-  "sklad": {},
+  "sklad": {
+    "slotCounter": "{{active}}/{{max}} активних",
+    "searchPlaceholder": "Пошук товарів...",
+    "searchAriaLabel": "Пошук товарів",
+    "reservationsButton": "Резерви ({{count}})",
+    "sortAriaLabel": "Сортування",
+    "sort": {
+      "name": "Назва",
+      "price": "Ціна",
+      "stock": "Залишок",
+      "date": "Дата"
+    },
+    "catalogTitle": "Каталог",
+    "empty": "Нічого не знайдено"
+  },
   "finance": {
     "title": "Фінанси",
     "historyButton": "Історія",
@@ -55,6 +72,123 @@
       "en": "English",
       "ru": "Русский"
     }
+  },
+  "product": {
+    "addTitle": "Додати товар",
+    "editTitle": "Редагувати товар",
+    "editCardAriaLabel": "Редагувати товар: {{name}}",
+    "templateLabel": "Шаблон",
+    "noTemplate": "Без шаблону",
+    "createOwnType": "+ Створити свій тип",
+    "nameLabel": "Назва",
+    "descriptionLabel": "Опис",
+    "showAdvanced": "Додатково",
+    "hideAdvanced": "Сховати додатково",
+    "variantsTitle": "Варіанти",
+    "priceLabel": "Ціна",
+    "initialStockLabel": "Початковий залишок",
+    "skuLabel": "Артикул",
+    "removeVariantButton": "Видалити варіант",
+    "addVariantButton": "+ Додати варіант",
+    "creating": "Створюємо...",
+    "createButton": "Створити",
+    "nameRequired": "Вкажіть назву товару",
+    "priceRequiredForVariant": "Вкажіть ціну для варіанта {{n}}",
+    "createFailed": "Не вдалося створити товар",
+    "tabInfo": "Інфо",
+    "tabPhoto": "Фото",
+    "addingVariant": "Додаємо...",
+    "saveFailed": "Не вдалося зберегти",
+    "saving": "Зберігаємо...",
+    "saveButton": "Зберегти",
+    "created": "✓ Товар створено!",
+    "doneButton": "Готово",
+    "variantsCount_one": "{{count}} варіант",
+    "variantsCount_few": "{{count}} варіанти",
+    "variantsCount_many": "{{count}} варіантів",
+    "variantsCount_other": "{{count}} варіантів",
+    "frozenBadge": "Заморожено",
+    "template": {
+      "nameRequired": "Вкажіть назву типу",
+      "axisNameRequired": "Вкажіть назву осі",
+      "optionRequired": "Додайте хоча б одну опцію",
+      "attrNameRequired": "Вкажіть назву характеристики",
+      "saveFailed": "Помилка збереження",
+      "axisNamePlaceholder": "Назва осі",
+      "attrNamePlaceholder": "Назва характеристики",
+      "axisNameAriaLabel": "Назва осі {{n}}",
+      "attrNameAriaLabel": "Назва характеристики {{n}}",
+      "typeText": "Текст",
+      "typeList": "Список",
+      "removeFieldAriaLabel": "Видалити",
+      "optionPlaceholder": "Опція",
+      "optionAriaLabel": "Опція {{n}}",
+      "removeOptionAriaLabel": "Видалити опцію",
+      "addOption": "+ Опція",
+      "title": "Створити тип товару",
+      "typeNameLabel": "Назва типу",
+      "typeNamePlaceholder": "Напр. Парфуми",
+      "axesTitle": "Осі варіантів",
+      "axesHint": "Розмножують на варіанти (розмір, колір)",
+      "addAxis": "+ Додати вісь",
+      "attrsTitle": "Характеристики",
+      "attrsHint": "Опис товару (бренд, матеріал)",
+      "addAttr": "+ Додати характеристику",
+      "saving": "Зберігаємо...",
+      "saveButton": "Зберегти"
+    },
+    "photo": {
+      "title": "Фото товару",
+      "maxReached": "Максимум 10 фото на товар",
+      "tooLarge": "Файл занадто великий",
+      "uploadFailed": "Помилка завантаження",
+      "deleteFailed": "Помилка видалення",
+      "blockedNotice": "Фото доступні на тарифі Basic+. Видалення наявних дозволено.",
+      "deleteAriaLabel": "Видалити фото",
+      "addAriaLabel": "Додати фото товару",
+      "viewerAriaLabel": "Перегляд фото",
+      "prevAriaLabel": "Попереднє фото",
+      "nextAriaLabel": "Наступне фото"
+    }
+  },
+  "variant": {
+    "ariaLabel": "Варіант: {{label}}",
+    "uploadPhotoAriaLabel": "Завантажити фото: {{sku}}",
+    "decreaseAriaLabel": "Зменшити залишок: {{sku}}",
+    "increaseAriaLabel": "Збільшити залишок: {{sku}}",
+    "reserveButton": "Відклади",
+    "sellButton": "Продано",
+    "editSectionLabel": "Редагування",
+    "priceLabel": "Ціна",
+    "skuLabel": "Артикул",
+    "skuPlaceholder": "необов'язково",
+    "saving": "Зберігаємо...",
+    "saveButton": "Зберегти",
+    "deleteConfirmPrefix": "Видалити варіант ",
+    "deleteConfirmSuffix": "?",
+    "deleteNo": "Ні",
+    "deleting": "Видаляємо...",
+    "deleteYes": "Так, видалити",
+    "deleteButton": "Видалити варіант",
+    "saveFailed": "Не вдалося зберегти варіант",
+    "deleteFailed": "Не вдалося видалити варіант",
+    "photoUploadFailed": "Не вдалося завантажити фото",
+    "outOfStock": "нема",
+    "lowStock": "мало"
+  },
+  "writeOff": {
+    "failed": "Не вдалося списати товар",
+    "reasonMissing": "Оберіть причину списання",
+    "reasonGroupAriaLabel": "Причина списання",
+    "commentLabel": "Коментар (обов'язково)",
+    "submitting": "Списуємо...",
+    "submit": "Списати"
+  },
+  "sell": {
+    "failed": "Не вдалося оформити продаж",
+    "withShippingLabel": "Оформити відправку",
+    "submitting": "Оформлюємо...",
+    "submit": "Продано"
   },
   "reservations": {
     "title": "Резерви",
@@ -95,6 +229,14 @@
       "prompt": "Чому клієнт не забрав «{{title}}»?",
       "reasonGroupAriaLabel": "Чому клієнт не забрав?",
       "submitting": "Оформлюємо..."
+    },
+    "form": {
+      "failed": "Не вдалося зарезервувати товар",
+      "customerNoteLabel": "Нотатка про клієнта",
+      "customerNotePlaceholder": "Ім'я / телефон",
+      "expiresLabel": "Тримати до (опц.)",
+      "submitting": "Зберігаємо...",
+      "submitButton": "Відкласти"
     }
   },
   "shipping": {
@@ -138,7 +280,33 @@
       "release": "Знято"
     }
   },
-  "paywall": {},
+  "paywall": {
+    "checkoutFailed": "Не вдалося оформити підписку",
+    "promoFailed": "Не вдалося активувати промокод",
+    "managerTitle": "Підписку призупинено",
+    "managerSubtitle": "Оформлення доступне лише власнику магазину.",
+    "title": "Оберіть тариф",
+    "subtitle": "Пробний період завершився — оберіть план, щоб продовжити.",
+    "openInTelegram": "Відкрийте посилання в Telegram:",
+    "current": "Поточний",
+    "recommended": "Рекомендовано",
+    "orStars": "або {{stars}} ⭐",
+    "periodMonth": "міс",
+    "periodYear": "рік",
+    "currentPlanButton": "Поточний план",
+    "freeButton": "Безкоштовний",
+    "checkingOut": "Оформлюємо…",
+    "checkoutButton": "Оформити через Stars",
+    "promoLabel": "Промокод",
+    "promoPlaceholder": "Введіть код",
+    "redeeming": "Активуємо…",
+    "redeemButton": "Активувати",
+    "unlimitedProducts": "Необмежена кількість товарів",
+    "maxProducts": "До {{count}} товарів",
+    "photosFeature": "Фото товарів",
+    "integrationsFeature": "Інтеграція з сайтом",
+    "chooseButton": "Обрати тариф"
+  },
   "errors": {},
   "reasons": {
     "customerChangedMind": "Клієнт передумав",
@@ -147,6 +315,10 @@
     "other": "Інша причина",
     "otherWithEmoji": "❓ Інша причина",
     "didNotPickUp": "Не забрав з пошти",
-    "refused": "Відмовився від посилки"
+    "refused": "Відмовився від посилки",
+    "sold": "💰 Продано",
+    "defect": "🔧 Брак",
+    "correction": "✏️ Корекція",
+    "otherShort": "❓ Інше"
   }
 }

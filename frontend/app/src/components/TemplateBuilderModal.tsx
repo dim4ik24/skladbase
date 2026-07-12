@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
+import { useTranslation } from "react-i18next";
 import { ApiError, createTemplate } from "../api";
 import type { Template } from "../types";
 
@@ -113,6 +114,7 @@ function removeOption(
 }
 
 export function TemplateBuilderModal({ onSave, onClose }: TemplateBuilderModalProps) {
+  const { t } = useTranslation();
   const [name, setName] = useState("");
   const [axes, setAxes] = useState<FieldDraft[]>([]);
   const [attrs, setAttrs] = useState<FieldDraft[]>([]);
@@ -122,16 +124,16 @@ export function TemplateBuilderModal({ onSave, onClose }: TemplateBuilderModalPr
 
   function validate(): boolean {
     const errs: Record<string, string> = {};
-    if (!name.trim()) errs["name"] = "Вкажіть назву типу";
+    if (!name.trim()) errs["name"] = t("product.template.nameRequired");
     axes.forEach((f, i) => {
-      if (!f.label.trim()) errs[`axis_${i}_label`] = "Вкажіть назву осі";
+      if (!f.label.trim()) errs[`axis_${i}_label`] = t("product.template.axisNameRequired");
       if (f.type === "enum" && f.options.filter((o) => o.trim()).length === 0)
-        errs[`axis_${i}_options`] = "Додайте хоча б одну опцію";
+        errs[`axis_${i}_options`] = t("product.template.optionRequired");
     });
     attrs.forEach((f, i) => {
-      if (!f.label.trim()) errs[`attr_${i}_label`] = "Вкажіть назву характеристики";
+      if (!f.label.trim()) errs[`attr_${i}_label`] = t("product.template.attrNameRequired");
       if (f.type === "enum" && f.options.filter((o) => o.trim()).length === 0)
-        errs[`attr_${i}_options`] = "Додайте хоча б одну опцію";
+        errs[`attr_${i}_options`] = t("product.template.optionRequired");
     });
     setFieldErrors(errs);
     return Object.keys(errs).length === 0;
@@ -146,7 +148,7 @@ export function TemplateBuilderModal({ onSave, onClose }: TemplateBuilderModalPr
       const created = await createTemplate(name.trim(), schema);
       onSave(created);
     } catch (err) {
-      setApiError(err instanceof ApiError ? err.detail : "Помилка збереження");
+      setApiError(err instanceof ApiError ? err.detail : t("product.template.saveFailed"));
     } finally {
       setSubmitting(false);
     }
@@ -168,26 +170,32 @@ export function TemplateBuilderModal({ onSave, onClose }: TemplateBuilderModalPr
           <input
             className="builder-field-input"
             type="text"
-            placeholder={isAxis ? "Назва осі" : "Назва характеристики"}
+            placeholder={
+              isAxis ? t("product.template.axisNamePlaceholder") : t("product.template.attrNamePlaceholder")
+            }
             value={field.label}
             onChange={(e) => updateField(setter, idx, { label: e.target.value })}
-            aria-label={isAxis ? `Назва осі ${idx + 1}` : `Назва характеристики ${idx + 1}`}
+            aria-label={
+              isAxis
+                ? t("product.template.axisNameAriaLabel", { n: idx + 1 })
+                : t("product.template.attrNameAriaLabel", { n: idx + 1 })
+            }
           />
           <select
             value={field.type}
             onChange={(e) => {
-              const t = e.target.value as "enum" | "string";
-              updateField(setter, idx, { type: t, options: t === "enum" ? [""] : [] });
+              const newType = e.target.value as "enum" | "string";
+              updateField(setter, idx, { type: newType, options: newType === "enum" ? [""] : [] });
             }}
           >
-            <option value="string">Текст</option>
-            <option value="enum">Список</option>
+            <option value="string">{t("product.template.typeText")}</option>
+            <option value="enum">{t("product.template.typeList")}</option>
           </select>
           <button
             type="button"
             className="builder-remove-btn"
             onClick={() => removeField(setter, idx)}
-            aria-label="Видалити"
+            aria-label={t("product.template.removeFieldAriaLabel")}
           >
             ✕
           </button>
@@ -204,16 +212,16 @@ export function TemplateBuilderModal({ onSave, onClose }: TemplateBuilderModalPr
                 <input
                   type="text"
                   className="builder-field-input"
-                  placeholder="Опція"
+                  placeholder={t("product.template.optionPlaceholder")}
                   value={opt}
                   onChange={(e) => updateOption(setter, idx, j, e.target.value)}
-                  aria-label={`Опція ${j + 1}`}
+                  aria-label={t("product.template.optionAriaLabel", { n: j + 1 })}
                 />
                 <button
                   type="button"
                   className="builder-remove-btn"
                   onClick={() => removeOption(setter, idx, j)}
-                  aria-label="Видалити опцію"
+                  aria-label={t("product.template.removeOptionAriaLabel")}
                 >
                   ✕
                 </button>
@@ -227,7 +235,7 @@ export function TemplateBuilderModal({ onSave, onClose }: TemplateBuilderModalPr
               className="link-button"
               onClick={() => addOption(setter, idx)}
             >
-              + Опція
+              {t("product.template.addOption")}
             </button>
           </div>
         ) : null}
@@ -241,15 +249,15 @@ export function TemplateBuilderModal({ onSave, onClose }: TemplateBuilderModalPr
         className="builder-card"
         role="dialog"
         aria-modal="true"
-        aria-label="Створити тип товару"
+        aria-label={t("product.template.title")}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="builder-header">
-          <h2>Створити тип товару</h2>
+          <h2>{t("product.template.title")}</h2>
           <button
             type="button"
             className="builder-close-btn"
-            aria-label="Закрити"
+            aria-label={t("common.close")}
             onClick={onClose}
           >
             ✕
@@ -259,10 +267,10 @@ export function TemplateBuilderModal({ onSave, onClose }: TemplateBuilderModalPr
         {apiError ? <p className="error-banner">{apiError}</p> : null}
 
         <label className="form-field">
-          <span>Назва типу</span>
+          <span>{t("product.template.typeNameLabel")}</span>
           <input
             type="text"
-            placeholder="Напр. Парфуми"
+            placeholder={t("product.template.typeNamePlaceholder")}
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
@@ -271,8 +279,8 @@ export function TemplateBuilderModal({ onSave, onClose }: TemplateBuilderModalPr
 
         <div className="builder-section">
           <div className="builder-section-header">
-            <h3>Осі варіантів</h3>
-            <span className="builder-hint">Розмножують на варіанти (розмір, колір)</span>
+            <h3>{t("product.template.axesTitle")}</h3>
+            <span className="builder-hint">{t("product.template.axesHint")}</span>
           </div>
           {axes.map((f, i) => renderField(f, i, setAxes, "axis"))}
           <button
@@ -280,14 +288,14 @@ export function TemplateBuilderModal({ onSave, onClose }: TemplateBuilderModalPr
             className="link-button"
             onClick={() => setAxes((prev) => [...prev, newDraft()])}
           >
-            + Додати вісь
+            {t("product.template.addAxis")}
           </button>
         </div>
 
         <div className="builder-section">
           <div className="builder-section-header">
-            <h3>Характеристики</h3>
-            <span className="builder-hint">Опис товару (бренд, матеріал)</span>
+            <h3>{t("product.template.attrsTitle")}</h3>
+            <span className="builder-hint">{t("product.template.attrsHint")}</span>
           </div>
           {attrs.map((f, i) => renderField(f, i, setAttrs, "attr"))}
           <button
@@ -295,16 +303,16 @@ export function TemplateBuilderModal({ onSave, onClose }: TemplateBuilderModalPr
             className="link-button"
             onClick={() => setAttrs((prev) => [...prev, newDraft()])}
           >
-            + Додати характеристику
+            {t("product.template.addAttr")}
           </button>
         </div>
 
         <div className="modal-actions">
           <button type="button" onClick={onClose} disabled={submitting}>
-            Скасувати
+            {t("common.cancel")}
           </button>
           <button type="button" onClick={handleSave} disabled={submitting}>
-            {submitting ? "Зберігаємо..." : "Зберегти"}
+            {submitting ? t("product.template.saving") : t("product.template.saveButton")}
           </button>
         </div>
       </div>

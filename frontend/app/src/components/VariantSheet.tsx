@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import type { ChangeEvent } from "react";
+import { useTranslation } from "react-i18next";
 import { errorMessage } from "../errors";
 import { chipLetter, resolveChipColor } from "../lib/variantColor";
 import type {
@@ -56,6 +57,7 @@ export function VariantSheet({
   onNavigateToSettings,
   onClose,
 }: VariantSheetProps) {
+  const { t } = useTranslation();
   const [isClosing, setIsClosing] = useState(false);
 
   // Edit fields
@@ -105,7 +107,7 @@ export function VariantSheet({
     try {
       await onPatchVariant(variant.id, patch);
     } catch (err) {
-      setPatchError(errorMessage(err, "Не вдалося зберегти варіант"));
+      setPatchError(errorMessage(err, t("variant.saveFailed")));
     } finally {
       setSaving(false);
     }
@@ -118,7 +120,7 @@ export function VariantSheet({
       await onDeleteVariant(variant.id);
       onClose();
     } catch (err) {
-      setDeleteError(errorMessage(err, "Не вдалося видалити варіант"));
+      setDeleteError(errorMessage(err, t("variant.deleteFailed")));
       setConfirmDelete(false);
     } finally {
       setDeleting(false);
@@ -134,7 +136,7 @@ export function VariantSheet({
     try {
       await onUploadPhoto(variant.id, file);
     } catch (err) {
-      setPhotoError(errorMessage(err, "Не вдалося завантажити фото"));
+      setPhotoError(errorMessage(err, t("variant.photoUploadFailed")));
     } finally {
       setPhotoUploading(false);
     }
@@ -169,7 +171,9 @@ export function VariantSheet({
       />
       <div
         role="dialog"
-        aria-label={`Варіант: ${axisLabel || variant.sku || String(variant.id)}`}
+        aria-label={t("variant.ariaLabel", {
+          label: axisLabel || variant.sku || String(variant.id),
+        })}
         className={`variant-sheet${isClosing ? " variant-sheet--closing" : ""}`}
         onClick={(e) => e.stopPropagation()}
       >
@@ -194,7 +198,7 @@ export function VariantSheet({
           <button
             type="button"
             className="sheet-close"
-            aria-label="Закрити"
+            aria-label={t("common.close")}
             onClick={handleClose}
           >
             ✕
@@ -223,7 +227,9 @@ export function VariantSheet({
               hidden
               disabled={photoUploading}
               onChange={handlePhotoChange}
-              aria-label={`Завантажити фото: ${variant.sku ?? String(variant.id)}`}
+              aria-label={t("variant.uploadPhotoAriaLabel", {
+                sku: variant.sku ?? String(variant.id),
+              })}
             />
           </label>
         </div>
@@ -234,7 +240,7 @@ export function VariantSheet({
           <button
             type="button"
             className="sheet-stepper-btn"
-            aria-label={`Зменшити залишок: ${variant.sku ?? variant.id}`}
+            aria-label={t("variant.decreaseAriaLabel", { sku: variant.sku ?? variant.id })}
             aria-disabled={isFrozen}
             disabled={variant.on_hand <= 0}
             onClick={() => {
@@ -245,12 +251,12 @@ export function VariantSheet({
             −
           </button>
           <span className="sheet-stock-count" data-testid={`stepper-${variant.id}`}>
-            {variant.on_hand} шт.
+            {variant.on_hand} {t("common.unitsShort")}
           </span>
           <button
             type="button"
             className="sheet-stepper-btn"
-            aria-label={`Збільшити залишок: ${variant.sku ?? variant.id}`}
+            aria-label={t("variant.increaseAriaLabel", { sku: variant.sku ?? variant.id })}
             aria-disabled={isFrozen}
             onClick={() => {
               if (isFrozen) { onFrozenAction?.(); return; }
@@ -281,7 +287,7 @@ export function VariantSheet({
               setShowReserveForm((prev) => !prev);
             }}
           >
-            Відклади
+            {t("variant.reserveButton")}
           </button>
           <button
             type="button"
@@ -293,7 +299,7 @@ export function VariantSheet({
               setShowSellForm((prev) => !prev);
             }}
           >
-            Продано
+            {t("variant.sellButton")}
           </button>
         </div>
         {showReserveForm ? (
@@ -316,12 +322,12 @@ export function VariantSheet({
         <div className="sheet-divider" />
 
         {/* ── Edit fields ── */}
-        <p className="sheet-section-label">Редагування</p>
+        <p className="sheet-section-label">{t("variant.editSectionLabel")}</p>
         {patchError ? <p className="error-banner">{patchError}</p> : null}
         <label className="form-field">
-          <span>Ціна</span>
+          <span>{t("variant.priceLabel")}</span>
           <input
-            aria-label="Ціна"
+            aria-label={t("variant.priceLabel")}
             type="number"
             min="0"
             step="0.01"
@@ -330,13 +336,13 @@ export function VariantSheet({
           />
         </label>
         <label className="form-field">
-          <span>Артикул</span>
+          <span>{t("variant.skuLabel")}</span>
           <input
-            aria-label="Артикул"
+            aria-label={t("variant.skuLabel")}
             type="text"
             value={sku}
             onChange={(e) => setSku(e.target.value)}
-            placeholder="необов'язково"
+            placeholder={t("variant.skuPlaceholder")}
           />
         </label>
         {axes.map((axis) => (
@@ -372,7 +378,7 @@ export function VariantSheet({
           onClick={() => void handleSave()}
           disabled={saving || deleting}
         >
-          {saving ? "Зберігаємо..." : "Зберегти"}
+          {saving ? t("variant.saving") : t("variant.saveButton")}
         </button>
 
         <div className="sheet-divider" />
@@ -381,14 +387,18 @@ export function VariantSheet({
         {deleteError ? <p className="error-banner">{deleteError}</p> : null}
         {confirmDelete ? (
           <div className="variant-delete-confirm">
-            <p>Видалити варіант <strong>{axisLabel || `#${variant.id}`}</strong>?</p>
+            <p>
+              {t("variant.deleteConfirmPrefix")}
+              <strong>{axisLabel || `#${variant.id}`}</strong>
+              {t("variant.deleteConfirmSuffix")}
+            </p>
             <div className="variant-edit-actions">
               <button
                 type="button"
                 onClick={() => setConfirmDelete(false)}
                 disabled={deleting}
               >
-                Ні
+                {t("variant.deleteNo")}
               </button>
               <button
                 type="button"
@@ -396,7 +406,7 @@ export function VariantSheet({
                 onClick={() => void handleDelete()}
                 disabled={deleting}
               >
-                {deleting ? "Видаляємо..." : "Так, видалити"}
+                {deleting ? t("variant.deleting") : t("variant.deleteYes")}
               </button>
             </div>
           </div>
@@ -407,7 +417,7 @@ export function VariantSheet({
             onClick={() => setConfirmDelete(true)}
             disabled={saving}
           >
-            Видалити варіант
+            {t("variant.deleteButton")}
           </button>
         )}
       </div>
@@ -415,7 +425,7 @@ export function VariantSheet({
       {sellReservation ? (
         <ShipSheet
           reservationId={sellReservation.id}
-          title={`${productName} (${[axisLabel, `${sellReservation.qty} шт.`].filter(Boolean).join(", ")})`}
+          title={`${productName} (${[axisLabel, `${sellReservation.qty} ${t("common.unitsShort")}`].filter(Boolean).join(", ")})`}
           productName={productName}
           defaultCodAmount={Number(variant.price) * sellReservation.qty}
           onSubmit={onShip}

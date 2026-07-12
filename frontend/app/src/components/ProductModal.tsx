@@ -2,6 +2,7 @@ import { Suspense, useState } from "react";
 import { createPortal } from "react-dom";
 import type { FormEvent } from "react";
 import { useReducedMotion } from "motion/react";
+import { useTranslation } from "react-i18next";
 import { ApiError } from "../api";
 import { errorMessage } from "../errors";
 import { lazyWithRetry } from "../lib/lazyWithRetry";
@@ -112,6 +113,7 @@ function CreateForm({
   onCreateProduct,
   onClose,
 }: CreateFormProps) {
+  const { t } = useTranslation();
   const [templateId, setTemplateId] = useState<string>(() => {
     const saved = resolveInitialTemplate(templates);
     return saved ? String(saved.id) : "";
@@ -130,13 +132,13 @@ function CreateForm({
   const [localTemplates, setLocalTemplates] = useState<Template[]>(templates);
   const [showBuilder, setShowBuilder] = useState(false);
 
-  const selectedTemplate = localTemplates.find((t) => String(t.id) === templateId) ?? null;
+  const selectedTemplate = localTemplates.find((tpl) => String(tpl.id) === templateId) ?? null;
   const axes = selectedTemplate?.field_schema.variant_axes ?? [];
   const attributeFields = selectedTemplate?.field_schema.attributes ?? [];
 
   function handleTemplateChange(value: string) {
     setTemplateId(value);
-    const template = localTemplates.find((t) => String(t.id) === value) ?? null;
+    const template = localTemplates.find((tpl) => String(tpl.id) === value) ?? null;
     setRows([emptyRow(template?.field_schema.variant_axes ?? [])]);
     setAttributeValues({});
   }
@@ -201,8 +203,8 @@ function CreateForm({
       setInvalidFields(nextInvalid);
       setError(
         nextInvalid.has("name")
-          ? "Вкажіть назву товару"
-          : `Вкажіть ціну для варіанта ${firstEmptyPriceIndex + 1}`,
+          ? t("product.nameRequired")
+          : t("product.priceRequiredForVariant", { n: firstEmptyPriceIndex + 1 }),
       );
       return;
     }
@@ -238,7 +240,7 @@ function CreateForm({
     } catch (err) {
       // 402 already handled by App (setUpgradePrompt); show other errors inline.
       if (!(err instanceof ApiError && err.status === 402)) {
-        setError(errorMessage(err, "Не вдалося створити товар"));
+        setError(errorMessage(err, t("product.createFailed")));
       }
     } finally {
       setSubmitting(false);
@@ -247,22 +249,22 @@ function CreateForm({
 
   return (
     <>
-      <h2>Додати товар</h2>
+      <h2>{t("product.addTitle")}</h2>
       <form onSubmit={handleSubmit}>
         {error ? <p className="error-banner">{error}</p> : null}
 
         <div className="modal-card-body">
         <label className="form-field">
-          <span>Шаблон</span>
+          <span>{t("product.templateLabel")}</span>
           <select
-            aria-label="Шаблон"
+            aria-label={t("product.templateLabel")}
             value={templateId}
             onChange={(e) => handleTemplateChange(e.target.value)}
           >
-            <option value="">Без шаблону</option>
-            {localTemplates.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
+            <option value="">{t("product.noTemplate")}</option>
+            {localTemplates.map((tpl) => (
+              <option key={tpl.id} value={tpl.id}>
+                {tpl.name}
               </option>
             ))}
           </select>
@@ -270,14 +272,14 @@ function CreateForm({
 
         {isOwner ? (
           <button type="button" className="link-button" onClick={() => setShowBuilder(true)}>
-            + Створити свій тип
+            {t("product.createOwnType")}
           </button>
         ) : null}
 
         <label className="form-field">
-          <span>Назва</span>
+          <span>{t("product.nameLabel")}</span>
           <input
-            aria-label="Назва"
+            aria-label={t("product.nameLabel")}
             type="text"
             className={invalidFields.has("name") ? "input-error" : undefined}
             value={name}
@@ -289,7 +291,7 @@ function CreateForm({
         </label>
 
         <label className="form-field">
-          <span>Опис</span>
+          <span>{t("product.descriptionLabel")}</span>
           <textarea value={description} onChange={(e) => setDescription(e.target.value)} />
         </label>
 
@@ -300,7 +302,7 @@ function CreateForm({
               className="link-button"
               onClick={() => setShowAdvanced((prev) => !prev)}
             >
-              {showAdvanced ? "Сховати додатково" : "Додатково"}
+              {showAdvanced ? t("product.hideAdvanced") : t("product.showAdvanced")}
             </button>
             {showAdvanced ? (
               <div className="advanced-fields">
@@ -338,7 +340,7 @@ function CreateForm({
           </>
         ) : null}
 
-        <h3>Варіанти</h3>
+        <h3>{t("product.variantsTitle")}</h3>
         {rows.map((row, index) => (
           <div className="variant-builder-row" key={index}>
             {axes.map((axis) => (
@@ -368,9 +370,9 @@ function CreateForm({
             ))}
 
             <label className="form-field">
-              <span>Ціна</span>
+              <span>{t("product.priceLabel")}</span>
               <input
-                aria-label="Ціна"
+                aria-label={t("product.priceLabel")}
                 type="number"
                 min="0"
                 step="0.01"
@@ -384,9 +386,9 @@ function CreateForm({
             </label>
 
             <label className="form-field">
-              <span>Початковий залишок</span>
+              <span>{t("product.initialStockLabel")}</span>
               <input
-                aria-label="Початковий залишок"
+                aria-label={t("product.initialStockLabel")}
                 type="number"
                 min="0"
                 value={row.onHand}
@@ -395,7 +397,7 @@ function CreateForm({
             </label>
 
             <label className="form-field">
-              <span>Артикул</span>
+              <span>{t("product.skuLabel")}</span>
               <input
                 type="text"
                 value={row.sku}
@@ -405,7 +407,7 @@ function CreateForm({
 
             {axes.length > 0 && rows.length > 1 ? (
               <button type="button" className="link-button" onClick={() => removeRow(index)}>
-                Видалити варіант
+                {t("product.removeVariantButton")}
               </button>
             ) : null}
           </div>
@@ -413,17 +415,17 @@ function CreateForm({
 
         {axes.length > 0 ? (
           <button type="button" className="link-button" onClick={addRow}>
-            + Додати варіант
+            {t("product.addVariantButton")}
           </button>
         ) : null}
         </div>
 
         <div className="modal-actions">
           <button type="button" onClick={onClose} disabled={submitting}>
-            Скасувати
+            {t("common.cancel")}
           </button>
           <button type="submit" disabled={submitting}>
-            {submitting ? "Створюємо..." : "Створити"}
+            {submitting ? t("product.creating") : t("product.createButton")}
           </button>
         </div>
       </form>
@@ -488,6 +490,7 @@ function EditForm({
   onFrozenAction,
   onClose,
 }: EditFormProps) {
+  const { t } = useTranslation();
   const [tab, setTab] = useState<EditTab>("variants");
   const [name, setName] = useState(product.name);
   const [description, setDescription] = useState(product.description ?? "");
@@ -504,7 +507,7 @@ function EditForm({
   const [addingVariant, setAddingVariant] = useState(false);
   const [activeVariantId, setActiveVariantId] = useState<number | null>(null);
 
-  const template = templates.find((t) => t.id === product.template_id) ?? null;
+  const template = templates.find((tpl) => tpl.id === product.template_id) ?? null;
   const axes: TemplateField[] = template?.field_schema.variant_axes ?? [];
   const attributeFields: TemplateField[] = template?.field_schema.attributes ?? [];
 
@@ -513,7 +516,7 @@ function EditForm({
   async function handleSave() {
     setError(null);
     if (!name.trim()) {
-      setError("Вкажіть назву товару");
+      setError(t("product.nameRequired"));
       setNameInvalid(true);
       return;
     }
@@ -527,7 +530,7 @@ function EditForm({
       });
       onClose();
     } catch (err) {
-      setError(errorMessage(err, "Не вдалося зберегти"));
+      setError(errorMessage(err, t("product.saveFailed")));
     } finally {
       setSaving(false);
     }
@@ -559,19 +562,23 @@ function EditForm({
 
   return (
     <>
-      <h2>Редагувати товар</h2>
+      <h2>{t("product.editTitle")}</h2>
 
       <div className="modal-tabs" role="tablist">
-        {(["variants", "info", "photo"] as EditTab[]).map((t) => (
+        {(["variants", "info", "photo"] as EditTab[]).map((tabId) => (
           <button
-            key={t}
+            key={tabId}
             type="button"
             role="tab"
-            aria-selected={tab === t}
-            className={`modal-tab${tab === t ? " modal-tab--active" : ""}`}
-            onClick={() => setTab(t)}
+            aria-selected={tab === tabId}
+            className={`modal-tab${tab === tabId ? " modal-tab--active" : ""}`}
+            onClick={() => setTab(tabId)}
           >
-            {t === "variants" ? "Варіанти" : t === "info" ? "Інфо" : "Фото"}
+            {tabId === "variants"
+              ? t("product.variantsTitle")
+              : tabId === "info"
+                ? t("product.tabInfo")
+                : t("product.tabPhoto")}
           </button>
         ))}
       </div>
@@ -602,7 +609,7 @@ function EditForm({
             disabled={addingVariant}
             onClick={() => void handleAddVariant()}
           >
-            {addingVariant ? "Додаємо..." : "+ Додати варіант"}
+            {addingVariant ? t("product.addingVariant") : t("product.addVariantButton")}
           </button>
 
           {activeVariantId !== null && activeVariant !== undefined ? (
@@ -632,9 +639,9 @@ function EditForm({
         <>
           {error ? <p className="error-banner">{error}</p> : null}
           <label className="form-field">
-            <span>Назва</span>
+            <span>{t("product.nameLabel")}</span>
             <input
-              aria-label="Назва"
+              aria-label={t("product.nameLabel")}
               type="text"
               className={nameInvalid ? "input-error" : undefined}
               value={name}
@@ -645,7 +652,7 @@ function EditForm({
             />
           </label>
           <label className="form-field">
-            <span>Опис</span>
+            <span>{t("product.descriptionLabel")}</span>
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} />
           </label>
 
@@ -691,11 +698,11 @@ function EditForm({
 
       <div className="modal-actions">
         <button type="button" onClick={onClose} disabled={saving}>
-          Закрити
+          {t("common.close")}
         </button>
         {tab === "info" ? (
           <button type="button" onClick={() => void handleSave()} disabled={saving}>
-            {saving ? "Зберігаємо..." : "Зберегти"}
+            {saving ? t("product.saving") : t("product.saveButton")}
           </button>
         ) : null}
       </div>
@@ -729,6 +736,7 @@ export function ProductModal({
   onFrozenAction,
   onClose,
 }: ProductModalProps) {
+  const { t } = useTranslation();
   const [createdProduct, setCreatedProduct] = useState<Product | null>(null);
   const [isClosing, setIsClosing] = useState(false);
   const prefersReducedMotion = useReducedMotion();
@@ -761,7 +769,7 @@ export function ProductModal({
         className="modal-card"
         role="dialog"
         aria-modal="true"
-        aria-label={product ? "Редагувати товар" : "Додати товар"}
+        aria-label={product ? t("product.editTitle") : t("product.addTitle")}
         onClick={(e) => e.stopPropagation()}
         initial={{ opacity: 0, scale: prefersReducedMotion ? 1 : 0.96 }}
         animate={
@@ -797,7 +805,7 @@ export function ProductModal({
           // Create mode Phase 2 — product created, upload photos
           <>
             <div className="modal-card-body">
-              <p className="product-modal-success">✓ Товар створено!</p>
+              <p className="product-modal-success">{t("product.created")}</p>
               <ProductPhotoGallery
                 product={liveProduct}
                 photosAllowed={photosAllowed}
@@ -807,7 +815,7 @@ export function ProductModal({
             </div>
             <div className="modal-actions">
               <button type="button" onClick={handleClose}>
-                Готово
+                {t("product.doneButton")}
               </button>
             </div>
           </>

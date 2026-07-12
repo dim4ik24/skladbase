@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
+import { useTranslation } from "react-i18next";
 import { errorMessage } from "../errors";
 import type { AdjustPayload, WriteOffReason } from "../types";
 
@@ -10,14 +11,15 @@ interface WriteOffFormProps {
   onCancel: () => void;
 }
 
-const REASONS: { value: WriteOffReason; label: string }[] = [
-  { value: "sold", label: "💰 Продано" },
-  { value: "defect", label: "🔧 Брак" },
-  { value: "correction", label: "✏️ Корекція" },
-  { value: "other", label: "❓ Інше" },
+const REASONS: { value: WriteOffReason; labelKey: string }[] = [
+  { value: "sold", labelKey: "reasons.sold" },
+  { value: "defect", labelKey: "reasons.defect" },
+  { value: "correction", labelKey: "reasons.correction" },
+  { value: "other", labelKey: "reasons.otherShort" },
 ];
 
 export function WriteOffForm({ variantId, maxQty, onSubmit, onCancel }: WriteOffFormProps) {
+  const { t } = useTranslation();
   const [qty, setQty] = useState("1");
   const [reason, setReason] = useState<WriteOffReason | null>(null);
   const [comment, setComment] = useState("");
@@ -31,11 +33,11 @@ export function WriteOffForm({ variantId, maxQty, onSubmit, onCancel }: WriteOff
 
     const qtyNumber = Number(qty);
     if (!Number.isInteger(qtyNumber) || qtyNumber <= 0 || qtyNumber > maxQty) {
-      setError(`Кількість має бути від 1 до ${maxQty}`);
+      setError(t("common.qtyRange", { max: maxQty }));
       return;
     }
     if (!reason) {
-      setError("Оберіть причину списання");
+      setError(t("writeOff.reasonMissing"));
       return;
     }
     const trimmedComment = comment.trim();
@@ -53,7 +55,7 @@ export function WriteOffForm({ variantId, maxQty, onSubmit, onCancel }: WriteOff
         comment: trimmedComment || undefined,
       });
     } catch (err) {
-      setError(errorMessage(err, "Не вдалося списати товар"));
+      setError(errorMessage(err, t("writeOff.failed")));
     } finally {
       setSubmitting(false);
     }
@@ -64,7 +66,7 @@ export function WriteOffForm({ variantId, maxQty, onSubmit, onCancel }: WriteOff
       {error ? <p className="error-banner">{error}</p> : null}
 
       <label className="form-field">
-        <span>Кількість (доступно {maxQty})</span>
+        <span>{t("common.qtyAvailable", { max: maxQty })}</span>
         <input
           type="number"
           min="1"
@@ -75,7 +77,11 @@ export function WriteOffForm({ variantId, maxQty, onSubmit, onCancel }: WriteOff
         />
       </label>
 
-      <div className="write-off-reasons" role="group" aria-label="Причина списання">
+      <div
+        className="write-off-reasons"
+        role="group"
+        aria-label={t("writeOff.reasonGroupAriaLabel")}
+      >
         {REASONS.map((r) => (
           <button
             key={r.value}
@@ -86,14 +92,14 @@ export function WriteOffForm({ variantId, maxQty, onSubmit, onCancel }: WriteOff
             aria-pressed={reason === r.value}
             onClick={() => setReason(r.value)}
           >
-            {r.label}
+            {t(r.labelKey)}
           </button>
         ))}
       </div>
 
       {reason === "other" ? (
         <label className="form-field">
-          <span>Коментар (обов'язково)</span>
+          <span>{t("writeOff.commentLabel")}</span>
           <input
             type="text"
             value={comment}
@@ -109,10 +115,10 @@ export function WriteOffForm({ variantId, maxQty, onSubmit, onCancel }: WriteOff
 
       <div className="modal-actions">
         <button type="button" onClick={onCancel} disabled={submitting}>
-          Скасувати
+          {t("common.cancel")}
         </button>
         <button type="submit" disabled={submitting}>
-          {submitting ? "Списуємо..." : "Списати"}
+          {submitting ? t("writeOff.submitting") : t("writeOff.submit")}
         </button>
       </div>
     </form>

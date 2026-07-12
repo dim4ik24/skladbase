@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
+import { useTranslation } from "react-i18next";
 import { errorMessage } from "../errors";
 
 interface SellFormProps {
@@ -10,6 +11,7 @@ interface SellFormProps {
 }
 
 export function SellForm({ variantId, maxQty, onSubmit, onCancel }: SellFormProps) {
+  const { t } = useTranslation();
   const [qty, setQty] = useState("1");
   const [withShipping, setWithShipping] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -21,7 +23,7 @@ export function SellForm({ variantId, maxQty, onSubmit, onCancel }: SellFormProp
 
     const qtyNumber = Number(qty);
     if (!Number.isInteger(qtyNumber) || qtyNumber <= 0 || qtyNumber > maxQty) {
-      setError(`Кількість має бути від 1 до ${maxQty}`);
+      setError(t("common.qtyRange", { max: maxQty }));
       return;
     }
 
@@ -29,7 +31,7 @@ export function SellForm({ variantId, maxQty, onSubmit, onCancel }: SellFormProp
     try {
       await onSubmit(variantId, qtyNumber, withShipping);
     } catch (err) {
-      setError(errorMessage(err, "Не вдалося оформити продаж"));
+      setError(errorMessage(err, t("sell.failed")));
     } finally {
       setSubmitting(false);
     }
@@ -40,7 +42,7 @@ export function SellForm({ variantId, maxQty, onSubmit, onCancel }: SellFormProp
       {error ? <p className="error-banner">{error}</p> : null}
 
       <label className="form-field">
-        <span>Кількість (доступно {maxQty})</span>
+        <span>{t("common.qtyAvailable", { max: maxQty })}</span>
         <input
           type="number"
           min="1"
@@ -57,15 +59,15 @@ export function SellForm({ variantId, maxQty, onSubmit, onCancel }: SellFormProp
           checked={withShipping}
           onChange={(event) => setWithShipping(event.target.checked)}
         />
-        Оформити відправку
+        {t("sell.withShippingLabel")}
       </label>
 
       <div className="modal-actions">
         <button type="button" onClick={onCancel} disabled={submitting}>
-          Скасувати
+          {t("common.cancel")}
         </button>
         <button type="submit" disabled={submitting}>
-          {submitting ? "Оформлюємо..." : "Продано"}
+          {submitting ? t("sell.submitting") : t("sell.submit")}
         </button>
       </div>
     </form>
