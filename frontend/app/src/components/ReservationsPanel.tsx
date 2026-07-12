@@ -1,4 +1,5 @@
 import { Suspense, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { lazyWithRetry } from "../lib/lazyWithRetry";
 import { ReservationSheet } from "./ReservationSheet";
 import type {
@@ -61,13 +62,14 @@ export function ReservationsPanel({
   onCreateTtn,
   onNavigateToSettings,
 }: ReservationsPanelProps) {
+  const { t } = useTranslation();
   const [activeId, setActiveId] = useState<number | null>(null);
   const [releasingId, setReleasingId] = useState<number | null>(null);
   const [shippingId, setShippingId] = useState<number | null>(null);
   const [notPickedUpId, setNotPickedUpId] = useState<number | null>(null);
 
   if (reservations.length === 0) {
-    return <p className="status-text">Активних резервів немає</p>;
+    return <p className="status-text">{t("reservations.empty")}</p>;
   }
 
   async function handleReleaseSubmit(reservationId: number, payload: ReleasePayload) {
@@ -96,7 +98,8 @@ export function ReservationsPanel({
   } {
     const resolved = resolveReservationVariant(reservation.variant_id);
     return {
-      productName: resolved?.product.name ?? `Варіант #${reservation.variant_id}`,
+      productName:
+        resolved?.product.name ?? t("reservations.variantFallback", { id: reservation.variant_id }),
       defaultCodAmount: resolved ? Number(resolved.variant.price) * reservation.qty : 0,
     };
   }
@@ -108,8 +111,10 @@ export function ReservationsPanel({
     const axisLabel = variant
       ? Object.values(variant.axis_values).filter(Boolean).join(" / ")
       : "";
-    const name = product ? product.name : `Варіант #${reservation.variant_id}`;
-    const inner = [axisLabel, `${reservation.qty} шт.`].filter(Boolean).join(", ");
+    const name = product ? product.name : t("reservations.variantFallback", { id: reservation.variant_id });
+    const inner = [axisLabel, `${reservation.qty} ${t("common.unitsShort")}`]
+      .filter(Boolean)
+      .join(", ");
     return `${name} (${inner})`;
   }
 
@@ -120,7 +125,9 @@ export function ReservationsPanel({
     const axisLabel = variant
       ? Object.values(variant.axis_values).filter(Boolean).join(" / ")
       : "";
-    const title = product ? product.name : `Варіант #${reservation.variant_id}`;
+    const title = product
+      ? product.name
+      : t("reservations.variantFallback", { id: reservation.variant_id });
     const photoUrl = variant?.photo_url ?? product?.photos[0]?.url ?? null;
     const letter = (axisLabel.charAt(0) || product?.name.charAt(0) || "?").toUpperCase();
     const unitPrice = variant ? Number(variant.price) : null;
@@ -143,15 +150,21 @@ export function ReservationsPanel({
 
           const qtyPriceLine =
             unitPrice !== null && sum !== null
-              ? `${reservation.qty} шт. × ${fmtMoney(unitPrice)} ₴ = ${fmtMoney(sum)} ₴`
-              : `${reservation.qty} шт.`;
+              ? t("reservations.qtyPriceLine", {
+                  qty: reservation.qty,
+                  unitPrice: fmtMoney(unitPrice),
+                  sum: fmtMoney(sum),
+                })
+              : `${reservation.qty} ${t("common.unitsShort")}`;
           const row2 = [axisLabel, qtyPriceLine].filter(Boolean).join(" · ");
 
           const isShipped = reservation.status === "shipped";
 
           const row3Parts = [
             reservation.customer_note,
-            reservation.expires_at ? `до ${formatCompactDate(reservation.expires_at)}` : null,
+            reservation.expires_at
+              ? t("reservations.until", { date: formatCompactDate(reservation.expires_at) })
+              : null,
           ].filter((part): part is string => Boolean(part));
 
           return (
@@ -159,7 +172,7 @@ export function ReservationsPanel({
               <button
                 type="button"
                 className="reservation-card"
-                aria-label={`Резерв: ${title}`}
+                aria-label={t("reservations.cardAriaLabel", { title })}
                 onClick={() => setActiveId(reservation.id)}
               >
                 {photoUrl ? (
@@ -178,7 +191,7 @@ export function ReservationsPanel({
                   ) : null}
                   {isShipped ? (
                     <span className="reservation-card-meta">
-                      🚚 {reservation.ttn ? reservation.ttn : "Відправлено (додати ТТН)"}
+                      🚚 {reservation.ttn ? reservation.ttn : t("reservations.shippedNoTtn")}
                     </span>
                   ) : null}
                   {isShipped && reservation.np_status ? (
@@ -188,7 +201,7 @@ export function ReservationsPanel({
 
                 <span className="reservation-card-right">
                   <span className={`badge${isShipped ? " badge-shipped" : " badge-active"}`}>
-                    {isShipped ? "🚚 Відправлено" : "Активний"}
+                    {isShipped ? t("reservations.badgeShipped") : t("reservations.badgeActive")}
                   </span>
                 </span>
               </button>

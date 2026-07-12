@@ -1,5 +1,6 @@
 import { Suspense, useState } from "react";
 import type { RefObject } from "react";
+import { useTranslation } from "react-i18next";
 import { LazySheetFallback } from "../components/LazyFallback";
 import type { MetricCardData } from "../components/MetricCarousel";
 import { MetricCarousel } from "../components/MetricCarousel";
@@ -28,11 +29,11 @@ const HistorySheet = lazyWithRetry(() =>
   import("../components/HistorySheet").then((m) => ({ default: m.HistorySheet })),
 );
 
-const PERIOD_OPTIONS: { value: FinancePeriod; label: string }[] = [
-  { value: "week", label: "Тиждень" },
-  { value: "month", label: "Місяць" },
-  { value: "year", label: "Рік" },
-  { value: "all", label: "Весь час" },
+const PERIOD_OPTIONS: { value: FinancePeriod; labelKey: string }[] = [
+  { value: "week", labelKey: "finance.period.week" },
+  { value: "month", labelKey: "finance.period.month" },
+  { value: "year", labelKey: "finance.period.year" },
+  { value: "all", labelKey: "finance.period.all" },
 ];
 
 function formatUah(value: string | number): string {
@@ -88,6 +89,7 @@ export function DashboardScreen({
   products,
   onOpenProduct,
 }: DashboardScreenProps) {
+  const { t } = useTranslation();
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyDate, setHistoryDate] = useState<string | undefined>(undefined);
 
@@ -102,17 +104,17 @@ export function DashboardScreen({
 
       <div className="glass-card rounded-[20px] p-4 mb-4 shadow-[var(--shadow-card)]">
         <div className="flex items-center justify-between mb-2">
-          <h2 className="section-title mb-0">Фінанси</h2>
+          <h2 className="section-title mb-0">{t("finance.title")}</h2>
           <button
             type="button"
             className="finance-history-btn"
             onClick={() => openHistory(undefined)}
           >
-            Історія
+            {t("finance.historyButton")}
           </button>
         </div>
 
-        <div className="finance-period-chips" role="group" aria-label="Період">
+        <div className="finance-period-chips" role="group" aria-label={t("finance.periodAriaLabel")}>
           {PERIOD_OPTIONS.map((option) => (
             <button
               key={option.value}
@@ -123,13 +125,13 @@ export function DashboardScreen({
               aria-pressed={financePeriod === option.value}
               onClick={() => onFinancePeriodChange(option.value)}
             >
-              {option.label}
+              {t(option.labelKey)}
             </button>
           ))}
         </div>
 
         {finance.sales_count === 0 ? (
-          <p className="status-text finance-empty-state">Немає продажів за цей період</p>
+          <p className="status-text finance-empty-state">{t("finance.emptyState")}</p>
         ) : (
           <>
             <RevenueChart
@@ -139,13 +141,13 @@ export function DashboardScreen({
             />
 
             <div className="finance-row">
-              <span className="text-sm text-text-soft">Дохід</span>
+              <span className="text-sm text-text-soft">{t("finance.revenue")}</span>
               <span className="font-mono-price text-base font-semibold text-text">
                 {formatUah(finance.revenue_uah)}
               </span>
             </div>
             <div className="finance-row finance-row--last">
-              <span className="text-sm text-text-soft">Продажів · Одиниць</span>
+              <span className="text-sm text-text-soft">{t("finance.salesUnits")}</span>
               <span className="font-mono-price text-base font-semibold text-text">
                 {finance.sales_count} · {finance.units_sold}
               </span>
@@ -153,7 +155,7 @@ export function DashboardScreen({
 
             {finance.returns_count > 0 ? (
               <div className="finance-row finance-row--last">
-                <span className="text-sm text-text-soft">Повернення</span>
+                <span className="text-sm text-text-soft">{t("finance.returns")}</span>
                 <span className="finance-returns-value">
                   {formatUah(finance.returns_uah)} · {finance.returns_count}
                 </span>
@@ -164,11 +166,11 @@ export function DashboardScreen({
 
         {finance.release_reasons.length > 0 ? (
           <div className="finance-reason-block">
-            <h3 className="finance-subsection-title">Зняття резервів</h3>
+            <h3 className="finance-subsection-title">{t("finance.releaseReasonsTitle")}</h3>
             <ul>
               {finance.release_reasons.map((row) => (
                 <li key={row.reason}>
-                  {reasonLabel(RELEASE_REASON_LABELS, row.reason)} — {row.count}
+                  {t(reasonLabel(RELEASE_REASON_LABELS, row.reason))} — {row.count}
                 </li>
               ))}
             </ul>
@@ -177,11 +179,11 @@ export function DashboardScreen({
 
         {finance.return_reasons.length > 0 ? (
           <div className="finance-reason-block">
-            <h3 className="finance-subsection-title">Повернення</h3>
+            <h3 className="finance-subsection-title">{t("finance.returns")}</h3>
             <ul>
               {finance.return_reasons.map((row) => (
                 <li key={row.reason}>
-                  {reasonLabel(RETURN_REASON_LABELS, row.reason)} — {row.count}
+                  {t(reasonLabel(RETURN_REASON_LABELS, row.reason))} — {row.count}
                 </li>
               ))}
             </ul>
@@ -195,11 +197,11 @@ export function DashboardScreen({
           className="section-title px-4 pt-4"
           scrollContainerRef={scrollContainerRef}
         >
-          Резерви
+          {t("reservations.title")}
         </ScrollFloat>
         <div className="px-4 pb-4">
           {loading ? (
-            <p className="status-text">Завантаження…</p>
+            <p className="status-text">{t("common.loading")}</p>
           ) : (
             <ReservationsPanel
               reservations={reservations}
@@ -219,7 +221,7 @@ export function DashboardScreen({
 
       {finance.top_products.length > 0 ? (
         <div className="glass-card rounded-[20px] p-4 mb-4 shadow-[var(--shadow-card)]">
-          <h2 className="section-title mb-2">Топ товарів</h2>
+          <h2 className="section-title mb-2">{t("finance.topProductsTitle")}</h2>
           <div className="finance-top-products">
             <ul>
               {finance.top_products.map((topProduct) => {
@@ -244,7 +246,10 @@ export function DashboardScreen({
                     )}
                     <span className="finance-top-product-name">{topProduct.name}</span>
                     <span className="finance-top-product-value">
-                      {formatUah(topProduct.revenue_uah)} · {topProduct.units} шт.
+                      {t("finance.topProductLine", {
+                        revenue: formatUah(topProduct.revenue_uah),
+                        units: topProduct.units,
+                      })}
                     </span>
                   </li>
                 );

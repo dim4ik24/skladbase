@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import type { FormEvent } from "react";
+import { useTranslation } from "react-i18next";
 import { errorMessage } from "../errors";
 import type { ReleasePayload, ReleaseReason } from "../types";
 
@@ -11,14 +12,15 @@ interface ReleaseSheetProps {
   onClose: () => void;
 }
 
-const REASONS: { value: ReleaseReason; label: string }[] = [
-  { value: "customer_changed_mind", label: "Клієнт передумав" },
-  { value: "unresponsive", label: "Клієнт не виходить на зв'язок" },
-  { value: "mistaken_reservation", label: "Резерв створено помилково" },
-  { value: "other", label: "❓ Інша причина" },
+const REASONS: { value: ReleaseReason; labelKey: string }[] = [
+  { value: "customer_changed_mind", labelKey: "reasons.customerChangedMind" },
+  { value: "unresponsive", labelKey: "reasons.unresponsive" },
+  { value: "mistaken_reservation", labelKey: "reasons.mistakenReservation" },
+  { value: "other", labelKey: "reasons.otherWithEmoji" },
 ];
 
 export function ReleaseSheet({ reservationId, title, onSubmit, onClose }: ReleaseSheetProps) {
+  const { t } = useTranslation();
   const [isClosing, setIsClosing] = useState(false);
   const [reason, setReason] = useState<ReleaseReason | null>(null);
   const [comment, setComment] = useState("");
@@ -36,7 +38,7 @@ export function ReleaseSheet({ reservationId, title, onSubmit, onClose }: Releas
     setError(null);
 
     if (!reason) {
-      setError("Оберіть причину зняття");
+      setError(t("reservations.release.reasonMissing"));
       return;
     }
     const trimmedComment = comment.trim();
@@ -54,7 +56,7 @@ export function ReleaseSheet({ reservationId, title, onSubmit, onClose }: Releas
       });
       handleClose();
     } catch (err) {
-      setError(errorMessage(err, "Не вдалося зняти резерв"));
+      setError(errorMessage(err, t("reservations.release.failed")));
       setSubmitting(false);
     }
   }
@@ -67,15 +69,20 @@ export function ReleaseSheet({ reservationId, title, onSubmit, onClose }: Releas
       />
       <div
         role="dialog"
-        aria-label={`Зняти резерв: ${title}`}
+        aria-label={t("reservations.release.ariaLabel", { title })}
         className={`variant-sheet${isClosing ? " variant-sheet--closing" : ""}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="sheet-header">
           <span className="sheet-axis-label release-sheet-title">
-            Чому знімаєте резерв «{title}»?
+            {t("reservations.release.prompt", { title })}
           </span>
-          <button type="button" className="sheet-close" aria-label="Закрити" onClick={handleClose}>
+          <button
+            type="button"
+            className="sheet-close"
+            aria-label={t("common.close")}
+            onClick={handleClose}
+          >
             ✕
           </button>
         </div>
@@ -83,7 +90,11 @@ export function ReleaseSheet({ reservationId, title, onSubmit, onClose }: Releas
         <form onSubmit={handleSubmit}>
           {error ? <p className="error-banner">{error}</p> : null}
 
-          <div className="write-off-reasons" role="group" aria-label="Чому знімаєте резерв?">
+          <div
+            className="write-off-reasons"
+            role="group"
+            aria-label={t("reservations.release.reasonGroupAriaLabel")}
+          >
             {REASONS.map((r) => (
               <button
                 key={r.value}
@@ -94,14 +105,14 @@ export function ReleaseSheet({ reservationId, title, onSubmit, onClose }: Releas
                 aria-pressed={reason === r.value}
                 onClick={() => setReason(r.value)}
               >
-                {r.label}
+                {t(r.labelKey)}
               </button>
             ))}
           </div>
 
           {reason === "other" ? (
             <label className="form-field">
-              <span>Коментар (обов'язково)</span>
+              <span>{t("reservations.commentLabel")}</span>
               <input
                 type="text"
                 value={comment}
@@ -117,10 +128,10 @@ export function ReleaseSheet({ reservationId, title, onSubmit, onClose }: Releas
 
           <div className="modal-actions">
             <button type="button" onClick={handleClose} disabled={submitting}>
-              Скасувати
+              {t("common.cancel")}
             </button>
             <button type="submit" disabled={submitting}>
-              {submitting ? "Знімаємо..." : "Підтвердити"}
+              {submitting ? t("reservations.release.submitting") : t("common.confirm")}
             </button>
           </div>
         </form>

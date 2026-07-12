@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import type { FormEvent } from "react";
+import { useTranslation } from "react-i18next";
 import * as api from "../api";
 import { errorMessage } from "../errors";
-import { isValidTtn, TTN_ERROR_MESSAGE } from "../lib/ttn";
+import { isValidTtn } from "../lib/ttn";
 import { NpCityPicker } from "./NpCityPicker";
 import { NpWarehousePicker } from "./NpWarehousePicker";
 import type { CreateTtnPayload, CreateTtnResult, NpCity, NpWarehouse, ShipPayload } from "../types";
@@ -33,6 +34,7 @@ export function ShipSheet({
   onNavigateToSettings,
   onClose,
 }: ShipSheetProps) {
+  const { t } = useTranslation();
   const [isClosing, setIsClosing] = useState(false);
   const [mode, setMode] = useState<ShipMode>("manual");
   const [submitting, setSubmitting] = useState(false);
@@ -91,7 +93,7 @@ export function ShipSheet({
     const trimmedTtn = ttn.trim();
     if (trimmedTtn && !isValidTtn(trimmedTtn)) {
       setTtnInvalid(true);
-      setError(TTN_ERROR_MESSAGE);
+      setError(t("shipping.ttnError"));
       return;
     }
 
@@ -100,7 +102,7 @@ export function ShipSheet({
       await onSubmit(reservationId, { ttn: trimmedTtn || undefined });
       handleClose();
     } catch (err) {
-      setError(errorMessage(err, "Не вдалося відправити резерв"));
+      setError(errorMessage(err, t("shipping.sendFailed")));
       setSubmitting(false);
     }
   }
@@ -110,7 +112,7 @@ export function ShipSheet({
     setError(null);
 
     if (!recipientName.trim() || !recipientPhone.trim() || !recipientCity || !recipientWarehouse) {
-      setError("Заповніть усі поля одержувача");
+      setError(t("shipping.recipientFieldsMissing"));
       return;
     }
 
@@ -128,7 +130,7 @@ export function ShipSheet({
       });
       setSuccessResult(result);
     } catch (err) {
-      setError(errorMessage(err, "Не вдалося створити накладну"));
+      setError(errorMessage(err, t("shipping.createFailed")));
     } finally {
       setSubmitting(false);
     }
@@ -142,13 +144,20 @@ export function ShipSheet({
       />
       <div
         role="dialog"
-        aria-label={`Відправити: ${title}`}
+        aria-label={t("shipping.ariaLabel", { title })}
         className={`variant-sheet${isClosing ? " variant-sheet--closing" : ""}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="sheet-header">
-          <span className="sheet-axis-label release-sheet-title">Відправити: {title}</span>
-          <button type="button" className="sheet-close" aria-label="Закрити" onClick={handleClose}>
+          <span className="sheet-axis-label release-sheet-title">
+            {t("shipping.ariaLabel", { title })}
+          </span>
+          <button
+            type="button"
+            className="sheet-close"
+            aria-label={t("common.close")}
+            onClick={handleClose}
+          >
             ✕
           </button>
         </div>
@@ -156,11 +165,14 @@ export function ShipSheet({
         {successResult ? (
           <>
             <p className="ship-success-message">
-              ТТН {successResult.ttn} створено, доставка ~{successResult.delivery_cost} грн
+              {t("shipping.successMessage", {
+                ttn: successResult.ttn,
+                cost: successResult.delivery_cost,
+              })}
             </p>
             <div className="modal-actions">
               <button type="button" onClick={handleClose}>
-                Готово
+                {t("shipping.done")}
               </button>
             </div>
           </>
@@ -168,14 +180,14 @@ export function ShipSheet({
           <form onSubmit={mode === "manual" ? handleManualSubmit : handleAutoSubmit}>
             {error ? <p className="error-banner">{error}</p> : null}
 
-            <div className="ship-mode-toggle" role="group" aria-label="Спосіб відправки">
+            <div className="ship-mode-toggle" role="group" aria-label={t("shipping.modeAriaLabel")}>
               <button
                 type="button"
                 className={`ship-mode-btn${mode === "auto" ? " ship-mode-btn--active" : ""}`}
                 aria-pressed={mode === "auto"}
                 onClick={() => setMode("auto")}
               >
-                Створити ТТН автоматично
+                {t("shipping.modeAuto")}
               </button>
               <button
                 type="button"
@@ -183,13 +195,13 @@ export function ShipSheet({
                 aria-pressed={mode === "manual"}
                 onClick={() => setMode("manual")}
               >
-                Вписати ТТН вручну
+                {t("shipping.modeManual")}
               </button>
             </div>
 
             {mode === "manual" ? (
               <label className="form-field">
-                <span>ТТН (можна додати пізніше)</span>
+                <span>{t("shipping.ttnFieldLabel")}</span>
                 <input
                   type="text"
                   inputMode="numeric"
@@ -205,18 +217,18 @@ export function ShipSheet({
                 />
               </label>
             ) : senderConfigured === null ? (
-              <p className="status-text">Перевіряємо дані відправника…</p>
+              <p className="status-text">{t("shipping.checkingSender")}</p>
             ) : senderConfigured === false ? (
               <div className="ship-sender-hint">
-                <p>Заповніть дані відправника в Налаштуваннях</p>
+                <p>{t("shipping.senderMissingHint")}</p>
                 <button type="button" onClick={onNavigateToSettings}>
-                  Перейти в Налаштування
+                  {t("shipping.goToSettings")}
                 </button>
               </div>
             ) : (
               <>
                 <label className="form-field">
-                  <span>ПІБ одержувача</span>
+                  <span>{t("shipping.recipientName")}</span>
                   <input
                     type="text"
                     value={recipientName}
@@ -224,7 +236,7 @@ export function ShipSheet({
                   />
                 </label>
                 <label className="form-field">
-                  <span>Телефон одержувача</span>
+                  <span>{t("shipping.recipientPhone")}</span>
                   <input
                     type="tel"
                     value={recipientPhone}
@@ -232,15 +244,19 @@ export function ShipSheet({
                     placeholder="380XXXXXXXXX"
                   />
                 </label>
-                <NpCityPicker label="Місто" value={recipientCity} onChange={setRecipientCity} />
+                <NpCityPicker
+                  label={t("shipping.city")}
+                  value={recipientCity}
+                  onChange={setRecipientCity}
+                />
                 <NpWarehousePicker
-                  label="Відділення"
+                  label={t("shipping.warehouse")}
                   cityRef={recipientCity?.ref ?? null}
                   value={recipientWarehouse}
                   onChange={setRecipientWarehouse}
                 />
                 <label className="form-field">
-                  <span>Вага, кг</span>
+                  <span>{t("shipping.weight")}</span>
                   <input
                     type="number"
                     min="0.1"
@@ -255,11 +271,11 @@ export function ShipSheet({
                     checked={cod}
                     onChange={(event) => setCod(event.target.checked)}
                   />
-                  Накладений платіж
+                  {t("shipping.cod")}
                 </label>
                 {cod ? (
                   <label className="form-field">
-                    <span>Сума накладеного платежу</span>
+                    <span>{t("shipping.codAmount")}</span>
                     <input
                       type="number"
                       min="0"
@@ -270,7 +286,7 @@ export function ShipSheet({
                   </label>
                 ) : null}
                 <label className="form-field">
-                  <span>Опис</span>
+                  <span>{t("shipping.description")}</span>
                   <input
                     type="text"
                     value={description}
@@ -282,15 +298,15 @@ export function ShipSheet({
 
             <div className="modal-actions">
               <button type="button" onClick={handleClose} disabled={submitting}>
-                Скасувати
+                {t("common.cancel")}
               </button>
               {mode === "manual" ? (
                 <button type="submit" disabled={submitting}>
-                  {submitting ? "Відправляємо..." : "Відправлено"}
+                  {submitting ? t("shipping.sending") : t("shipping.sent")}
                 </button>
               ) : senderConfigured ? (
                 <button type="submit" disabled={submitting}>
-                  {submitting ? "Створюємо..." : "Створити накладну"}
+                  {submitting ? t("shipping.creating") : t("shipping.createTtnButton")}
                 </button>
               ) : null}
             </div>

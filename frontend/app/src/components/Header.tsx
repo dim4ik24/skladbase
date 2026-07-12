@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { GradientText } from "./GradientText";
 import type { Shop, ShopSummary } from "../types";
 
@@ -10,6 +11,7 @@ interface HeaderProps {
 }
 
 export function Header({ shop, shops = [], onSwitchShop }: HeaderProps) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
 
   if (!shop) {
@@ -79,7 +81,7 @@ export function Header({ shop, shops = [], onSwitchShop }: HeaderProps) {
                     <span className="shop-switcher-info">
                       <span className="shop-switcher-name">{s.shop_name}</span>
                       <span className="shop-switcher-role">
-                        {s.role === "owner" ? "Власник" : "Менеджер"}
+                        {s.role === "owner" ? t("common.roleOwner") : t("common.roleManager")}
                       </span>
                     </span>
                     {s.shop_id === shop.shop_id ? (

@@ -1,13 +1,52 @@
 {
-  "common": {},
+  "common": {
+    "close": "Закрити",
+    "cancel": "Скасувати",
+    "confirm": "Підтвердити",
+    "loading": "Завантаження…",
+    "ellipsis": "...",
+    "unitsShort": "шт.",
+    "roleOwner": "Власник",
+    "roleManager": "Менеджер"
+  },
   "nav": {
     "dashboard": "Дашборд",
     "sklad": "Склад",
     "settings": "Налаштування"
   },
-  "dashboard": {},
+  "dashboard": {
+    "trialBanner_one": "Тріал: залишилось {{count}} день",
+    "trialBanner_few": "Тріал: залишилось {{count}} дні",
+    "trialBanner_many": "Тріал: залишилось {{count}} днів",
+    "trialBanner_other": "Тріал: залишилось {{count}} днів",
+    "demoText": "Це приклади — додайте свої товари, коли будете готові.",
+    "demoClearing": "Очищаємо...",
+    "demoClear": "Очистити приклади"
+  },
   "sklad": {},
-  "finance": {},
+  "finance": {
+    "title": "Фінанси",
+    "historyButton": "Історія",
+    "periodAriaLabel": "Період",
+    "period": {
+      "week": "Тиждень",
+      "month": "Місяць",
+      "year": "Рік",
+      "all": "Весь час"
+    },
+    "emptyState": "Немає продажів за цей період",
+    "revenue": "Дохід",
+    "salesUnits": "Продажів · Одиниць",
+    "returns": "Повернення",
+    "releaseReasonsTitle": "Зняття резервів",
+    "topProductsTitle": "Топ товарів",
+    "topProductLine": "{{revenue}} · {{units}} шт.",
+    "chart": {
+      "ariaLabel": "Графік доходу за період",
+      "barAriaLabel": "{{label}}: {{value}} ₴",
+      "tooltip": "{{label}} · продано {{units}} шт · {{value}} ₴"
+    }
+  },
   "team": {},
   "settings": {
     "language": {
@@ -17,9 +56,97 @@
       "ru": "Русский"
     }
   },
-  "reservations": {},
-  "shipping": {},
-  "history": {},
+  "reservations": {
+    "title": "Резерви",
+    "empty": "Активних резервів немає",
+    "cardAriaLabel": "Резерв: {{title}}",
+    "variantFallback": "Варіант #{{id}}",
+    "qtyPriceLine": "{{qty}} шт. × {{unitPrice}} ₴ = {{sum}} ₴",
+    "until": "до {{date}}",
+    "shippedNoTtn": "Відправлено (додати ТТН)",
+    "badgeShipped": "🚚 Відправлено",
+    "badgeActive": "Активний",
+    "ttnLabel": "ТТН:",
+    "ttnAdd": "додати",
+    "commentLabel": "Коментар (обов'язково)",
+    "actions": {
+      "ship": "Відправлено",
+      "sold": "Продано",
+      "release": "Зняти",
+      "pickedUp": "Забрав",
+      "notPickedUp": "Не забрав"
+    },
+    "sheet": {
+      "fulfillFailed": "Не вдалося оформити продаж",
+      "pickupFailed": "Не вдалося оформити забір"
+    },
+    "release": {
+      "reasonMissing": "Оберіть причину зняття",
+      "failed": "Не вдалося зняти резерв",
+      "ariaLabel": "Зняти резерв: {{title}}",
+      "prompt": "Чому знімаєте резерв «{{title}}»?",
+      "reasonGroupAriaLabel": "Чому знімаєте резерв?",
+      "submitting": "Знімаємо..."
+    },
+    "notPickedUp": {
+      "reasonMissing": "Оберіть причину незабору",
+      "failed": "Не вдалося оформити незабір",
+      "ariaLabel": "Не забрав: {{title}}",
+      "prompt": "Чому клієнт не забрав «{{title}}»?",
+      "reasonGroupAriaLabel": "Чому клієнт не забрав?",
+      "submitting": "Оформлюємо..."
+    }
+  },
+  "shipping": {
+    "ariaLabel": "Відправити: {{title}}",
+    "recipientFieldsMissing": "Заповніть усі поля одержувача",
+    "createFailed": "Не вдалося створити накладну",
+    "sendFailed": "Не вдалося відправити резерв",
+    "successMessage": "ТТН {{ttn}} створено, доставка ~{{cost}} грн",
+    "done": "Готово",
+    "modeAriaLabel": "Спосіб відправки",
+    "modeAuto": "Створити ТТН автоматично",
+    "modeManual": "Вписати ТТН вручну",
+    "ttnFieldLabel": "ТТН (можна додати пізніше)",
+    "checkingSender": "Перевіряємо дані відправника…",
+    "senderMissingHint": "Заповніть дані відправника в Налаштуваннях",
+    "goToSettings": "Перейти в Налаштування",
+    "recipientName": "ПІБ одержувача",
+    "recipientPhone": "Телефон одержувача",
+    "city": "Місто",
+    "warehouse": "Відділення",
+    "weight": "Вага, кг",
+    "cod": "Накладений платіж",
+    "codAmount": "Сума накладеного платежу",
+    "description": "Опис",
+    "sending": "Відправляємо...",
+    "sent": "Відправлено",
+    "creating": "Створюємо...",
+    "createTtnButton": "Створити накладну",
+    "ttnError": "ТТН Нової Пошти — 14 цифр, починається з 20 або 59"
+  },
+  "history": {
+    "title": "Історія",
+    "titleWithDate": "Історія · {{date}}",
+    "showAllDates": "Показати всі дати",
+    "loadFailed": "Не вдалося завантажити історію",
+    "empty": "Немає подій",
+    "unitsShort": "шт",
+    "event": {
+      "sale": "Продано",
+      "return": "Повернено",
+      "release": "Знято"
+    }
+  },
   "paywall": {},
-  "errors": {}
+  "errors": {},
+  "reasons": {
+    "customerChangedMind": "Клієнт передумав",
+    "unresponsive": "Клієнт не виходить на зв'язок",
+    "mistakenReservation": "Резерв створено помилково",
+    "other": "Інша причина",
+    "otherWithEmoji": "❓ Інша причина",
+    "didNotPickUp": "Не забрав з пошти",
+    "refused": "Відмовився від посилки"
+  }
 }

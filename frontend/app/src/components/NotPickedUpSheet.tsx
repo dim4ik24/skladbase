@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import type { FormEvent } from "react";
+import { useTranslation } from "react-i18next";
 import { errorMessage } from "../errors";
 import type { NotPickedUpPayload, NotPickedUpReason } from "../types";
 
@@ -11,10 +12,10 @@ interface NotPickedUpSheetProps {
   onClose: () => void;
 }
 
-const REASONS: { value: NotPickedUpReason; label: string }[] = [
-  { value: "did_not_pick_up", label: "Не забрав з пошти" },
-  { value: "refused", label: "Відмовився від посилки" },
-  { value: "other", label: "❓ Інша причина" },
+const REASONS: { value: NotPickedUpReason; labelKey: string }[] = [
+  { value: "did_not_pick_up", labelKey: "reasons.didNotPickUp" },
+  { value: "refused", labelKey: "reasons.refused" },
+  { value: "other", labelKey: "reasons.otherWithEmoji" },
 ];
 
 export function NotPickedUpSheet({
@@ -23,6 +24,7 @@ export function NotPickedUpSheet({
   onSubmit,
   onClose,
 }: NotPickedUpSheetProps) {
+  const { t } = useTranslation();
   const [isClosing, setIsClosing] = useState(false);
   const [reason, setReason] = useState<NotPickedUpReason | null>(null);
   const [comment, setComment] = useState("");
@@ -40,7 +42,7 @@ export function NotPickedUpSheet({
     setError(null);
 
     if (!reason) {
-      setError("Оберіть причину незабору");
+      setError(t("reservations.notPickedUp.reasonMissing"));
       return;
     }
     const trimmedComment = comment.trim();
@@ -58,7 +60,7 @@ export function NotPickedUpSheet({
       });
       handleClose();
     } catch (err) {
-      setError(errorMessage(err, "Не вдалося оформити незабір"));
+      setError(errorMessage(err, t("reservations.notPickedUp.failed")));
       setSubmitting(false);
     }
   }
@@ -71,15 +73,20 @@ export function NotPickedUpSheet({
       />
       <div
         role="dialog"
-        aria-label={`Не забрав: ${title}`}
+        aria-label={t("reservations.notPickedUp.ariaLabel", { title })}
         className={`variant-sheet${isClosing ? " variant-sheet--closing" : ""}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="sheet-header">
           <span className="sheet-axis-label release-sheet-title">
-            Чому клієнт не забрав «{title}»?
+            {t("reservations.notPickedUp.prompt", { title })}
           </span>
-          <button type="button" className="sheet-close" aria-label="Закрити" onClick={handleClose}>
+          <button
+            type="button"
+            className="sheet-close"
+            aria-label={t("common.close")}
+            onClick={handleClose}
+          >
             ✕
           </button>
         </div>
@@ -87,7 +94,11 @@ export function NotPickedUpSheet({
         <form onSubmit={handleSubmit}>
           {error ? <p className="error-banner">{error}</p> : null}
 
-          <div className="write-off-reasons" role="group" aria-label="Чому клієнт не забрав?">
+          <div
+            className="write-off-reasons"
+            role="group"
+            aria-label={t("reservations.notPickedUp.reasonGroupAriaLabel")}
+          >
             {REASONS.map((r) => (
               <button
                 key={r.value}
@@ -98,14 +109,14 @@ export function NotPickedUpSheet({
                 aria-pressed={reason === r.value}
                 onClick={() => setReason(r.value)}
               >
-                {r.label}
+                {t(r.labelKey)}
               </button>
             ))}
           </div>
 
           {reason === "other" ? (
             <label className="form-field">
-              <span>Коментар (обов'язково)</span>
+              <span>{t("reservations.commentLabel")}</span>
               <input
                 type="text"
                 value={comment}
@@ -121,10 +132,10 @@ export function NotPickedUpSheet({
 
           <div className="modal-actions">
             <button type="button" onClick={handleClose} disabled={submitting}>
-              Скасувати
+              {t("common.cancel")}
             </button>
             <button type="submit" disabled={submitting}>
-              {submitting ? "Оформлюємо..." : "Підтвердити"}
+              {submitting ? t("reservations.notPickedUp.submitting") : t("common.confirm")}
             </button>
           </div>
         </form>

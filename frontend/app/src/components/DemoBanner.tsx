@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+
 interface DemoBannerProps {
   canClear: boolean;
   clearing: boolean;
@@ -5,12 +7,13 @@ interface DemoBannerProps {
 }
 
 export function DemoBanner({ canClear, clearing, onClear }: DemoBannerProps) {
+  const { t } = useTranslation();
   return (
     <div className="banner banner-demo">
-      <span>Це приклади — додайте свої товари, коли будете готові.</span>
+      <span>{t("dashboard.demoText")}</span>
       {canClear ? (
         <button type="button" onClick={onClear} disabled={clearing}>
-          {clearing ? "Очищаємо..." : "Очистити приклади"}
+          {clearing ? t("dashboard.demoClearing") : t("dashboard.demoClear")}
         </button>
       ) : null}
     </div>

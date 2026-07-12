@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { FinanceChartPoint, FinancePeriod } from "../types";
 
 interface RevenueChartProps {
@@ -78,6 +79,7 @@ function buildBars(period: FinancePeriod, chart: FinanceChartPoint[]): ChartBar[
 }
 
 export function RevenueChart({ period, chart, onOpenHistory }: RevenueChartProps) {
+  const { t } = useTranslation();
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const lastTapRef = useRef<{ index: number; time: number } | null>(null);
   const bars = buildBars(period, chart);
@@ -100,7 +102,7 @@ export function RevenueChart({ period, chart, onOpenHistory }: RevenueChartProps
 
   return (
     <div className="revenue-chart">
-      <div className="revenue-chart-bars" role="img" aria-label="Графік доходу за період">
+      <div className="revenue-chart-bars" role="img" aria-label={t("finance.chart.ariaLabel")}>
         {bars.map((bar, i) => (
           <button
             key={bar.key}
@@ -113,13 +115,20 @@ export function RevenueChart({ period, chart, onOpenHistory }: RevenueChartProps
             onBlur={() => setActiveIndex(null)}
             onTouchStart={() => setActiveIndex(i)}
             onClick={() => handleBarTap(i)}
-            aria-label={`${bar.label}: ${bar.value.toLocaleString("uk-UA", { maximumFractionDigits: 0 })} ₴`}
+            aria-label={t("finance.chart.barAriaLabel", {
+              label: bar.label,
+              value: bar.value.toLocaleString("uk-UA", { maximumFractionDigits: 0 }),
+            })}
           />
         ))}
       </div>
       <div className="revenue-chart-tooltip" aria-live="polite">
         {active
-          ? `${active.label} · продано ${active.units} шт · ${active.value.toLocaleString("uk-UA", { maximumFractionDigits: 0 })} ₴`
+          ? t("finance.chart.tooltip", {
+              label: active.label,
+              units: active.units,
+              value: active.value.toLocaleString("uk-UA", { maximumFractionDigits: 0 }),
+            })
           : ""}
       </div>
       <div className="revenue-chart-axis">

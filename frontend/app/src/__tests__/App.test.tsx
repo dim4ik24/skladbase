@@ -1480,7 +1480,8 @@ describe("Trial banner", () => {
 
     render(<App />);
 
-    expect(await screen.findByText("Тріал: залишилось 3 днів")).toBeInTheDocument();
+    // i18next uk plural rules: 3 falls in the "few" category → "дні", not "днів".
+    expect(await screen.findByText("Тріал: залишилось 3 дні")).toBeInTheDocument();
   });
 
   it("does not render when status is not trial", async () => {

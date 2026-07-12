@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { errorMessage } from "../errors";
-import { isValidTtn, TTN_ERROR_MESSAGE } from "../lib/ttn";
+import { isValidTtn } from "../lib/ttn";
 import type { Reservation } from "../types";
 
 interface ReservationSheetProps {
@@ -47,6 +48,7 @@ export function ReservationSheet({
   onUpdateTtn,
   onClose,
 }: ReservationSheetProps) {
+  const { t } = useTranslation();
   const [isClosing, setIsClosing] = useState(false);
   const [acting, setActing] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -83,7 +85,7 @@ export function ReservationSheet({
       await onFulfill(reservation.id);
       handleClose();
     } catch (err) {
-      setActionError(errorMessage(err, "Не вдалося оформити продаж"));
+      setActionError(errorMessage(err, t("reservations.sheet.fulfillFailed")));
       setActing(false);
     }
   }
@@ -95,7 +97,7 @@ export function ReservationSheet({
       await onPickUp(reservation.id);
       handleClose();
     } catch (err) {
-      setActionError(errorMessage(err, "Не вдалося оформити забір"));
+      setActionError(errorMessage(err, t("reservations.sheet.pickupFailed")));
       setActing(false);
     }
   }
@@ -103,7 +105,7 @@ export function ReservationSheet({
   async function handleTtnSave() {
     const trimmed = ttnDraft.trim();
     if (trimmed && !isValidTtn(trimmed)) {
-      setTtnError(TTN_ERROR_MESSAGE);
+      setTtnError(t("shipping.ttnError"));
       return;
     }
     setTtnError(null);
@@ -121,7 +123,7 @@ export function ReservationSheet({
       />
       <div
         role="dialog"
-        aria-label={`Резерв: ${title}`}
+        aria-label={t("reservations.cardAriaLabel", { title })}
         className={`variant-sheet${isClosing ? " variant-sheet--closing" : ""}`}
         onClick={(e) => e.stopPropagation()}
       >
@@ -138,7 +140,12 @@ export function ReservationSheet({
             </span>
           )}
           <span className="sheet-axis-label release-sheet-title">{title}</span>
-          <button type="button" className="sheet-close" aria-label="Закрити" onClick={handleClose}>
+          <button
+            type="button"
+            className="sheet-close"
+            aria-label={t("common.close")}
+            onClick={handleClose}
+          >
             ✕
           </button>
         </div>
@@ -148,19 +155,21 @@ export function ReservationSheet({
         <div className="reservation-sheet-info">
           {axisLabel ? <p className="reservation-sheet-row">{axisLabel}</p> : null}
           <p className="reservation-sheet-row">
-            {qty} шт.
+            {qty} {t("common.unitsShort")}
             {unitPrice !== null ? ` × ${fmtMoney(unitPrice)} ₴` : ""}
             {sum !== null ? ` = ${fmtMoney(sum)} ₴` : ""}
           </p>
           {customerNote ? <p className="reservation-sheet-row">{customerNote}</p> : null}
-          {deadlineLabel ? <p className="reservation-sheet-row">до {deadlineLabel}</p> : null}
+          {deadlineLabel ? (
+            <p className="reservation-sheet-row">{t("reservations.until", { date: deadlineLabel })}</p>
+          ) : null}
 
           <span
             className={`badge reservation-status-badge${
               isShipped ? " badge-shipped" : " badge-active"
             }`}
           >
-            {isShipped ? "🚚 Відправлено" : "Активний"}
+            {isShipped ? t("reservations.badgeShipped") : t("reservations.badgeActive")}
           </span>
 
           {isShipped ? (
@@ -191,7 +200,7 @@ export function ReservationSheet({
                     setTtnDraft(reservation.ttn ?? "");
                   }}
                 >
-                  ТТН: {reservation.ttn ? reservation.ttn : "додати"}
+                  {t("reservations.ttnLabel")} {reservation.ttn ? reservation.ttn : t("reservations.ttnAdd")}
                 </span>
               )}
               {reservation.np_status ? <> · 📍 {reservation.np_status}</> : null}
@@ -207,22 +216,22 @@ export function ReservationSheet({
           {reservation.status === "active" ? (
             <>
               <button type="button" onClick={requestShip} disabled={acting}>
-                Відправлено
+                {t("reservations.actions.ship")}
               </button>
               <button type="button" onClick={() => void handleFulfill()} disabled={acting}>
-                {acting ? "..." : "Продано"}
+                {acting ? t("common.ellipsis") : t("reservations.actions.sold")}
               </button>
               <button type="button" onClick={requestRelease} disabled={acting}>
-                Зняти
+                {t("reservations.actions.release")}
               </button>
             </>
           ) : (
             <>
               <button type="button" onClick={() => void handlePickUp()} disabled={acting}>
-                {acting ? "..." : "Забрав"}
+                {acting ? t("common.ellipsis") : t("reservations.actions.pickedUp")}
               </button>
               <button type="button" onClick={requestNotPickedUp} disabled={acting}>
-                Не забрав
+                {t("reservations.actions.notPickedUp")}
               </button>
             </>
           )}
