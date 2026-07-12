@@ -4,6 +4,7 @@
     "cancel": "Скасувати",
     "confirm": "Підтвердити",
     "loading": "Завантаження…",
+    "loadingAriaLabel": "Завантаження",
     "ellipsis": "...",
     "unitsShort": "шт.",
     "roleOwner": "Власник",
@@ -13,6 +14,7 @@
     "qtyRange": "Кількість має бути від 1 до {{max}}"
   },
   "nav": {
+    "ariaLabel": "Навігація",
     "dashboard": "Дашборд",
     "sklad": "Склад",
     "settings": "Налаштування"
@@ -24,7 +26,17 @@
     "trialBanner_other": "Тріал: залишилось {{count}} днів",
     "demoText": "Це приклади — додайте свої товари, коли будете готові.",
     "demoClearing": "Очищаємо...",
-    "demoClear": "Очистити приклади"
+    "demoClear": "Очистити приклади",
+    "inviteBanner": {
+      "joined": "Вітаємо! Ви приєднались до магазину {{shopName}}",
+      "alreadyMember": "Ви вже маєте магазин — запрошення не застосовано",
+      "alreadyInShop": "Ви вже учасник цього магазину",
+      "invalid": "Запрошення недійсне або прострочене. Створено ваш власний магазин."
+    },
+    "promoBanner": {
+      "appliedUntil": "Промокод застосовано до {{date}}",
+      "applied": "Промокод застосовано"
+    }
   },
   "sklad": {
     "slotCounter": "{{active}}/{{max}} активних",
@@ -64,13 +76,143 @@
       "tooltip": "{{label}} · продано {{units}} шт · {{value}} ₴"
     }
   },
-  "team": {},
+  "team": {
+    "title": "Команда",
+    "loadFailed": "Не вдалося завантажити команду",
+    "no": "Ні",
+    "confirmDelete": "Так, видалити",
+    "membersCount_one": "{{count}} учасник",
+    "membersCount_few": "{{count}} учасники",
+    "membersCount_many": "{{count}} учасників",
+    "membersCount_other": "{{count}} учасників",
+    "invites": {
+      "createButton": "Запросити людину",
+      "creating": "Створюємо…",
+      "createFailed": "Не вдалося створити запрошення",
+      "copyButton": "Копіювати",
+      "shareButton": "Поділитись",
+      "shareText": "Приєднуйся до мого магазину в SkladBase",
+      "expiresIn": "Діє ще {{hours}} год",
+      "confirmRevoke": "Так, скасувати",
+      "revokeFailed": "Не вдалося скасувати запрошення"
+    },
+    "roles": {
+      "title": "Ролі",
+      "ownerHint": "Роль власника завжди має всі права",
+      "systemBadge": "системна",
+      "nameLabel": "Назва",
+      "nameAriaLabel": "Назва ролі: {{name}}",
+      "newNameAriaLabel": "Назва нової ролі",
+      "deleteButton": "Видалити роль",
+      "createButton": "+ Створити роль",
+      "creating": "Створюємо…",
+      "createSubmit": "Створити",
+      "duplicateName": "Роль з такою назвою вже є",
+      "createFailed": "Не вдалося створити роль",
+      "updateFailed": "Не вдалося оновити роль",
+      "deleteFailed": "Не вдалося видалити роль"
+    },
+    "permissions": {
+      "viewInventory": "Перегляд складу",
+      "editProducts": "Редагування товарів",
+      "manageReservations": "Резерви й замовлення",
+      "manageStock": "Рух складу (прихід/списання)",
+      "viewFinance": "Фінанси",
+      "manageBilling": "Оплата й тариф"
+    },
+    "members": {
+      "overriddenLabel": "Змінені права",
+      "fullAccess": "повний доступ",
+      "removeButton": "Видалити",
+      "removeFailed": "Не вдалося видалити учасника",
+      "roleChangeFailed": "Не вдалося змінити роль",
+      "roleLabel": "Роль",
+      "roleAriaLabel": "Роль: {{name}}",
+      "overridesWillReset": "Індивідуальні права буде скинуто",
+      "confirmRoleChange": "Так, змінити",
+      "permissionsLabel": "Права",
+      "resetToRoleButton": "Скинути до ролі",
+      "resetFieldAriaLabel": "Скинути \"{{field}}\" до ролі",
+      "overriddenTooltip": "Змінено вручну — натисни, щоб скинути до ролі",
+      "permissionsUpdateFailed": "Не вдалося оновити права",
+      "overridesResetFailed": "Не вдалося скинути права"
+    }
+  },
   "settings": {
+    "title": "Налаштування",
+    "ellipsis": "…",
     "language": {
       "title": "Мова",
       "uk": "Українська",
       "en": "English",
       "ru": "Русский"
+    },
+    "status": {
+      "trial": "Тріал",
+      "active": "Активна",
+      "pastDue": "Прострочена",
+      "canceled": "Скасована",
+      "expired": "Закінчилась"
+    },
+    "comingSoonTitle": "Незабаром",
+    "comingSoonBadge": "Скоро",
+    "comingSoon": {
+      "integrations": "Підключення акаунтів"
+    },
+    "profile": {
+      "title": "Профіль магазину",
+      "nameEmpty": "Назва не може бути порожньою",
+      "saveFailed": "Не вдалося зберегти назву",
+      "logoUploadFailed": "Не вдалося завантажити лого",
+      "logoRemoveFailed": "Не вдалося прибрати лого",
+      "logoAlt": "Лого магазину",
+      "uploadLogo": "Завантажити лого",
+      "removeLogo": "Прибрати",
+      "nameLabel": "Назва магазину",
+      "saveButton": "Зберегти"
+    },
+    "subscription": {
+      "title": "Підписка",
+      "currentLabel": "Зараз активний",
+      "limit": "Ліміт: {{max}} активних товарів",
+      "statusLabel": "Статус",
+      "untilLabel": "До",
+      "changeButton": "Змінити тариф",
+      "planTrial": "Пробний період",
+      "planFree": "Безкоштовний",
+      "chipTrial": "Пробний",
+      "chipActive": "Активний"
+    },
+    "np": {
+      "senderLoadFailed": "Не вдалося завантажити дані відправника",
+      "senderFieldsMissing": "Заповніть усі поля відправника",
+      "senderSaveFailed": "Не вдалося зберегти дані відправника",
+      "senderTitle": "Дані відправника",
+      "senderConfigured": "Відправник налаштований ✅",
+      "fullNameLabel": "ПІБ / ФОП",
+      "phoneLabel": "Телефон",
+      "senderSaving": "Зберігаємо...",
+      "senderSaveButton": "Зберегти",
+      "checkStatusFailed": "Не вдалося перевірити статус Нової Пошти",
+      "connectFailed": "Не вдалося підключити ключ",
+      "disconnectFailed": "Не вдалося відключити Нову Пошту",
+      "title": "Нова Пошта",
+      "connected": "Підключено ✅",
+      "autoUpdateHint": "Статуси відправлень оновлюються автоматично кожні 10 хв",
+      "no": "Ні",
+      "confirmDisconnect": "Так, відключити",
+      "disconnectButton": "Відключити",
+      "apiKeyLabel": "API-ключ",
+      "connectButton": "Підключити",
+      "apiKeyHint": "Ключ можна згенерувати в бізнес-кабінеті new.novaposhta.ua → Налаштування → Безпека → Створити ключ API",
+      "cityNotFound": "Не вдалося знайти місто",
+      "cityPlaceholder": "Почніть вводити назву міста",
+      "searching": "Пошук...",
+      "noResults": "Нічого не знайдено",
+      "warehouseLoadFailed": "Не вдалося завантажити відділення",
+      "warehouseSearchPlaceholder": "Пошук відділення",
+      "warehouseSelectCityFirst": "Спершу оберіть місто",
+      "warehouseLoading": "Завантаження..."
     }
   },
   "product": {
@@ -290,7 +432,7 @@
     "openInTelegram": "Відкрийте посилання в Telegram:",
     "current": "Поточний",
     "recommended": "Рекомендовано",
-    "orStars": "або {{stars}} ⭐",
+    "orStars": "або {{stars}} ⭐",
     "periodMonth": "міс",
     "periodYear": "рік",
     "currentPlanButton": "Поточний план",
@@ -307,7 +449,9 @@
     "integrationsFeature": "Інтеграція з сайтом",
     "chooseButton": "Обрати тариф"
   },
-  "errors": {},
+  "errors": {
+    "chunkLoad": "Оновіть застосунок, щоб продовжити"
+  },
   "reasons": {
     "customerChangedMind": "Клієнт передумав",
     "unresponsive": "Клієнт не виходить на зв'язок",

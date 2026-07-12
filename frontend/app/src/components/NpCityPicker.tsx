@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import * as api from "../api";
 import { errorMessage } from "../errors";
 import { useAnchoredDropdown } from "../hooks/useAnchoredDropdown";
@@ -17,6 +18,7 @@ interface NpCityPickerProps {
 }
 
 export function NpCityPicker({ label, value, onChange, disabled }: NpCityPickerProps) {
+  const { t } = useTranslation();
   const [query, setQuery] = useState(value?.name ?? "");
   const [results, setResults] = useState<NpCity[]>([]);
   const [open, setOpen] = useState(false);
@@ -66,7 +68,7 @@ export function NpCityPicker({ label, value, onChange, disabled }: NpCityPickerP
       setOpen(true);
     } catch (err) {
       if (requestId !== requestIdRef.current) return;
-      setError(errorMessage(err, "Не вдалося знайти місто"));
+      setError(errorMessage(err, t("settings.np.cityNotFound")));
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
@@ -111,7 +113,7 @@ export function NpCityPicker({ label, value, onChange, disabled }: NpCityPickerP
           onChange={handleChange}
           onFocus={handleFocus}
           onBlur={handleBlur}
-          placeholder="Почніть вводити назву міста"
+          placeholder={t("settings.np.cityPlaceholder")}
         />
       </label>
       {error ? <p className="error-banner np-picker-error">{error}</p> : null}
@@ -124,9 +126,13 @@ export function NpCityPicker({ label, value, onChange, disabled }: NpCityPickerP
               aria-label={label}
             >
               {loading ? (
-                <li className="np-picker-option np-picker-option--status">Пошук...</li>
+                <li className="np-picker-option np-picker-option--status">
+                  {t("settings.np.searching")}
+                </li>
               ) : results.length === 0 ? (
-                <li className="np-picker-option np-picker-option--status">Нічого не знайдено</li>
+                <li className="np-picker-option np-picker-option--status">
+                  {t("settings.np.noResults")}
+                </li>
               ) : (
                 results.map((city) => (
                   <li key={city.ref}>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import * as api from "../api";
 import { errorMessage } from "../errors";
 import { NpCityPicker } from "./NpCityPicker";
@@ -16,6 +17,7 @@ function isSenderConfigured(sender: NpSenderProfile | null): boolean {
 }
 
 function SenderSection() {
+  const { t } = useTranslation();
   const [sender, setSender] = useState<NpSenderProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -47,7 +49,7 @@ function SenderSection() {
         );
       } catch (err) {
         if (!mounted) return;
-        setError(errorMessage(err, "Не вдалося завантажити дані відправника"));
+        setError(errorMessage(err, t("settings.np.senderLoadFailed")));
       } finally {
         if (mounted) setLoading(false);
       }
@@ -56,11 +58,12 @@ function SenderSection() {
     return () => {
       mounted = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- t навмисно не в deps: завантаження лише на mount
   }, []);
 
   async function handleSave() {
     if (!name.trim() || !phone.trim() || !city || !warehouse) {
-      setError("Заповніть усі поля відправника");
+      setError(t("settings.np.senderFieldsMissing"));
       return;
     }
     setError(null);
@@ -76,7 +79,7 @@ function SenderSection() {
       });
       setSender(profile);
     } catch (err) {
-      setError(errorMessage(err, "Не вдалося зберегти дані відправника"));
+      setError(errorMessage(err, t("settings.np.senderSaveFailed")));
     } finally {
       setSaving(false);
     }
@@ -86,26 +89,26 @@ function SenderSection() {
     <div className="np-sender-section">
       <div className="flex items-center justify-between mb-2">
         <h4 className="text-xs font-bold text-text-soft uppercase tracking-wide">
-          Дані відправника
+          {t("settings.np.senderTitle")}
         </h4>
         {isSenderConfigured(sender) ? (
           <span className="rounded-full bg-[var(--state-ok)] px-2.5 py-0.5 text-[10px] font-bold text-green-deep">
-            Відправник налаштований ✅
+            {t("settings.np.senderConfigured")}
           </span>
         ) : null}
       </div>
 
       {loading ? (
-        <p className="status-text">Завантаження…</p>
+        <p className="status-text">{t("common.loading")}</p>
       ) : (
         <>
           {error ? <p className="error-banner">{error}</p> : null}
           <label className="form-field">
-            <span>ПІБ / ФОП</span>
+            <span>{t("settings.np.fullNameLabel")}</span>
             <input type="text" value={name} onChange={(e) => setName(e.target.value)} />
           </label>
           <label className="form-field">
-            <span>Телефон</span>
+            <span>{t("settings.np.phoneLabel")}</span>
             <input
               type="tel"
               value={phone}
@@ -113,9 +116,9 @@ function SenderSection() {
               placeholder="380XXXXXXXXX"
             />
           </label>
-          <NpCityPicker label="Місто" value={city} onChange={setCity} />
+          <NpCityPicker label={t("shipping.city")} value={city} onChange={setCity} />
           <NpWarehousePicker
-            label="Відділення"
+            label={t("shipping.warehouse")}
             cityRef={city?.ref ?? null}
             value={warehouse}
             onChange={setWarehouse}
@@ -126,7 +129,7 @@ function SenderSection() {
             disabled={saving}
             onClick={() => void handleSave()}
           >
-            {saving ? "Зберігаємо..." : "Зберегти"}
+            {saving ? t("settings.np.senderSaving") : t("settings.np.senderSaveButton")}
           </button>
         </>
       )}
@@ -135,6 +138,7 @@ function SenderSection() {
 }
 
 export function NpKeySection() {
+  const { t } = useTranslation();
   const [connected, setConnected] = useState(false);
   const [loading, setLoading] = useState(true);
   const [apiKey, setApiKey] = useState("");
@@ -151,7 +155,7 @@ export function NpKeySection() {
         setConnected(status.connected);
       } catch (err) {
         if (!mounted) return;
-        setError(errorMessage(err, "Не вдалося перевірити статус Нової Пошти"));
+        setError(errorMessage(err, t("settings.np.checkStatusFailed")));
       } finally {
         if (mounted) setLoading(false);
       }
@@ -160,6 +164,7 @@ export function NpKeySection() {
     return () => {
       mounted = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- t навмисно не в deps: завантаження лише на mount
   }, []);
 
   async function handleConnect() {
@@ -171,7 +176,7 @@ export function NpKeySection() {
       setConnected(status.connected);
       setApiKey("");
     } catch (err) {
-      setError(errorMessage(err, "Не вдалося підключити ключ"));
+      setError(errorMessage(err, t("settings.np.connectFailed")));
     } finally {
       setSaving(false);
     }
@@ -183,7 +188,7 @@ export function NpKeySection() {
       await api.deleteNpKey();
       setConnected(false);
     } catch (err) {
-      setError(errorMessage(err, "Не вдалося відключити Нову Пошту"));
+      setError(errorMessage(err, t("settings.np.disconnectFailed")));
     } finally {
       setConfirmDisconnect(false);
     }
@@ -192,31 +197,29 @@ export function NpKeySection() {
   return (
     <div className="glass-card rounded-[20px] p-4 shadow-[var(--shadow-card)]">
       <h3 className="text-sm font-bold text-text-soft uppercase tracking-wide mb-3">
-        Нова Пошта
+        {t("settings.np.title")}
       </h3>
 
       {error ? <p className="error-banner">{error}</p> : null}
 
       {loading ? (
-        <p className="status-text">Завантаження…</p>
+        <p className="status-text">{t("common.loading")}</p>
       ) : connected ? (
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
             <span className="rounded-full bg-[var(--state-ok)] px-2.5 py-0.5 text-[10px] font-bold text-green-deep">
-              Підключено ✅
+              {t("settings.np.connected")}
             </span>
           </div>
-          <p className="text-xs text-text-soft">
-            Статуси відправлень оновлюються автоматично кожні 10 хв
-          </p>
+          <p className="text-xs text-text-soft">{t("settings.np.autoUpdateHint")}</p>
 
           {confirmDisconnect ? (
             <div className="flex gap-2 mt-1">
               <button type="button" onClick={() => setConfirmDisconnect(false)}>
-                Ні
+                {t("settings.np.no")}
               </button>
               <button type="button" className="btn-danger" onClick={() => void handleDisconnect()}>
-                Так, відключити
+                {t("settings.np.confirmDisconnect")}
               </button>
             </div>
           ) : (
@@ -225,7 +228,7 @@ export function NpKeySection() {
               className="btn-danger-outline mt-1"
               onClick={() => setConfirmDisconnect(true)}
             >
-              Відключити
+              {t("settings.np.disconnectButton")}
             </button>
           )}
 
@@ -236,7 +239,9 @@ export function NpKeySection() {
         <div className="flex flex-col gap-2">
           <div className="flex gap-2">
             <label className="flex-1 flex flex-col gap-1">
-              <span className="text-xs font-semibold text-text-soft">API-ключ</span>
+              <span className="text-xs font-semibold text-text-soft">
+                {t("settings.np.apiKeyLabel")}
+              </span>
               <input
                 type="password"
                 value={apiKey}
@@ -254,13 +259,10 @@ export function NpKeySection() {
                 boxShadow: "var(--shadow-cta)",
               }}
             >
-              {saving ? "…" : "Підключити"}
+              {saving ? t("settings.ellipsis") : t("settings.np.connectButton")}
             </button>
           </div>
-          <p className="text-xs text-text-soft">
-            Ключ можна згенерувати в бізнес-кабінеті new.novaposhta.ua → Налаштування → Безпека →
-            Створити ключ API
-          </p>
+          <p className="text-xs text-text-soft">{t("settings.np.apiKeyHint")}</p>
         </div>
       )}
     </div>

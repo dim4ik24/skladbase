@@ -1,3 +1,4 @@
+import type { TFunction } from "i18next";
 import type { Shop } from "../types";
 
 /** Single source of truth: trial is live only if status=trial AND ends in the future. */
@@ -40,9 +41,9 @@ export function effectivePlanCode(shop: Shop): string | null {
 }
 
 /** Human-readable label shown in SettingsScreen. Derived from effectivePlanCode. */
-export function currentPlanLabel(shop: Shop): string {
+export function currentPlanLabel(shop: Shop, t: TFunction): string {
   const code = effectivePlanCode(shop);
-  if (code === null) return "Пробний період";
-  if (code === "free") return "Безкоштовний";
+  if (code === null) return t("settings.subscription.planTrial");
+  if (code === "free") return t("settings.subscription.planFree");
   return code.charAt(0).toUpperCase() + code.slice(1);
 }

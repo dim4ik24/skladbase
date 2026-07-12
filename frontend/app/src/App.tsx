@@ -11,6 +11,7 @@ import type { MetricCardData } from "./components/MetricCarousel";
 import { TrialBanner } from "./components/TrialBanner";
 import { errorMessage } from "./errors";
 import "./i18n";
+import { useTranslation } from "react-i18next";
 import { DashboardScreen } from "./screens/DashboardScreen";
 import { SettingsScreen } from "./screens/SettingsScreen";
 import { SkladScreen } from "./screens/SkladScreen";
@@ -101,6 +102,7 @@ function persistFinancePeriod(period: FinancePeriod): void {
 }
 
 export default function App() {
+  const { t } = useTranslation();
   const [shop, setShop] = useState<Shop | null>(null);
   const [shops, setShops] = useState<ShopSummary[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -680,17 +682,17 @@ export default function App() {
           >
             <span>
               {inviteBanner.status === "joined"
-                ? `Вітаємо! Ви приєднались до магазину ${inviteBanner.shopName}`
+                ? t("dashboard.inviteBanner.joined", { shopName: inviteBanner.shopName })
                 : inviteBanner.status === "already_member"
-                  ? "Ви вже маєте магазин — запрошення не застосовано"
+                  ? t("dashboard.inviteBanner.alreadyMember")
                   : inviteBanner.status === "already_in_shop"
-                    ? "Ви вже учасник цього магазину"
-                    : "Запрошення недійсне або прострочене. Створено ваш власний магазин."}
+                    ? t("dashboard.inviteBanner.alreadyInShop")
+                    : t("dashboard.inviteBanner.invalid")}
             </span>
             <button
               type="button"
               className="banner-dismiss"
-              aria-label="Закрити"
+              aria-label={t("common.close")}
               onClick={() => setInviteBanner(null)}
             >
               ×
@@ -702,13 +704,15 @@ export default function App() {
           <div className="banner banner-success" onClick={() => setPromoBanner(null)}>
             <span>
               {promoBanner.until
-                ? `Промокод застосовано до ${new Date(promoBanner.until).toLocaleDateString("uk-UA")}`
-                : "Промокод застосовано"}
+                ? t("dashboard.promoBanner.appliedUntil", {
+                    date: new Date(promoBanner.until).toLocaleDateString("uk-UA"),
+                  })
+                : t("dashboard.promoBanner.applied")}
             </span>
             <button
               type="button"
               className="banner-dismiss"
-              aria-label="Закрити"
+              aria-label={t("common.close")}
               onClick={() => setPromoBanner(null)}
             >
               ×

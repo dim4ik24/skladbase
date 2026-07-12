@@ -1,23 +1,23 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent, RefObject } from "react";
 import { AnimatePresence, motion } from "motion/react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import * as api from "../api";
 import { ApiError } from "../api";
 import { errorMessage } from "../errors";
 import { shareInviteLink } from "../telegram";
 import type { Invite, Role, RolePermissions, TeamMember } from "../types";
 
-const SHARE_TEXT = "Приєднуйся до мого магазину в SkladBase";
-
 const COLLAPSE_TRANSITION = { duration: 0.2, ease: "easeInOut" as const };
 
-const PERMISSION_FIELDS: Array<{ key: keyof RolePermissions; label: string }> = [
-  { key: "can_view_inventory", label: "Перегляд складу" },
-  { key: "can_edit_products", label: "Редагування товарів" },
-  { key: "can_manage_reservations", label: "Резерви й замовлення" },
-  { key: "can_manage_stock", label: "Рух складу (прихід/списання)" },
-  { key: "can_view_finance", label: "Фінанси" },
-  { key: "can_manage_billing", label: "Оплата й тариф" },
+const PERMISSION_FIELDS: Array<{ key: keyof RolePermissions; labelKey: string }> = [
+  { key: "can_view_inventory", labelKey: "team.permissions.viewInventory" },
+  { key: "can_edit_products", labelKey: "team.permissions.editProducts" },
+  { key: "can_manage_reservations", labelKey: "team.permissions.manageReservations" },
+  { key: "can_manage_stock", labelKey: "team.permissions.manageStock" },
+  { key: "can_view_finance", labelKey: "team.permissions.viewFinance" },
+  { key: "can_manage_billing", labelKey: "team.permissions.manageBilling" },
 ];
 
 const DEFAULT_ROLE_PERMS: RolePermissions = {
@@ -51,13 +51,8 @@ function hoursLeft(expiresAt: string): number {
   return Math.max(0, Math.round(ms / (60 * 60 * 1000)));
 }
 
-// Українська плюралізація: 1 учасник / 2-4 учасники / 5+ (і 11-14) учасників.
-function membersCountLabel(count: number): string {
-  const mod10 = count % 10;
-  const mod100 = count % 100;
-  if (mod10 === 1 && mod100 !== 11) return `${count} учасник`;
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${count} учасники`;
-  return `${count} учасників`;
+function membersCountLabel(count: number, t: TFunction): string {
+  return t("team.membersCount", { count });
 }
 
 interface TeamSectionProps {
@@ -107,6 +102,7 @@ function useCollapseWhenScrolledOut(
 }
 
 export function TeamSection({ scrollContainerRef }: TeamSectionProps) {
+  const { t } = useTranslation();
   const [invites, setInvites] = useState<Invite[]>([]);
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
@@ -164,7 +160,7 @@ export function TeamSection({ scrollContainerRef }: TeamSectionProps) {
         setRoles(rolesResult);
       } catch (err) {
         if (!mounted) return;
-        setError(errorMessage(err, "Не вдалося завантажити команду"));
+        setError(errorMessage(err, t("team.loadFailed")));
       } finally {
         if (mounted) setLoading(false);
       }
@@ -173,6 +169,7 @@ export function TeamSection({ scrollContainerRef }: TeamSectionProps) {
     return () => {
       mounted = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- t навмисно не в deps: завантаження лише на mount
   }, []);
 
   async function handleCreateInvite() {
@@ -183,7 +180,7 @@ export function TeamSection({ scrollContainerRef }: TeamSectionProps) {
       setNewInvite(invite);
       setInvites((prev) => [invite, ...prev]);
     } catch (err) {
-      setError(errorMessage(err, "Не вдалося створити запрошення"));
+      setError(errorMessage(err, t("team.invites.createFailed")));
     } finally {
       setCreating(false);
     }
@@ -196,7 +193,7 @@ export function TeamSection({ scrollContainerRef }: TeamSectionProps) {
       setInvites((prev) => prev.filter((inv) => inv.id !== id));
       setNewInvite((prev) => (prev?.id === id ? null : prev));
     } catch (err) {
-      setError(errorMessage(err, "Не вдалося скасувати запрошення"));
+      setError(errorMessage(err, t("team.invites.revokeFailed")));
     } finally {
       setConfirmRevokeId(null);
     }
@@ -209,7 +206,7 @@ export function TeamSection({ scrollContainerRef }: TeamSectionProps) {
       setMembers((prev) => prev.filter((m) => m.id !== id));
       setExpandedItem((prev) => (prev?.type === "member" && prev.id === id ? null : prev));
     } catch (err) {
-      setError(errorMessage(err, "Не вдалося видалити учасника"));
+      setError(errorMessage(err, t("team.members.removeFailed")));
     } finally {
       setConfirmRemoveId(null);
     }
@@ -241,7 +238,7 @@ export function TeamSection({ scrollContainerRef }: TeamSectionProps) {
       setMembers((prev) => prev.map((m) => (m.id === memberId ? updated : m)));
     } catch (err) {
       setMembers((prev) => prev.map((m) => (m.id === memberId ? previous : m)));
-      setError(errorMessage(err, "Не вдалося змінити роль"));
+      setError(errorMessage(err, t("team.members.roleChangeFailed")));
     }
   }
 
@@ -290,7 +287,7 @@ export function TeamSection({ scrollContainerRef }: TeamSectionProps) {
       setMembers((prev) => prev.map((m) => (m.id === memberId ? updated : m)));
     } catch (err) {
       setMembers((prev) => prev.map((m) => (m.id === memberId ? previous : m)));
-      setError(errorMessage(err, "Не вдалося оновити права"));
+      setError(errorMessage(err, t("team.members.permissionsUpdateFailed")));
     }
   }
 
@@ -313,7 +310,7 @@ export function TeamSection({ scrollContainerRef }: TeamSectionProps) {
       setMembers((prev) => prev.map((m) => (m.id === memberId ? updated : m)));
     } catch (err) {
       setMembers((prev) => prev.map((m) => (m.id === memberId ? previous : m)));
-      setError(errorMessage(err, "Не вдалося скинути права"));
+      setError(errorMessage(err, t("team.members.overridesResetFailed")));
     }
   }
 
@@ -334,9 +331,9 @@ export function TeamSection({ scrollContainerRef }: TeamSectionProps) {
       setNewRolePerms(DEFAULT_ROLE_PERMS);
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
-        setRoleFormError("Роль з такою назвою вже є");
+        setRoleFormError(t("team.roles.duplicateName"));
       } else {
-        setRoleFormError(errorMessage(err, "Не вдалося створити роль"));
+        setRoleFormError(errorMessage(err, t("team.roles.createFailed")));
       }
     } finally {
       setCreatingRole(false);
@@ -356,7 +353,7 @@ export function TeamSection({ scrollContainerRef }: TeamSectionProps) {
       await api.patchRole(roleId, { [field]: value });
     } catch (err) {
       setRoles((prev) => prev.map((r) => (r.id === roleId ? previous : r)));
-      setError(errorMessage(err, "Не вдалося оновити роль"));
+      setError(errorMessage(err, t("team.roles.updateFailed")));
     }
   }
 
@@ -371,7 +368,7 @@ export function TeamSection({ scrollContainerRef }: TeamSectionProps) {
     } catch (err) {
       setRoles((prev) => prev.map((r) => (r.id === roleId ? previous : r)));
       setRoleNameDraft(previous.name);
-      setError(errorMessage(err, "Не вдалося оновити роль"));
+      setError(errorMessage(err, t("team.roles.updateFailed")));
     }
   }
 
@@ -382,14 +379,14 @@ export function TeamSection({ scrollContainerRef }: TeamSectionProps) {
       setRoles((prev) => prev.filter((r) => r.id !== roleId));
       setExpandedItem((prev) => (prev?.type === "role" && prev.id === roleId ? null : prev));
     } catch (err) {
-      setError(errorMessage(err, "Не вдалося видалити роль"));
+      setError(errorMessage(err, t("team.roles.deleteFailed")));
     } finally {
       setConfirmDeleteRoleId(null);
     }
   }
 
   function handleShare(url: string) {
-    shareInviteLink(url, SHARE_TEXT);
+    shareInviteLink(url, t("team.invites.shareText"));
   }
 
   function handleCopy(url: string) {
@@ -398,7 +395,9 @@ export function TeamSection({ scrollContainerRef }: TeamSectionProps) {
 
   return (
     <div className="glass-card rounded-[20px] p-4 shadow-[var(--shadow-card)]">
-      <h3 className="text-sm font-bold text-text-soft uppercase tracking-wide mb-3">Команда</h3>
+      <h3 className="text-sm font-bold text-text-soft uppercase tracking-wide mb-3">
+        {t("team.title")}
+      </h3>
 
       {error ? <p className="error-banner">{error}</p> : null}
 
@@ -412,7 +411,7 @@ export function TeamSection({ scrollContainerRef }: TeamSectionProps) {
           boxShadow: "var(--shadow-cta)",
         }}
       >
-        {creating ? "Створюємо…" : "Запросити людину"}
+        {creating ? t("team.invites.creating") : t("team.invites.createButton")}
       </button>
 
       {newInvite ? (
@@ -429,7 +428,7 @@ export function TeamSection({ scrollContainerRef }: TeamSectionProps) {
               onClick={() => handleCopy(newInvite.url)}
               className="flex-1 rounded-xl px-3 py-1.5 text-xs font-semibold text-green-deep border border-[var(--green)]"
             >
-              Копіювати
+              {t("team.invites.copyButton")}
             </button>
             <button
               type="button"
@@ -439,14 +438,14 @@ export function TeamSection({ scrollContainerRef }: TeamSectionProps) {
                 background: "linear-gradient(135deg, var(--green) 0%, var(--green-deep) 100%)",
               }}
             >
-              Поділитись
+              {t("team.invites.shareButton")}
             </button>
           </div>
         </div>
       ) : null}
 
       {loading ? (
-        <p className="status-text">Завантаження…</p>
+        <p className="status-text">{t("common.loading")}</p>
       ) : (
         <>
           {invites.length > 0 ? (
@@ -457,19 +456,19 @@ export function TeamSection({ scrollContainerRef }: TeamSectionProps) {
                   className="flex items-center justify-between gap-2 rounded-xl px-3 py-2 bg-[var(--glass-bg)] border border-[var(--line)]"
                 >
                   <span className="text-xs text-text-soft">
-                    Діє ще {hoursLeft(invite.expires_at)} год
+                    {t("team.invites.expiresIn", { hours: hoursLeft(invite.expires_at) })}
                   </span>
                   {confirmRevokeId === invite.id ? (
                     <div className="flex gap-2 shrink-0">
                       <button type="button" onClick={() => setConfirmRevokeId(null)}>
-                        Ні
+                        {t("team.no")}
                       </button>
                       <button
                         type="button"
                         className="btn-danger"
                         onClick={() => void handleRevoke(invite.id)}
                       >
-                        Так, скасувати
+                        {t("team.invites.confirmRevoke")}
                       </button>
                     </div>
                   ) : (
@@ -478,7 +477,7 @@ export function TeamSection({ scrollContainerRef }: TeamSectionProps) {
                       className="btn-danger-outline shrink-0"
                       onClick={() => setConfirmRevokeId(invite.id)}
                     >
-                      Скасувати
+                      {t("common.cancel")}
                     </button>
                   )}
                 </li>
@@ -488,16 +487,16 @@ export function TeamSection({ scrollContainerRef }: TeamSectionProps) {
 
           <div className="mt-4">
             <h4 className="text-xs font-bold text-text-soft uppercase tracking-wide mb-2">
-              Ролі
+              {t("team.roles.title")}
             </h4>
 
             {ownerRoleHint ? (
               <div className="banner banner-neutral" onClick={() => setOwnerRoleHint(false)}>
-                <span>Роль власника завжди має всі права</span>
+                <span>{t("team.roles.ownerHint")}</span>
                 <button
                   type="button"
                   className="banner-dismiss"
-                  aria-label="Закрити"
+                  aria-label={t("common.close")}
                   onClick={() => setOwnerRoleHint(false)}
                 >
                   ×
@@ -532,10 +531,12 @@ export function TeamSection({ scrollContainerRef }: TeamSectionProps) {
                     >
                       <div className="min-w-0 flex items-center gap-2">
                         <p className="text-sm text-text truncate">{role.name}</p>
-                        {role.is_system ? <span className="badge">системна</span> : null}
+                        {role.is_system ? (
+                          <span className="badge">{t("team.roles.systemBadge")}</span>
+                        ) : null}
                       </div>
                       <span className="text-xs text-text-soft shrink-0">
-                        {membersCountLabel(role.members_count)}
+                        {membersCountLabel(role.members_count, t)}
                       </span>
                     </div>
 
@@ -552,13 +553,13 @@ export function TeamSection({ scrollContainerRef }: TeamSectionProps) {
                           onClick={(e) => e.stopPropagation()}
                         >
                           <label className="form-field">
-                            <span>Назва</span>
+                            <span>{t("team.roles.nameLabel")}</span>
                             <input
                               type="text"
                               value={roleNameDraft}
                               onChange={(e) => setRoleNameDraft(e.target.value)}
                               onBlur={() => void handleRoleNameCommit(role.id)}
-                              aria-label={`Назва ролі: ${role.name}`}
+                              aria-label={t("team.roles.nameAriaLabel", { name: role.name })}
                             />
                           </label>
                           {PERMISSION_FIELDS.map((field) => (
@@ -573,7 +574,7 @@ export function TeamSection({ scrollContainerRef }: TeamSectionProps) {
                                   void handleRolePermToggle(role.id, field.key, e.target.checked)
                                 }
                               />
-                              {field.label}
+                              {t(field.labelKey)}
                             </label>
                           ))}
 
@@ -584,14 +585,14 @@ export function TeamSection({ scrollContainerRef }: TeamSectionProps) {
                                   type="button"
                                   onClick={() => setConfirmDeleteRoleId(null)}
                                 >
-                                  Ні
+                                  {t("team.no")}
                                 </button>
                                 <button
                                   type="button"
                                   className="btn-danger"
                                   onClick={() => void handleDeleteRole(role.id)}
                                 >
-                                  Так, видалити
+                                  {t("team.confirmDelete")}
                                 </button>
                               </div>
                             ) : (
@@ -600,7 +601,7 @@ export function TeamSection({ scrollContainerRef }: TeamSectionProps) {
                                 className="btn-danger-outline mt-1"
                                 onClick={() => setConfirmDeleteRoleId(role.id)}
                               >
-                                Видалити роль
+                                {t("team.roles.deleteButton")}
                               </button>
                             )
                           ) : null}
@@ -619,12 +620,12 @@ export function TeamSection({ scrollContainerRef }: TeamSectionProps) {
               >
                 {roleFormError ? <p className="error-banner">{roleFormError}</p> : null}
                 <label className="form-field">
-                  <span>Назва</span>
+                  <span>{t("team.roles.nameLabel")}</span>
                   <input
                     type="text"
                     value={newRoleName}
                     onChange={(e) => setNewRoleName(e.target.value)}
-                    aria-label="Назва нової ролі"
+                    aria-label={t("team.roles.newNameAriaLabel")}
                   />
                 </label>
                 {PERMISSION_FIELDS.map((field) => (
@@ -634,7 +635,7 @@ export function TeamSection({ scrollContainerRef }: TeamSectionProps) {
                       checked={newRolePerms[field.key]}
                       onChange={(e) => toggleNewRolePerm(field.key, e.target.checked)}
                     />
-                    {field.label}
+                    {t(field.labelKey)}
                   </label>
                 ))}
                 <div className="role-form-actions">
@@ -647,14 +648,14 @@ export function TeamSection({ scrollContainerRef }: TeamSectionProps) {
                     }}
                     disabled={creatingRole}
                   >
-                    Скасувати
+                    {t("common.cancel")}
                   </button>
                   <button
                     type="submit"
                     className="sheet-reserve-btn"
                     disabled={creatingRole || !newRoleName.trim()}
                   >
-                    {creatingRole ? "Створюємо…" : "Створити"}
+                    {creatingRole ? t("team.roles.creating") : t("team.roles.createSubmit")}
                   </button>
                 </div>
               </form>
@@ -664,7 +665,7 @@ export function TeamSection({ scrollContainerRef }: TeamSectionProps) {
                 className="link-button mt-2"
                 onClick={() => setShowCreateRole(true)}
               >
-                + Створити роль
+                {t("team.roles.createButton")}
               </button>
             )}
           </div>
@@ -696,13 +697,13 @@ export function TeamSection({ scrollContainerRef }: TeamSectionProps) {
                         {member.overridden.length > 0 ? (
                           <span
                             className="perm-override-dot"
-                            aria-label="Змінені права"
-                            title="Змінені права"
+                            aria-label={t("team.members.overriddenLabel")}
+                            title={t("team.members.overriddenLabel")}
                           />
                         ) : null}
                       </p>
                       <p className="text-xs text-text-soft">
-                        {isOwner ? "повний доступ" : member.role_name}
+                        {isOwner ? t("team.members.fullAccess") : member.role_name}
                       </p>
                     </div>
                     {!isOwner ? (
@@ -712,14 +713,14 @@ export function TeamSection({ scrollContainerRef }: TeamSectionProps) {
                           onClick={(e) => e.stopPropagation()}
                         >
                           <button type="button" onClick={() => setConfirmRemoveId(null)}>
-                            Ні
+                            {t("team.no")}
                           </button>
                           <button
                             type="button"
                             className="btn-danger"
                             onClick={() => void handleRemoveMember(member.id)}
                           >
-                            Так, видалити
+                            {t("team.confirmDelete")}
                           </button>
                         </div>
                       ) : (
@@ -731,7 +732,7 @@ export function TeamSection({ scrollContainerRef }: TeamSectionProps) {
                             setConfirmRemoveId(member.id);
                           }}
                         >
-                          Видалити
+                          {t("team.members.removeButton")}
                         </button>
                       )
                     ) : null}
@@ -748,10 +749,12 @@ export function TeamSection({ scrollContainerRef }: TeamSectionProps) {
                         style={{ overflow: "hidden" }}
                         className="flex flex-col gap-2 px-3 pb-3 pt-2 border-t border-[var(--line)]"
                       >
-                        <p className="text-xs text-text-soft">Роль</p>
+                        <p className="text-xs text-text-soft">{t("team.members.roleLabel")}</p>
                         <div
                           role="radiogroup"
-                          aria-label={`Роль: ${member.display_name ?? member.tg_id}`}
+                          aria-label={t("team.members.roleAriaLabel", {
+                            name: member.display_name ?? member.tg_id,
+                          })}
                           className="flex flex-col gap-2"
                         >
                           {roles.map((role) => (
@@ -773,35 +776,37 @@ export function TeamSection({ scrollContainerRef }: TeamSectionProps) {
                         {pendingRoleChange?.memberId === member.id ? (
                           <div className="flex flex-col gap-2 rounded-xl bg-[var(--bg)] p-2">
                             <p className="text-xs text-text-soft">
-                              Індивідуальні права буде скинуто
+                              {t("team.members.overridesWillReset")}
                             </p>
                             <div className="flex gap-2">
                               <button
                                 type="button"
                                 onClick={() => setPendingRoleChange(null)}
                               >
-                                Скасувати
+                                {t("common.cancel")}
                               </button>
                               <button
                                 type="button"
                                 className="btn-danger"
                                 onClick={() => void confirmPendingRoleChange()}
                               >
-                                Так, змінити
+                                {t("team.members.confirmRoleChange")}
                               </button>
                             </div>
                           </div>
                         ) : null}
 
                         <div className="flex items-center justify-between mt-1">
-                          <p className="text-xs text-text-soft">Права</p>
+                          <p className="text-xs text-text-soft">
+                            {t("team.members.permissionsLabel")}
+                          </p>
                           {member.overridden.length > 0 ? (
                             <button
                               type="button"
                               className="link-button"
                               onClick={() => void handleResetAllOverrides(member.id)}
                             >
-                              Скинути до ролі
+                              {t("team.members.resetToRoleButton")}
                             </button>
                           ) : null}
                         </div>
@@ -823,13 +828,15 @@ export function TeamSection({ scrollContainerRef }: TeamSectionProps) {
                                   )
                                 }
                               />
-                              {field.label}
+                              {t(field.labelKey)}
                               {isOverridden ? (
                                 <button
                                   type="button"
                                   className="perm-override-dot"
-                                  aria-label={`Скинути "${field.label}" до ролі`}
-                                  title="Змінено вручну — натисни, щоб скинути до ролі"
+                                  aria-label={t("team.members.resetFieldAriaLabel", {
+                                    field: t(field.labelKey),
+                                  })}
+                                  title={t("team.members.overriddenTooltip")}
                                   onClick={() =>
                                     void handleMemberPermToggle(member.id, field.key, null)
                                   }

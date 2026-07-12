@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import type { RefObject } from "react";
 import { useTranslation } from "react-i18next";
-import { currentPlanLabel } from "../lib/planStatus";
+import { currentPlanLabel, effectivePlanCode } from "../lib/planStatus";
 import { errorMessage } from "../errors";
 import { NpKeySection } from "../components/NpKeySection";
 import { TeamSection } from "../components/TeamSection";
@@ -17,15 +17,15 @@ interface SettingsScreenProps {
   scrollContainerRef: RefObject<HTMLDivElement | null>;
 }
 
-const STATUS_LABELS: Record<string, { label: string; colorClass: string }> = {
-  trial: { label: "Тріал", colorClass: "text-green-deep" },
-  active: { label: "Активна", colorClass: "text-green-deep" },
-  past_due: { label: "Прострочена", colorClass: "text-[#b0460e]" },
-  canceled: { label: "Скасована", colorClass: "text-text-soft" },
-  expired: { label: "Закінчилась", colorClass: "text-[#b0460e]" },
+const STATUS_LABEL_KEYS: Record<string, { labelKey: string; colorClass: string }> = {
+  trial: { labelKey: "settings.status.trial", colorClass: "text-green-deep" },
+  active: { labelKey: "settings.status.active", colorClass: "text-green-deep" },
+  past_due: { labelKey: "settings.status.pastDue", colorClass: "text-[#b0460e]" },
+  canceled: { labelKey: "settings.status.canceled", colorClass: "text-text-soft" },
+  expired: { labelKey: "settings.status.expired", colorClass: "text-[#b0460e]" },
 };
 
-const COMING_SOON = ["Підключення акаунтів"];
+const COMING_SOON_KEYS = ["settings.comingSoon.integrations"];
 
 function LanguageSection() {
   const { t, i18n } = useTranslation();
@@ -68,6 +68,7 @@ function ShopProfileSection({
   onUploadShopLogo: (file: File) => Promise<void>;
   onDeleteShopLogo: () => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [name, setName] = useState(shop.shop_name);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -76,7 +77,7 @@ function ShopProfileSection({
 
   async function handleSaveName() {
     if (!name.trim()) {
-      setError("Назва не може бути порожньою");
+      setError(t("settings.profile.nameEmpty"));
       return;
     }
     setError(null);
@@ -86,7 +87,7 @@ function ShopProfileSection({
       // Sync input with server-confirmed value
       setName(result.shop_name);
     } catch (err) {
-      setError(errorMessage(err, "Не вдалося зберегти назву"));
+      setError(errorMessage(err, t("settings.profile.saveFailed")));
     } finally {
       setSaving(false);
     }
@@ -100,7 +101,7 @@ function ShopProfileSection({
     try {
       await onUploadShopLogo(file);
     } catch (err) {
-      setError(errorMessage(err, "Не вдалося завантажити лого"));
+      setError(errorMessage(err, t("settings.profile.logoUploadFailed")));
     } finally {
       setUploading(false);
       // Reset so same file can be re-selected after error
@@ -113,21 +114,25 @@ function ShopProfileSection({
     try {
       await onDeleteShopLogo();
     } catch (err) {
-      setError(errorMessage(err, "Не вдалося прибрати лого"));
+      setError(errorMessage(err, t("settings.profile.logoRemoveFailed")));
     }
   }
 
   return (
     <div className="glass-card rounded-[20px] p-4 shadow-[var(--shadow-card)]">
       <h3 className="text-sm font-bold text-text-soft uppercase tracking-wide mb-4">
-        Профіль магазину
+        {t("settings.profile.title")}
       </h3>
 
       {/* Logo */}
       <div className="flex items-center gap-4 mb-4">
         <div className="shrink-0 w-16 h-16 rounded-full overflow-hidden bg-[var(--glass-bg)] border border-[var(--line)] flex items-center justify-center">
           {shop.logo_url ? (
-            <img src={shop.logo_url} alt="Лого магазину" className="w-full h-full object-cover" />
+            <img
+              src={shop.logo_url}
+              alt={t("settings.profile.logoAlt")}
+              className="w-full h-full object-cover"
+            />
           ) : (
             <span className="text-2xl font-bold text-green-deep select-none">
               {shop.shop_name.charAt(0).toUpperCase()}
@@ -141,7 +146,7 @@ function ShopProfileSection({
             onClick={() => fileInputRef.current?.click()}
             className="rounded-xl px-3 py-1.5 text-xs font-semibold text-green-deep border border-[var(--green)] disabled:opacity-50"
           >
-            {uploading ? "Завантаження…" : "Завантажити лого"}
+            {uploading ? t("common.loading") : t("settings.profile.uploadLogo")}
           </button>
           {shop.logo_url ? (
             <button
@@ -149,7 +154,7 @@ function ShopProfileSection({
               onClick={() => void handleDeleteLogo()}
               className="rounded-xl px-3 py-1.5 text-xs font-semibold text-text-soft border border-[var(--line)]"
             >
-              Прибрати
+              {t("settings.profile.removeLogo")}
             </button>
           ) : null}
         </div>
@@ -163,7 +168,9 @@ function ShopProfileSection({
       </div>
 
       {/* Name */}
-      <label className="block mb-1 text-xs font-semibold text-text-soft">Назва магазину</label>
+      <label className="block mb-1 text-xs font-semibold text-text-soft">
+        {t("settings.profile.nameLabel")}
+      </label>
       <div className="flex gap-2">
         <input
           type="text"
@@ -182,7 +189,7 @@ function ShopProfileSection({
             boxShadow: "var(--shadow-cta)",
           }}
         >
-          {saving ? "…" : "Зберегти"}
+          {saving ? t("settings.ellipsis") : t("settings.profile.saveButton")}
         </button>
       </div>
 
@@ -201,27 +208,33 @@ export function SettingsScreen({
   onDeleteShopLogo,
   scrollContainerRef,
 }: SettingsScreenProps) {
-  const statusInfo = shop?.status ? STATUS_LABELS[shop.status] : null;
-  const planLabel = shop ? currentPlanLabel(shop) : "…";
+  const { t } = useTranslation();
+  const statusInfo = shop?.status ? STATUS_LABEL_KEYS[shop.status] : null;
+  const planCode = shop ? effectivePlanCode(shop) : undefined;
+  const planLabel = shop ? currentPlanLabel(shop, t) : t("settings.ellipsis");
   const chipLabel =
-    planLabel === "Безкоштовний" ? "Free" : planLabel === "Пробний період" ? "Пробний" : "Активний";
+    planCode === "free"
+      ? "Free"
+      : planCode === null
+        ? t("settings.subscription.chipTrial")
+        : t("settings.subscription.chipActive");
 
   return (
     <div className="flex flex-col gap-4 pb-4">
-      <h2 className="section-title">Налаштування</h2>
+      <h2 className="section-title">{t("settings.title")}</h2>
 
       <div className="glass-card rounded-[20px] p-4 shadow-[var(--shadow-card)]">
         <h3 className="text-sm font-bold text-text-soft uppercase tracking-wide mb-3">
-          Підписка
+          {t("settings.subscription.title")}
         </h3>
 
         <div className="flex items-start justify-between gap-3 mb-3">
           <div className="min-w-0">
-            <p className="text-xs text-text-soft mb-0.5">Зараз активний</p>
+            <p className="text-xs text-text-soft mb-0.5">{t("settings.subscription.currentLabel")}</p>
             <p className="text-base font-bold text-text">{planLabel}</p>
             {shop?.max_products != null ? (
               <p className="text-xs text-text-soft mt-0.5">
-                Ліміт: {shop.max_products} активних товарів
+                {t("settings.subscription.limit", { max: shop.max_products })}
               </p>
             ) : null}
           </div>
@@ -234,16 +247,16 @@ export function SettingsScreen({
 
         {statusInfo ? (
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-text-soft">Статус</span>
+            <span className="text-sm text-text-soft">{t("settings.subscription.statusLabel")}</span>
             <span className={`text-sm font-semibold ${statusInfo.colorClass}`}>
-              {statusInfo.label}
+              {t(statusInfo.labelKey)}
             </span>
           </div>
         ) : null}
 
         {shop?.current_period_end ? (
           <div className="flex items-center justify-between mb-3">
-            <span className="text-sm text-text-soft">До</span>
+            <span className="text-sm text-text-soft">{t("settings.subscription.untilLabel")}</span>
             <span className="text-sm font-semibold text-text">
               {new Date(shop.current_period_end).toLocaleDateString("uk-UA")}
             </span>
@@ -260,7 +273,7 @@ export function SettingsScreen({
               boxShadow: "var(--shadow-cta)",
             }}
           >
-            Змінити тариф
+            {t("settings.subscription.changeButton")}
           </button>
         ) : null}
       </div>
@@ -284,18 +297,18 @@ export function SettingsScreen({
 
       <div className="glass-card rounded-[20px] overflow-hidden shadow-[var(--shadow-card)]">
         <h3 className="text-sm font-bold text-text-soft uppercase tracking-wide px-4 pt-4 mb-1">
-          Незабаром
+          {t("settings.comingSoonTitle")}
         </h3>
-        {COMING_SOON.map((label, i) => (
+        {COMING_SOON_KEYS.map((labelKey, i) => (
           <div
-            key={label}
+            key={labelKey}
             className={`flex items-center justify-between px-4 py-3 ${
-              i < COMING_SOON.length - 1 ? "border-b border-[var(--line)]" : "pb-4"
+              i < COMING_SOON_KEYS.length - 1 ? "border-b border-[var(--line)]" : "pb-4"
             }`}
           >
-            <span className="text-sm text-text-soft">{label}</span>
+            <span className="text-sm text-text-soft">{t(labelKey)}</span>
             <span className="rounded-full bg-pastel-mint px-2 py-0.5 text-[10px] font-bold text-green-deep">
-              Скоро
+              {t("settings.comingSoonBadge")}
             </span>
           </div>
         ))}

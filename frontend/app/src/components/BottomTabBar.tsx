@@ -16,7 +16,7 @@ const TABS: { id: TabId; labelKey: string; Icon: typeof Package }[] = [
 export function BottomTabBar({ active, onChange }: BottomTabBarProps) {
   const { t } = useTranslation();
   return (
-    <div role="tablist" aria-label="Навігація" className="tab-bar">
+    <div role="tablist" aria-label={t("nav.ariaLabel")} className="tab-bar">
       {TABS.map(({ id, labelKey, Icon }) => (
         <button
           key={id}

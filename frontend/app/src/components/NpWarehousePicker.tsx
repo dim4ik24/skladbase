@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import * as api from "../api";
 import { errorMessage } from "../errors";
 import { useAnchoredDropdown } from "../hooks/useAnchoredDropdown";
@@ -25,6 +26,7 @@ export function NpWarehousePicker({
   onChange,
   disabled,
 }: NpWarehousePickerProps) {
+  const { t } = useTranslation();
   const [query, setQuery] = useState(value?.name ?? "");
   const [warehouses, setWarehouses] = useState<NpWarehouse[]>([]);
   const [open, setOpen] = useState(false);
@@ -60,7 +62,7 @@ export function NpWarehousePicker({
       setWarehouses(rows);
       setOpen(true);
     } catch (err) {
-      setError(errorMessage(err, "Не вдалося завантажити відділення"));
+      setError(errorMessage(err, t("settings.np.warehouseLoadFailed")));
     } finally {
       setLoading(false);
     }
@@ -109,7 +111,9 @@ export function NpWarehousePicker({
           onChange={handleChange}
           onFocus={() => void handleFocus()}
           onBlur={handleBlur}
-          placeholder={cityRef ? "Пошук відділення" : "Спершу оберіть місто"}
+          placeholder={
+            cityRef ? t("settings.np.warehouseSearchPlaceholder") : t("settings.np.warehouseSelectCityFirst")
+          }
         />
       </label>
       {error ? <p className="error-banner np-picker-error">{error}</p> : null}
@@ -122,9 +126,13 @@ export function NpWarehousePicker({
               aria-label={label}
             >
               {loading ? (
-                <li className="np-picker-option np-picker-option--status">Завантаження...</li>
+                <li className="np-picker-option np-picker-option--status">
+                  {t("settings.np.warehouseLoading")}
+                </li>
               ) : filtered.length === 0 ? (
-                <li className="np-picker-option np-picker-option--status">Нічого не знайдено</li>
+                <li className="np-picker-option np-picker-option--status">
+                  {t("settings.np.noResults")}
+                </li>
               ) : (
                 filtered.map((w) => (
                   <li key={w.ref}>
