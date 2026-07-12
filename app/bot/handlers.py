@@ -62,17 +62,20 @@ banned -> тихий ігнор без відповіді, muted -> "буде д
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime, time
 from typing import NamedTuple
 
 from aiogram import Bot, Router
-from aiogram.filters import Command, CommandStart, StateFilter
+from aiogram.filters import Command, CommandObject, CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.base import BaseStorage, StorageKey
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, WebAppInfo
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.models import Plan, PromoCode, PromoType
 from app.security.rate_limit import InMemoryRateLimiter
 from app.services.support_moderation import (
     ban_user,
@@ -233,6 +236,163 @@ async def admin_unban(message: Message, session: AsyncSession) -> None:
 
     await unban_user(session, target.tg_id)
     await message.answer(f"{target.name} розбанено в підтримці.")
+
+
+# --------------------------------------------------------------------------- #
+#  Промокоди (фіча "промокоди") — адмін роздає доступ магазинам, що привели
+#  користувачів. Розширення наявного PromoCode/redeem_promo (стадія 5a):
+#  /promo_create будує рядок і одразу підтверджує зведенням (без FSM —
+#  зайве для однорядкової команди), /promo_list показує активні,
+#  /promo_off вимикає (is_active=False, а не видаляє — used_count і
+#  історія Redemption лишаються для звітності).
+# --------------------------------------------------------------------------- #
+_PROMO_CREATE_USAGE = (
+    "Формат: /promo_create <CODE> <trial|plan:КОД_ПЛАНУ> <днів> <макс_використань> "
+    "[expires РРРР-ММ-ДД]\n"
+    "Приклади:\n"
+    "/promo_create WELCOME60 trial 60 5\n"
+    "/promo_create VIP2026 plan:pro 30 1 expires 2026-12-31"
+)
+
+
+def _parse_expires(parts: list[str]) -> tuple[list[str], datetime | None]:
+    """Знімає необов'язковий хвіст 'expires РРРР-ММ-ДД' з кінця аргументів.
+    Повертає (решта аргументів, expires_at | None)."""
+    if len(parts) >= 2 and parts[-2].lower() == "expires":
+        try:
+            day = datetime.strptime(parts[-1], "%Y-%m-%d").date()
+        except ValueError:
+            raise ValueError(f"Не розпізнав дату '{parts[-1]}' — формат РРРР-ММ-ДД") from None
+        return parts[:-2], datetime.combine(day, time.max, tzinfo=UTC)
+    return parts, None
+
+
+@router.message(Command("promo_create"), _is_admin)
+async def admin_promo_create(
+    message: Message, command: CommandObject, session: AsyncSession
+) -> None:
+    raw = (command.args or "").split()
+    try:
+        raw, expires_at = _parse_expires(raw)
+    except ValueError as exc:
+        await message.answer(f"{exc}\n\n{_PROMO_CREATE_USAGE}")
+        return
+
+    if len(raw) != 4:
+        await message.answer(_PROMO_CREATE_USAGE)
+        return
+
+    code_raw, kind_raw, days_raw, max_uses_raw = raw
+    code = code_raw.strip().upper()
+
+    plan: Plan | None = None
+    if kind_raw == "trial":
+        promo_type = PromoType.free_period
+    elif kind_raw.startswith("plan:"):
+        promo_type = PromoType.plan_grant
+        plan_code = kind_raw.removeprefix("plan:")
+        plan = await session.scalar(
+            select(Plan).where(Plan.code == plan_code, Plan.is_active.is_(True))
+        )
+        if plan is None:
+            await message.answer(f"План '{plan_code}' не знайдено серед активних тарифів.")
+            return
+    else:
+        await message.answer(
+            f"Другий аргумент має бути 'trial' або 'plan:КОД'.\n\n{_PROMO_CREATE_USAGE}"
+        )
+        return
+
+    try:
+        days = int(days_raw)
+        max_uses = int(max_uses_raw)
+        if days <= 0 or max_uses <= 0:
+            raise ValueError
+    except ValueError:
+        await message.answer(
+            f"Днів і макс. використань мають бути додатними числами.\n\n{_PROMO_CREATE_USAGE}"
+        )
+        return
+
+    existing = await session.scalar(select(PromoCode).where(PromoCode.code == code))
+    if existing is not None:
+        await message.answer(f"Код {code} вже існує.")
+        return
+
+    promo = PromoCode(
+        code=code,
+        type=promo_type,
+        value=days,
+        plan_id=plan.id if plan else None,
+        max_uses=max_uses,
+        expires_at=expires_at,
+    )
+    session.add(promo)
+    await session.commit()
+
+    if promo_type == PromoType.free_period:
+        kind_label = "тріал"
+    else:
+        assert plan is not None
+        kind_label = f"план «{plan.name}»"
+    expires_label = expires_at.strftime("%Y-%m-%d") if expires_at else "без обмеження"
+    await message.answer(
+        "✅ Створено промокод\n"
+        f"Код: {code}\n"
+        f"Тип: {kind_label}\n"
+        f"Днів: {days}\n"
+        f"Макс. використань: {max_uses}\n"
+        f"Дійсний до: {expires_label}"
+    )
+
+
+@router.message(Command("promo_list"), _is_admin)
+async def admin_promo_list(message: Message, session: AsyncSession) -> None:
+    promos = (
+        await session.scalars(
+            select(PromoCode)
+            .where(PromoCode.is_active.is_(True))
+            .order_by(PromoCode.created_at.desc())
+        )
+    ).all()
+    if not promos:
+        await message.answer("Активних промокодів немає.")
+        return
+
+    plans_by_id = {p.id: p.name for p in (await session.scalars(select(Plan))).all()}
+
+    lines = ["Активні промокоди:"]
+    for promo in promos:
+        if promo.type == PromoType.free_period:
+            detail = f"тріал, {promo.value} дн."
+        elif promo.type == PromoType.plan_grant:
+            plan_name = plans_by_id.get(promo.plan_id, "?") if promo.plan_id else "?"
+            detail = f"план «{plan_name}», {promo.value} дн."
+        else:
+            detail = f"знижка {promo.value}%"
+        expires = promo.expires_at.strftime("%Y-%m-%d") if promo.expires_at else "без обмеження"
+        lines.append(f"{promo.code} — {detail}, {promo.used_count}/{promo.max_uses}, до {expires}")
+
+    await message.answer("\n".join(lines))
+
+
+@router.message(Command("promo_off"), _is_admin)
+async def admin_promo_off(
+    message: Message, command: CommandObject, session: AsyncSession
+) -> None:
+    code = (command.args or "").strip().upper()
+    if not code:
+        await message.answer("Формат: /promo_off <CODE>")
+        return
+
+    promo = await session.scalar(select(PromoCode).where(PromoCode.code == code))
+    if promo is None:
+        await message.answer(f"Код {code} не знайдено.")
+        return
+
+    promo.is_active = False
+    await session.commit()
+    await message.answer(f"Код {code} вимкнено.")
 
 
 @router.message(_is_admin_reply)

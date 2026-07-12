@@ -13,6 +13,7 @@ interface SubscriptionPaywallProps {
   role: "owner" | "manager";
   currentPlanCode?: string | null;
   onCheckout: (planCode: string) => Promise<{ invoice_link: string }>;
+  onRedeemPromo: (code: string) => Promise<void>;
   onDismiss?: () => void;
 }
 
@@ -34,11 +35,15 @@ export function SubscriptionPaywall({
   role,
   currentPlanCode,
   onCheckout,
+  onRedeemPromo,
   onDismiss,
 }: SubscriptionPaywallProps) {
   const [checkingOutCode, setCheckingOutCode] = useState<string | null>(null);
   const [fallbackLink, setFallbackLink] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [promoCode, setPromoCode] = useState("");
+  const [redeemingPromo, setRedeemingPromo] = useState(false);
+  const [promoError, setPromoError] = useState<string | null>(null);
   const prefersReducedMotion = useReducedMotion();
 
   async function handleCheckout(planCode: string) {
@@ -54,6 +59,21 @@ export function SubscriptionPaywall({
       setError(errorMessage(err, "Не вдалося оформити підписку"));
     } finally {
       setCheckingOutCode(null);
+    }
+  }
+
+  async function handleRedeemPromo() {
+    const trimmed = promoCode.trim();
+    if (!trimmed) return;
+    setPromoError(null);
+    setRedeemingPromo(true);
+    try {
+      await onRedeemPromo(trimmed);
+      // Успіх закриває paywall (App.tsx) — тут нічого прибирати не треба.
+    } catch (err) {
+      setPromoError(errorMessage(err, "Не вдалося активувати промокод"));
+    } finally {
+      setRedeemingPromo(false);
     }
   }
 
@@ -206,6 +226,28 @@ export function SubscriptionPaywall({
             </Reveal>
           );
         })}
+      </div>
+
+      <div className="mt-4 pt-4 border-t border-[var(--line)]">
+        <label className="form-field">
+          <span>Промокод</span>
+          <input
+            type="text"
+            value={promoCode}
+            onChange={(e) => setPromoCode(e.target.value)}
+            placeholder="Введіть код"
+            aria-label="Промокод"
+          />
+        </label>
+        {promoError ? <p className="error-banner">{promoError}</p> : null}
+        <button
+          type="button"
+          disabled={redeemingPromo || !promoCode.trim()}
+          onClick={() => void handleRedeemPromo()}
+          className="mt-2 w-full rounded-xl border border-[var(--line)] py-2.5 text-sm font-semibold text-text transition-opacity duration-150 hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green disabled:opacity-50"
+        >
+          {redeemingPromo ? "Активуємо…" : "Активувати"}
+        </button>
       </div>
     </>
   );

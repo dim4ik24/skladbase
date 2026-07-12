@@ -206,6 +206,13 @@ export function checkoutStars(planCode: string): Promise<{ invoice_link: string 
   });
 }
 
+export function redeemPromo(code: string): Promise<{ current_period_end: string | null }> {
+  return request<{ current_period_end: string | null }>("/api/billing/promo", {
+    method: "POST",
+    body: JSON.stringify({ code }),
+  });
+}
+
 export function createTemplate(name: string, field_schema: Record<string, unknown>): Promise<Template> {
   return request<Template>("/api/templates", {
     method: "POST",

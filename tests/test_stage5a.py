@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import time
+from datetime import timedelta
 
 import pytest
 from aiogram import Bot
@@ -33,11 +34,13 @@ from app.models import (
     MemberRole,
     Membership,
     Payment,
+    Plan,
     Product,
     PromoCode,
     PromoType,
     Subscription,
     SubStatus,
+    utcnow,
 )
 from tests.conftest import TEST_BOT_TOKEN, get_system_role_id, make_init_data
 
@@ -122,6 +125,13 @@ async def _insert_promo(code: str, *, value_days: int = 60, max_uses: int = 5) -
             PromoCode(code=code, type=PromoType.free_period, value=value_days, max_uses=max_uses)
         )
         await session.commit()
+
+
+async def _get_plan(code: str) -> Plan:
+    async with db.async_session() as session:
+        plan = await session.scalar(select(Plan).where(Plan.code == code))
+        assert plan is not None
+        return plan
 
 
 _telegram_calls: list[tuple[str, object]] = []
@@ -231,7 +241,111 @@ async def test_promo_extends_period_and_rejects_second_redeem(client: AsyncClien
     r2 = await client.post(
         "/api/billing/promo", json={"code": "welcome60"}, headers={HEADER: init_data}
     )
-    assert r2.status_code == 400
+    assert r2.status_code == 409  # 3c: розрізнені статуси (404/409/410) замість generic 400
+
+
+@pytest.mark.asyncio
+async def test_promo_not_found_returns_404(client: AsyncClient) -> None:
+    init_data, _shop_id = await _bootstrap(client, 5010)
+
+    r = await client.post(
+        "/api/billing/promo", json={"code": "NOSUCHCODE"}, headers={HEADER: init_data}
+    )
+    assert r.status_code == 404
+    assert "не знайдено" in r.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_promo_exhausted_by_another_shop_returns_410(client: AsyncClient) -> None:
+    await _insert_promo("ONESHOT", max_uses=1)
+    first_init, _first_shop = await _bootstrap(client, 5011)
+    r1 = await client.post(
+        "/api/billing/promo", json={"code": "ONESHOT"}, headers={HEADER: first_init}
+    )
+    assert r1.status_code == 200, r1.text
+
+    second_init, _second_shop = await _bootstrap(client, 5012)
+    r2 = await client.post(
+        "/api/billing/promo", json={"code": "ONESHOT"}, headers={HEADER: second_init}
+    )
+    assert r2.status_code == 410
+    assert "вичерпано" in r2.json()["detail"] or "прострочено" in r2.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_promo_expired_returns_410(client: AsyncClient) -> None:
+    async with db.async_session() as session:
+        session.add(
+            PromoCode(
+                code="OLDCODE",
+                type=PromoType.free_period,
+                value=30,
+                max_uses=5,
+                expires_at=utcnow() - timedelta(days=1),
+            )
+        )
+        await session.commit()
+
+    init_data, _shop_id = await _bootstrap(client, 5013)
+    r = await client.post(
+        "/api/billing/promo", json={"code": "OLDCODE"}, headers={HEADER: init_data}
+    )
+    assert r.status_code == 410
+
+
+@pytest.mark.asyncio
+async def test_promo_used_count_increments(client: AsyncClient) -> None:
+    await _insert_promo("COUNTME", max_uses=5)
+    init_data, _shop_id = await _bootstrap(client, 5014)
+
+    async with db.async_session() as session:
+        before = await session.scalar(select(PromoCode).where(PromoCode.code == "COUNTME"))
+        assert before.used_count == 0
+
+    r = await client.post(
+        "/api/billing/promo", json={"code": "COUNTME"}, headers={HEADER: init_data}
+    )
+    assert r.status_code == 200, r.text
+
+    async with db.async_session() as session:
+        after = await session.scalar(select(PromoCode).where(PromoCode.code == "COUNTME"))
+        assert after.used_count == 1
+
+
+@pytest.mark.asyncio
+async def test_promo_plan_grant_activates_the_plan_and_extends_period(
+    client: AsyncClient,
+) -> None:
+    """Фіча 3c-плюс "промокоди": адмін видає конкретний ПЛАТНИЙ план на N
+    днів безкоштовно (не просто продовжує поточний, як free_period)."""
+    init_data, shop_id = await _bootstrap(client, 5015)
+    pro_plan = await _get_plan("pro")
+    sub_before = await _get_subscription(shop_id)
+    assert sub_before.plan_id != pro_plan.id
+
+    async with db.async_session() as session:
+        session.add(
+            PromoCode(
+                code="VIPGRANT",
+                type=PromoType.plan_grant,
+                value=30,
+                plan_id=pro_plan.id,
+                max_uses=1,
+            )
+        )
+        await session.commit()
+
+    r = await client.post(
+        "/api/billing/promo", json={"code": "VIPGRANT"}, headers={HEADER: init_data}
+    )
+    assert r.status_code == 200, r.text
+
+    sub_after = await _get_subscription(shop_id)
+    assert sub_after.plan_id == pro_plan.id
+    assert sub_after.status == SubStatus.active
+    assert sub_after.is_comp is True
+    assert sub_after.auto_renew is False
+    assert (sub_after.current_period_end - sub_before.current_period_end).days == 30
 
 
 @pytest.mark.asyncio

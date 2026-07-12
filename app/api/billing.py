@@ -212,7 +212,7 @@ async def redeem_promo(
     try:
         await SubscriptionService(session).redeem_promo(shop, subscription, payload.code)
     except SubscriptionError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
     await session.commit()
     await session.refresh(subscription)

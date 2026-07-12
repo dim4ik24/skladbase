@@ -120,6 +120,7 @@ export default function App() {
   const [inviteBanner, setInviteBanner] = useState<{ status: string; shopName: string } | null>(
     null,
   );
+  const [promoBanner, setPromoBanner] = useState<{ until: string | null } | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const mountedRef = useRef(true);
 
@@ -535,6 +536,19 @@ export default function App() {
     }
   }
 
+  async function handleRedeemPromo(code: string) {
+    // Помилку (404/409/410 з бекенда) лишаємо кидати далі — paywall сам
+    // показує інлайн-текст, тут лише успішний шлях: рефетч /api/me (той
+    // самий loadAll, що й на старті) підтягує нові status/current_period_end
+    // усюди в UI, потім закриваємо paywall і показуємо банер.
+    await api.redeemPromo(code);
+    const meResult = await api.getMe();
+    if (!mountedRef.current) return;
+    await loadAll(meResult);
+    setShowPaywall(false);
+    setPromoBanner({ until: meResult.current_period_end });
+  }
+
   function resolveReservationVariant(
     variantId: number,
   ): { variant: Variant; product: Product } | null {
@@ -683,6 +697,24 @@ export default function App() {
           </div>
         ) : null}
 
+        {promoBanner ? (
+          <div className="banner banner-success" onClick={() => setPromoBanner(null)}>
+            <span>
+              {promoBanner.until
+                ? `Промокод застосовано до ${new Date(promoBanner.until).toLocaleDateString("uk-UA")}`
+                : "Промокод застосовано"}
+            </span>
+            <button
+              type="button"
+              className="banner-dismiss"
+              aria-label="Закрити"
+              onClick={() => setPromoBanner(null)}
+            >
+              ×
+            </button>
+          </div>
+        ) : null}
+
         {shop && isLiveTrial(shop) ? (
           <TrialBanner shop={shop} />
         ) : null}
@@ -769,6 +801,7 @@ export default function App() {
               onUpdateShopName={handleUpdateShopName}
               onUploadShopLogo={handleUploadShopLogo}
               onDeleteShopLogo={handleDeleteShopLogo}
+              scrollContainerRef={scrollContainerRef}
             />
           )}
         </div>
@@ -793,6 +826,7 @@ export default function App() {
             role={shop.role}
             currentPlanCode={effectivePlanCode(shop)}
             onCheckout={api.checkoutStars}
+            onRedeemPromo={handleRedeemPromo}
             onDismiss={() => setShowPaywall(false)}
           />
         </Suspense>
