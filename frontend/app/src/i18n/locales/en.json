@@ -1,0 +1,15 @@
+{
+  "nav": {
+    "dashboard": "Dashboard",
+    "sklad": "Inventory",
+    "settings": "Settings"
+  },
+  "settings": {
+    "language": {
+      "title": "Language",
+      "uk": "Українська",
+      "en": "English",
+      "ru": "Русский"
+    }
+  }
+}

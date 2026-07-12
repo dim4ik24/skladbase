@@ -1735,6 +1735,29 @@ body {
   cursor: pointer;
 }
 
+/* ── Налаштування — перемикач мови ───────────────────────────────────── */
+.lang-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.lang-chip {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1.5px solid var(--line);
+  background: var(--surface);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.lang-chip--active {
+  border-color: var(--green);
+  background: var(--green);
+  color: #fff;
+  font-weight: 600;
+}
+
 /* ── Фінанси — графік доходу ─────────────────────────────────────────── */
 .revenue-chart {
   margin: 4px 0 12px;

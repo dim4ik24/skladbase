@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
 import type {
   FinanceSummary,
@@ -3644,5 +3644,73 @@ describe("ShipSheet — automatic TTN creation", () => {
     expect(
       await screen.findByText("НП: невірний формат телефону одержувача"),
     ).toBeInTheDocument();
+  });
+});
+
+describe("i18n language switcher", () => {
+  afterEach(async () => {
+    // i18n is a module-level singleton — reset it back to uk so later tests
+    // in this file (which assert Ukrainian text) aren't affected.
+    const { default: i18n } = await import("../i18n");
+    await i18n.changeLanguage("uk");
+  });
+
+  async function goToSettings() {
+    await screen.findByText("Тестовий магазин");
+    fireEvent.click(screen.getByRole("tab", { name: "Налаштування" }));
+  }
+
+  it("switches the tab bar language when a language chip is selected", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.getPlans).mockResolvedValue([planFixture]);
+
+    render(<App />);
+    await goToSettings();
+
+    fireEvent.click(screen.getByRole("button", { name: "English" }));
+
+    expect(await screen.findByRole("tab", { name: "Dashboard" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Inventory" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Settings" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Русский" }));
+
+    expect(await screen.findByRole("tab", { name: "Настройки" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Дашборд" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Склад" })).toBeInTheDocument();
+  });
+
+  it("persists the selected language in localStorage across a remount", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.getPlans).mockResolvedValue([planFixture]);
+
+    const { unmount } = render(<App />);
+    await goToSettings();
+    fireEvent.click(screen.getByRole("button", { name: "English" }));
+    await screen.findByRole("tab", { name: "Dashboard" });
+    unmount();
+
+    expect(localStorage.getItem("skladbase:lang")).toBe("en");
+
+    render(<App />);
+    expect(await screen.findByRole("tab", { name: "Dashboard" })).toBeInTheDocument();
+  });
+
+  it("falls back to Ukrainian text for keys not yet translated", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.getPlans).mockResolvedValue([planFixture]);
+
+    render(<App />);
+    await goToSettings();
+
+    fireEvent.click(screen.getByRole("button", { name: "English" }));
+    await screen.findByRole("tab", { name: "Dashboard" });
+
+    // "Підписка" (subscription card heading) has no en/ru translation yet —
+    // it must still fall back to the Ukrainian source string.
+    expect(screen.getByText("Підписка")).toBeInTheDocument();
   });
 });

@@ -1,0 +1,15 @@
+{
+  "nav": {
+    "dashboard": "Дашборд",
+    "sklad": "Склад",
+    "settings": "Настройки"
+  },
+  "settings": {
+    "language": {
+      "title": "Язык",
+      "uk": "Українська",
+      "en": "English",
+      "ru": "Русский"
+    }
+  }
+}

@@ -1,8 +1,10 @@
 import { useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { currentPlanLabel } from "../lib/planStatus";
 import { errorMessage } from "../errors";
 import { NpKeySection } from "../components/NpKeySection";
 import { TeamSection } from "../components/TeamSection";
+import { SUPPORTED_LANGUAGES, setStoredLanguage, type SupportedLanguage } from "../i18n";
 import type { Shop } from "../types";
 
 interface SettingsScreenProps {
@@ -21,7 +23,37 @@ const STATUS_LABELS: Record<string, { label: string; colorClass: string }> = {
   expired: { label: "Закінчилась", colorClass: "text-[#b0460e]" },
 };
 
-const COMING_SOON = ["Мова", "Підключення акаунтів"];
+const COMING_SOON = ["Підключення акаунтів"];
+
+function LanguageSection() {
+  const { t, i18n } = useTranslation();
+
+  function handleSelect(lang: SupportedLanguage) {
+    void i18n.changeLanguage(lang);
+    setStoredLanguage(lang);
+  }
+
+  return (
+    <div className="glass-card rounded-[20px] p-4 shadow-[var(--shadow-card)]">
+      <h3 className="text-sm font-bold text-text-soft uppercase tracking-wide mb-3">
+        {t("settings.language.title")}
+      </h3>
+      <div className="lang-chips" role="group" aria-label={t("settings.language.title")}>
+        {SUPPORTED_LANGUAGES.map((lang) => (
+          <button
+            key={lang}
+            type="button"
+            className={`lang-chip${i18n.resolvedLanguage === lang ? " lang-chip--active" : ""}`}
+            aria-pressed={i18n.resolvedLanguage === lang}
+            onClick={() => handleSelect(lang)}
+          >
+            {t(`settings.language.${lang}`)}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function ShopProfileSection({
   shop,
@@ -242,6 +274,8 @@ export function SettingsScreen({
       {shop?.role === "owner" ? <TeamSection /> : null}
 
       {shop?.role === "owner" ? <NpKeySection /> : null}
+
+      <LanguageSection />
 
       <div className="glass-card rounded-[20px] overflow-hidden shadow-[var(--shadow-card)]">
         <h3 className="text-sm font-bold text-text-soft uppercase tracking-wide px-4 pt-4 mb-1">

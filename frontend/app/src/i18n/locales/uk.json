@@ -1,0 +1,25 @@
+{
+  "common": {},
+  "nav": {
+    "dashboard": "Дашборд",
+    "sklad": "Склад",
+    "settings": "Налаштування"
+  },
+  "dashboard": {},
+  "sklad": {},
+  "finance": {},
+  "team": {},
+  "settings": {
+    "language": {
+      "title": "Мова",
+      "uk": "Українська",
+      "en": "English",
+      "ru": "Русский"
+    }
+  },
+  "reservations": {},
+  "shipping": {},
+  "history": {},
+  "paywall": {},
+  "errors": {}
+}

@@ -20,6 +20,12 @@ interface TelegramThemeParams {
 
 interface TelegramWebApp {
   initData: string;
+  initDataUnsafe?: {
+    user?: {
+      language_code?: string;
+      [key: string]: unknown;
+    };
+  };
   themeParams: TelegramThemeParams;
   colorScheme?: "light" | "dark";
   ready: () => void;

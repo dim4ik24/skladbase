@@ -10,6 +10,7 @@ import { LazyInlineFallback, LazyOverlayFallback } from "./components/LazyFallba
 import type { MetricCardData } from "./components/MetricCarousel";
 import { TrialBanner } from "./components/TrialBanner";
 import { errorMessage } from "./errors";
+import "./i18n";
 import { DashboardScreen } from "./screens/DashboardScreen";
 import { SettingsScreen } from "./screens/SettingsScreen";
 import { SkladScreen } from "./screens/SkladScreen";
