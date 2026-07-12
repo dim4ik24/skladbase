@@ -138,8 +138,9 @@ class PaymentStatus(str, enum.Enum):
 
 
 class PromoType(str, enum.Enum):
-    free_period = "free_period"  # value = к-сть днів безкоштовно
+    free_period = "free_period"  # value = к-сть днів безкоштовно (тріал/поточний план)
     percent = "percent"          # value = % знижки на першу оплату
+    plan_grant = "plan_grant"    # value = к-сть днів; plan_id ОБОВ'ЯЗКОВИЙ — видати цей план безкоштовно
 
 
 # --------------------------------------------------------------------------- #
@@ -568,8 +569,10 @@ class PromoCode(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     code: Mapped[str] = mapped_column(String(40), unique=True, index=True)
     type: Mapped[PromoType] = mapped_column(SAEnum(PromoType))
-    value: Mapped[int] = mapped_column(Integer)            # днів (free_period) або % (percent)
+    value: Mapped[int] = mapped_column(Integer)            # днів (free_period/plan_grant) або % (percent)
     plan_id: Mapped[int | None] = mapped_column(ForeignKey("plans.id", ondelete="SET NULL"))
+    # ^ ОБОВ'ЯЗКОВИЙ для type=plan_grant (перевіряється в сервісі/боті, не DB
+    # constraint — free_period/percent його не потребують).
     max_uses: Mapped[int] = mapped_column(Integer, default=1)
     used_count: Mapped[int] = mapped_column(Integer, default=0)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

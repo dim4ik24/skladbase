@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
-import type { FormEvent } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { FormEvent, RefObject } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import * as api from "../api";
 import { ApiError } from "../api";
 import { errorMessage } from "../errors";
@@ -7,6 +8,8 @@ import { shareInviteLink } from "../telegram";
 import type { Invite, Role, RolePermissions, TeamMember } from "../types";
 
 const SHARE_TEXT = "Приєднуйся до мого магазину в SkladBase";
+
+const COLLAPSE_TRANSITION = { duration: 0.2, ease: "easeInOut" as const };
 
 const PERMISSION_FIELDS: Array<{ key: keyof RolePermissions; label: string }> = [
   { key: "can_view_inventory", label: "Перегляд складу" },
@@ -57,7 +60,53 @@ function membersCountLabel(count: number): string {
   return `${count} учасників`;
 }
 
-export function TeamSection() {
+interface TeamSectionProps {
+  scrollContainerRef: RefObject<HTMLDivElement | null>;
+}
+
+type ExpandedItem = { type: "role" | "member"; id: number } | null;
+
+/** Скрол-згортання (фідбек "поле не зникає"): якщо відкрита розгортка
+ * ПОВНІСТЮ вийшла за межі скрол-контейнера — закриваємо. IntersectionObserver
+ * з isIntersecting=false спрацьовує саме на 0% видимості (дефолтний
+ * threshold 0), тобто "частково видима" НЕ закриває — рівно те, що треба,
+ * інакше розгортка зникла б "під пальцем" під час самого скролу.
+ *
+ * setExpandedItem викликається через ФУНКЦІОНАЛЬНИЙ апдейтер, що звіряє
+ * поточний expandedItem з тим item, за яким СПОСТЕРІГАВ саме цей observer
+ * — інакше живий баг: клік на іншому рядку (роль/член) міняє expandedItem
+ * і водночас (той самий скрол, що вивів попередню панель за межі екрана)
+ * будить старий observer СТАРОЇ панелі; без цієї звірки його колбек
+ * долітав би вже ПІСЛЯ того, як новий item відкрився, і тихо скидав би
+ * його назад у null. */
+function useCollapseWhenScrolledOut(
+  panelRef: RefObject<HTMLDivElement | null>,
+  scrollContainerRef: RefObject<HTMLDivElement | null>,
+  item: ExpandedItem,
+  setExpandedItem: (updater: (current: ExpandedItem) => ExpandedItem) => void,
+) {
+  useEffect(() => {
+    if (!item) return;
+    const panel = panelRef.current;
+    if (!panel) return;
+    const watched = item;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) return;
+        setExpandedItem((current) =>
+          current?.type === watched.type && current.id === watched.id ? null : current,
+        );
+      },
+      { root: scrollContainerRef.current, threshold: 0 },
+    );
+    observer.observe(panel);
+    return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item?.type, item?.id]);
+}
+
+export function TeamSection({ scrollContainerRef }: TeamSectionProps) {
   const [invites, setInvites] = useState<Invite[]>([]);
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
@@ -67,14 +116,20 @@ export function TeamSection() {
   const [newInvite, setNewInvite] = useState<Invite | null>(null);
   const [confirmRevokeId, setConfirmRevokeId] = useState<number | null>(null);
   const [confirmRemoveId, setConfirmRemoveId] = useState<number | null>(null);
-  const [expandedMemberId, setExpandedMemberId] = useState<number | null>(null);
+
+  // Аккордеон: розгортка ролі й розгортка члена ділять ОДИН стан — відкриття
+  // будь-якої з них закриває попередню відкриту (незалежно, роль це чи
+  // член), бо фідбек "поле не зникає" був саме про це — забуту відкриту
+  // розгортку деінде на екрані.
+  const [expandedItem, setExpandedItem] = useState<
+    { type: "role" | "member"; id: number } | null
+  >(null);
 
   const [showCreateRole, setShowCreateRole] = useState(false);
   const [newRoleName, setNewRoleName] = useState("");
   const [newRolePerms, setNewRolePerms] = useState<RolePermissions>(DEFAULT_ROLE_PERMS);
   const [creatingRole, setCreatingRole] = useState(false);
   const [roleFormError, setRoleFormError] = useState<string | null>(null);
-  const [expandedRoleId, setExpandedRoleId] = useState<number | null>(null);
   const [roleNameDraft, setRoleNameDraft] = useState("");
   const [confirmDeleteRoleId, setConfirmDeleteRoleId] = useState<number | null>(null);
   const [ownerRoleHint, setOwnerRoleHint] = useState(false);
@@ -82,6 +137,11 @@ export function TeamSection() {
     memberId: number;
     roleId: number;
   } | null>(null);
+
+  // Один ref на панель, що зараз розгорнута — акордеон гарантує, що
+  // одночасно існує щонайбільше одна.
+  const expandedPanelRef = useRef<HTMLDivElement | null>(null);
+  useCollapseWhenScrolledOut(expandedPanelRef, scrollContainerRef, expandedItem, setExpandedItem);
 
   useEffect(() => {
     if (!ownerRoleHint) return;
@@ -147,7 +207,7 @@ export function TeamSection() {
     try {
       await api.removeMember(id);
       setMembers((prev) => prev.filter((m) => m.id !== id));
-      setExpandedMemberId((prev) => (prev === id ? null : prev));
+      setExpandedItem((prev) => (prev?.type === "member" && prev.id === id ? null : prev));
     } catch (err) {
       setError(errorMessage(err, "Не вдалося видалити учасника"));
     } finally {
@@ -320,7 +380,7 @@ export function TeamSection() {
     try {
       await api.deleteRole(roleId);
       setRoles((prev) => prev.filter((r) => r.id !== roleId));
-      setExpandedRoleId((prev) => (prev === roleId ? null : prev));
+      setExpandedItem((prev) => (prev?.type === "role" && prev.id === roleId ? null : prev));
     } catch (err) {
       setError(errorMessage(err, "Не вдалося видалити роль"));
     } finally {
@@ -447,7 +507,7 @@ export function TeamSection() {
 
             <ul className="flex flex-col gap-2">
               {roles.map((role) => {
-                const isExpanded = expandedRoleId === role.id;
+                const isExpanded = expandedItem?.type === "role" && expandedItem.id === role.id;
                 const isLockedRole = role.name === OWNER_ROLE_NAME;
                 return (
                   <li
@@ -462,9 +522,9 @@ export function TeamSection() {
                           setOwnerRoleHint(true);
                           return;
                         }
-                        const next = expandedRoleId === role.id ? null : role.id;
-                        setExpandedRoleId(next);
-                        setRoleNameDraft(next === role.id ? role.name : "");
+                        const next = isExpanded ? null : { type: "role" as const, id: role.id };
+                        setExpandedItem(next);
+                        setRoleNameDraft(next ? role.name : "");
                       }}
                       className={`flex items-center justify-between gap-2 px-3 py-2 ${
                         isLockedRole ? "" : "cursor-pointer"
@@ -479,63 +539,74 @@ export function TeamSection() {
                       </span>
                     </div>
 
-                    {!isLockedRole && isExpanded ? (
-                      <div
-                        className="flex flex-col gap-2 px-3 pb-3 pt-2 border-t border-[var(--line)]"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <label className="form-field">
-                          <span>Назва</span>
-                          <input
-                            type="text"
-                            value={roleNameDraft}
-                            onChange={(e) => setRoleNameDraft(e.target.value)}
-                            onBlur={() => void handleRoleNameCommit(role.id)}
-                            aria-label={`Назва ролі: ${role.name}`}
-                          />
-                        </label>
-                        {PERMISSION_FIELDS.map((field) => (
-                          <label
-                            key={field.key}
-                            className="flex items-center gap-2 text-sm text-text"
-                          >
+                    <AnimatePresence initial={false}>
+                      {!isLockedRole && isExpanded ? (
+                        <motion.div
+                          ref={expandedPanelRef}
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={COLLAPSE_TRANSITION}
+                          style={{ overflow: "hidden" }}
+                          className="flex flex-col gap-2 px-3 pb-3 pt-2 border-t border-[var(--line)]"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <label className="form-field">
+                            <span>Назва</span>
                             <input
-                              type="checkbox"
-                              checked={role[field.key]}
-                              onChange={(e) =>
-                                void handleRolePermToggle(role.id, field.key, e.target.checked)
-                              }
+                              type="text"
+                              value={roleNameDraft}
+                              onChange={(e) => setRoleNameDraft(e.target.value)}
+                              onBlur={() => void handleRoleNameCommit(role.id)}
+                              aria-label={`Назва ролі: ${role.name}`}
                             />
-                            {field.label}
                           </label>
-                        ))}
+                          {PERMISSION_FIELDS.map((field) => (
+                            <label
+                              key={field.key}
+                              className="flex items-center gap-2 text-sm text-text"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={role[field.key]}
+                                onChange={(e) =>
+                                  void handleRolePermToggle(role.id, field.key, e.target.checked)
+                                }
+                              />
+                              {field.label}
+                            </label>
+                          ))}
 
-                        {!role.is_system ? (
-                          confirmDeleteRoleId === role.id ? (
-                            <div className="flex gap-2 mt-1">
-                              <button type="button" onClick={() => setConfirmDeleteRoleId(null)}>
-                                Ні
-                              </button>
+                          {!role.is_system ? (
+                            confirmDeleteRoleId === role.id ? (
+                              <div className="flex gap-2 mt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmDeleteRoleId(null)}
+                                >
+                                  Ні
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn-danger"
+                                  onClick={() => void handleDeleteRole(role.id)}
+                                >
+                                  Так, видалити
+                                </button>
+                              </div>
+                            ) : (
                               <button
                                 type="button"
-                                className="btn-danger"
-                                onClick={() => void handleDeleteRole(role.id)}
+                                className="btn-danger-outline mt-1"
+                                onClick={() => setConfirmDeleteRoleId(role.id)}
                               >
-                                Так, видалити
+                                Видалити роль
                               </button>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              className="btn-danger-outline mt-1"
-                              onClick={() => setConfirmDeleteRoleId(role.id)}
-                            >
-                              Видалити роль
-                            </button>
-                          )
-                        ) : null}
-                      </div>
-                    ) : null}
+                            )
+                          ) : null}
+                        </motion.div>
+                      ) : null}
+                    </AnimatePresence>
                   </li>
                 );
               })}
@@ -601,7 +672,8 @@ export function TeamSection() {
           <ul className="mt-4 flex flex-col gap-2">
             {members.map((member) => {
               const isOwner = member.role === "owner";
-              const isExpanded = expandedMemberId === member.id;
+              const isExpanded =
+                expandedItem?.type === "member" && expandedItem.id === member.id;
               return (
                 <li
                   key={member.id}
@@ -612,7 +684,7 @@ export function TeamSection() {
                     tabIndex={isOwner ? undefined : 0}
                     onClick={() => {
                       if (isOwner) return;
-                      setExpandedMemberId((prev) => (prev === member.id ? null : member.id));
+                      setExpandedItem(isExpanded ? null : { type: "member", id: member.id });
                     }}
                     className={`flex items-center justify-between gap-2 px-3 py-2 ${
                       isOwner ? "" : "cursor-pointer"
@@ -665,100 +737,110 @@ export function TeamSection() {
                     ) : null}
                   </div>
 
-                  {!isOwner && isExpanded ? (
-                    <div className="flex flex-col gap-2 px-3 pb-3 pt-2 border-t border-[var(--line)]">
-                      <p className="text-xs text-text-soft">Роль</p>
-                      <div
-                        role="radiogroup"
-                        aria-label={`Роль: ${member.display_name ?? member.tg_id}`}
-                        className="flex flex-col gap-2"
+                  <AnimatePresence initial={false}>
+                    {!isOwner && isExpanded ? (
+                      <motion.div
+                        ref={expandedPanelRef}
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={COLLAPSE_TRANSITION}
+                        style={{ overflow: "hidden" }}
+                        className="flex flex-col gap-2 px-3 pb-3 pt-2 border-t border-[var(--line)]"
                       >
-                        {roles.map((role) => (
-                          <label
-                            key={role.id}
-                            className="flex items-center gap-2 text-sm text-text"
-                          >
-                            <input
-                              type="radio"
-                              name={`member-role-${member.id}`}
-                              checked={member.role_id === role.id}
-                              onChange={() => handleRoleRadioChange(member, role.id)}
-                            />
-                            {role.name}
-                          </label>
-                        ))}
-                      </div>
-
-                      {pendingRoleChange?.memberId === member.id ? (
-                        <div className="flex flex-col gap-2 rounded-xl bg-[var(--bg)] p-2">
-                          <p className="text-xs text-text-soft">
-                            Індивідуальні права буде скинуто
-                          </p>
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setPendingRoleChange(null)}
+                        <p className="text-xs text-text-soft">Роль</p>
+                        <div
+                          role="radiogroup"
+                          aria-label={`Роль: ${member.display_name ?? member.tg_id}`}
+                          className="flex flex-col gap-2"
+                        >
+                          {roles.map((role) => (
+                            <label
+                              key={role.id}
+                              className="flex items-center gap-2 text-sm text-text"
                             >
-                              Скасувати
-                            </button>
-                            <button
-                              type="button"
-                              className="btn-danger"
-                              onClick={() => void confirmPendingRoleChange()}
-                            >
-                              Так, змінити
-                            </button>
-                          </div>
+                              <input
+                                type="radio"
+                                name={`member-role-${member.id}`}
+                                checked={member.role_id === role.id}
+                                onChange={() => handleRoleRadioChange(member, role.id)}
+                              />
+                              {role.name}
+                            </label>
+                          ))}
                         </div>
-                      ) : null}
 
-                      <div className="flex items-center justify-between mt-1">
-                        <p className="text-xs text-text-soft">Права</p>
-                        {member.overridden.length > 0 ? (
-                          <button
-                            type="button"
-                            className="link-button"
-                            onClick={() => void handleResetAllOverrides(member.id)}
-                          >
-                            Скинути до ролі
-                          </button>
-                        ) : null}
-                      </div>
-                      {PERMISSION_FIELDS.map((field) => {
-                        const isOverridden = member.overridden.includes(field.key);
-                        return (
-                          <label
-                            key={field.key}
-                            className="flex items-center gap-2 text-sm text-text"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={member[field.key]}
-                              onChange={(e) =>
-                                void handleMemberPermToggle(
-                                  member.id,
-                                  field.key,
-                                  e.target.checked,
-                                )
-                              }
-                            />
-                            {field.label}
-                            {isOverridden ? (
+                        {pendingRoleChange?.memberId === member.id ? (
+                          <div className="flex flex-col gap-2 rounded-xl bg-[var(--bg)] p-2">
+                            <p className="text-xs text-text-soft">
+                              Індивідуальні права буде скинуто
+                            </p>
+                            <div className="flex gap-2">
                               <button
                                 type="button"
-                                className="perm-override-dot"
-                                aria-label={`Скинути "${field.label}" до ролі`}
-                                title="Змінено вручну — натисни, щоб скинути до ролі"
-                                onClick={() =>
-                                  void handleMemberPermToggle(member.id, field.key, null)
+                                onClick={() => setPendingRoleChange(null)}
+                              >
+                                Скасувати
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-danger"
+                                onClick={() => void confirmPendingRoleChange()}
+                              >
+                                Так, змінити
+                              </button>
+                            </div>
+                          </div>
+                        ) : null}
+
+                        <div className="flex items-center justify-between mt-1">
+                          <p className="text-xs text-text-soft">Права</p>
+                          {member.overridden.length > 0 ? (
+                            <button
+                              type="button"
+                              className="link-button"
+                              onClick={() => void handleResetAllOverrides(member.id)}
+                            >
+                              Скинути до ролі
+                            </button>
+                          ) : null}
+                        </div>
+                        {PERMISSION_FIELDS.map((field) => {
+                          const isOverridden = member.overridden.includes(field.key);
+                          return (
+                            <label
+                              key={field.key}
+                              className="flex items-center gap-2 text-sm text-text"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={member[field.key]}
+                                onChange={(e) =>
+                                  void handleMemberPermToggle(
+                                    member.id,
+                                    field.key,
+                                    e.target.checked,
+                                  )
                                 }
                               />
-                            ) : null}
-                          </label>
-                        );
-                      })}
-                    </div>
-                  ) : null}
+                              {field.label}
+                              {isOverridden ? (
+                                <button
+                                  type="button"
+                                  className="perm-override-dot"
+                                  aria-label={`Скинути "${field.label}" до ролі`}
+                                  title="Змінено вручну — натисни, щоб скинути до ролі"
+                                  onClick={() =>
+                                    void handleMemberPermToggle(member.id, field.key, null)
+                                  }
+                                />
+                              ) : null}
+                            </label>
+                          );
+                        })}
+                      </motion.div>
+                    ) : null}
+                  </AnimatePresence>
                 </li>
               );
             })}

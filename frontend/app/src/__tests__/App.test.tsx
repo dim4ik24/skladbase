@@ -44,6 +44,7 @@ vi.mock("../api", () => ({
   releaseReservation: vi.fn(),
   fulfillReservation: vi.fn(),
   checkoutStars: vi.fn(),
+  redeemPromo: vi.fn(),
   clearDemos: vi.fn(),
   getFinanceSummary: vi.fn(),
   getFinanceHistory: vi.fn(),
@@ -230,6 +231,7 @@ beforeEach(() => {
   vi.mocked(api.releaseReservation).mockReset();
   vi.mocked(api.fulfillReservation).mockReset();
   vi.mocked(api.checkoutStars).mockReset();
+  vi.mocked(api.redeemPromo).mockReset();
   vi.mocked(api.clearDemos).mockReset();
   vi.mocked(api.getFinanceSummary).mockReset().mockResolvedValue(makeFinance());
   vi.mocked(api.getFinanceHistory).mockReset().mockResolvedValue([]);
@@ -1627,6 +1629,74 @@ describe("Free plan limits and upgrade prompt", () => {
   });
 });
 
+describe("Promo code redemption (SubscriptionPaywall)", () => {
+  async function goToSettings() {
+    await screen.findByText("Тестовий магазин");
+    fireEvent.click(screen.getByRole("tab", { name: "Налаштування" }));
+  }
+
+  async function openPaywall() {
+    await goToSettings();
+    fireEvent.click(await screen.findByRole("button", { name: "Змінити тариф" }));
+    await screen.findByRole("dialog", { name: "Оберіть тариф" });
+  }
+
+  it("redeeming a promo code closes the paywall, refetches the subscription, and shows a success banner", async () => {
+    vi.mocked(api.getMe)
+      .mockResolvedValueOnce(shopFixture)
+      .mockResolvedValueOnce({ ...shopFixture, current_period_end: "2026-12-31T00:00:00Z" });
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.getPlans).mockResolvedValue([planFixture]);
+    vi.mocked(api.redeemPromo).mockResolvedValue({ current_period_end: "2026-12-31T00:00:00Z" });
+
+    render(<App />);
+    await openPaywall();
+
+    fireEvent.change(screen.getByLabelText("Промокод"), { target: { value: "welcome60" } });
+    fireEvent.click(screen.getByRole("button", { name: "Активувати" }));
+
+    await waitFor(() => {
+      expect(api.redeemPromo).toHaveBeenCalledWith("welcome60");
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Оберіть тариф" })).not.toBeInTheDocument();
+    });
+    expect(
+      await screen.findByText(/Промокод застосовано до/),
+    ).toBeInTheDocument();
+    expect(api.getMe).toHaveBeenCalledTimes(2); // рефетч після успіху
+  });
+
+  it("shows an inline error from the backend when redeem fails, without closing the paywall", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.getPlans).mockResolvedValue([planFixture]);
+    vi.mocked(api.redeemPromo).mockRejectedValue(new ApiError(404, "Код не знайдено"));
+
+    render(<App />);
+    await openPaywall();
+
+    fireEvent.change(screen.getByLabelText("Промокод"), { target: { value: "NOSUCH" } });
+    fireEvent.click(screen.getByRole("button", { name: "Активувати" }));
+
+    expect(await screen.findByText("Код не знайдено")).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Оберіть тариф" })).toBeInTheDocument();
+  });
+
+  it("disables the Активувати button until a code is entered", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    vi.mocked(api.getPlans).mockResolvedValue([planFixture]);
+
+    render(<App />);
+    await openPaywall();
+
+    expect(screen.getByRole("button", { name: "Активувати" })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Промокод"), { target: { value: "X" } });
+    expect(screen.getByRole("button", { name: "Активувати" })).not.toBeDisabled();
+  });
+});
+
 describe("Frozen products", () => {
   it("renders frozen badge for a frozen product", async () => {
     vi.mocked(api.getMe).mockResolvedValue(shopFixture);
@@ -2513,7 +2583,132 @@ describe("Team section (Settings, owner-only)", () => {
     expect(await screen.findByLabelText("Назва ролі: Продавець")).toBeInTheDocument();
 
     fireEvent.click(rowContainer as HTMLElement);
-    expect(screen.queryByLabelText(/Назва ролі/)).not.toBeInTheDocument();
+    // Розгортка тепер закривається через AnimatePresence exit-анімацію
+    // (скрол-згортання, фіча 3d) — елемент лишається в DOM до кінця
+    // transition, тож перевіряємо асинхронно, не одразу.
+    await waitFor(() => {
+      expect(screen.queryByLabelText(/Назва ролі/)).not.toBeInTheDocument();
+    });
+  });
+
+  it("opening a second expandable row closes the first — one accordion for roles AND members", async () => {
+    vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+    vi.mocked(api.getProducts).mockResolvedValue([]);
+    const roleA: Role = {
+      id: 30, name: "Роль А", is_system: false, members_count: 0,
+      can_view_inventory: true, can_edit_products: true, can_manage_reservations: true,
+      can_manage_stock: true, can_view_finance: true, can_manage_billing: true,
+    };
+    const roleB: Role = {
+      id: 31, name: "Роль Б", is_system: false, members_count: 0,
+      can_view_inventory: true, can_edit_products: true, can_manage_reservations: true,
+      can_manage_stock: true, can_view_finance: true, can_manage_billing: true,
+    };
+    vi.mocked(api.getRoles).mockResolvedValue([ownerRoleFixture, managerRoleFixture, roleA, roleB]);
+    vi.mocked(api.listMembers).mockResolvedValue([
+      {
+        id: 2, tg_id: 1002, display_name: "Менеджер Іван", role: "manager",
+        role_id: 20, role_name: "Менеджер",
+        can_view_inventory: true, can_edit_products: true, can_manage_reservations: true,
+        can_manage_stock: true, can_view_finance: true, can_manage_billing: true,
+        overridden: [],
+      },
+    ]);
+
+    render(<App />);
+    await goToSettings();
+
+    // Капчуримо самі клікабельні рядки один раз — після відкриття члена
+    // команди назва "Роль А" з'являється ВДРУГЕ (у радіогрупі вибору ролі),
+    // тож повторний пошук по тексту після цього був би неоднозначним.
+    const roleARow = (await screen.findByText("Роль А")).closest('[role="button"]') as HTMLElement;
+    const roleBRow = screen.getByText("Роль Б").closest('[role="button"]') as HTMLElement;
+
+    // Роль А, потім роль Б — А закривається.
+    fireEvent.click(roleARow);
+    expect(await screen.findByLabelText("Назва ролі: Роль А")).toBeInTheDocument();
+
+    fireEvent.click(roleBRow);
+    expect(await screen.findByLabelText("Назва ролі: Роль Б")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByLabelText("Назва ролі: Роль А")).not.toBeInTheDocument();
+    });
+
+    // Тепер відкриваємо члена команди — роль Б закривається (один акордеон
+    // на розгортки ролей І членів разом).
+    fireEvent.click(screen.getByText("Менеджер Іван"));
+    expect(await screen.findByRole("radiogroup")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByLabelText("Назва ролі: Роль Б")).not.toBeInTheDocument();
+    });
+
+    // І назад: відкриття ролі закриває розгортку члена.
+    fireEvent.click(roleARow);
+    expect(await screen.findByLabelText("Назва ролі: Роль А")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByRole("radiogroup")).not.toBeInTheDocument();
+    });
+  });
+
+  it("closes an expanded role panel when it scrolls fully out of view, but not while partially visible", async () => {
+    // Контрольований IntersectionObserver: тест сам вирішує, коли "викликати"
+    // callback з isIntersecting true/false, замість реального скролу
+    // (jsdom його не рахує).
+    let observedCallback: IntersectionObserverCallback | null = null;
+    const observe = vi.fn();
+    const disconnect = vi.fn();
+    class ControlledIntersectionObserver implements IntersectionObserver {
+      readonly root: Element | Document | null = null;
+      readonly rootMargin = "";
+      readonly scrollMargin = "";
+      readonly thresholds: ReadonlyArray<number> = [];
+      constructor(callback: IntersectionObserverCallback) {
+        observedCallback = callback;
+      }
+      observe = observe;
+      unobserve = vi.fn();
+      disconnect = disconnect;
+      takeRecords = () => [];
+    }
+    const OriginalIntersectionObserver = window.IntersectionObserver;
+    window.IntersectionObserver = ControlledIntersectionObserver as unknown as typeof IntersectionObserver;
+
+    try {
+      vi.mocked(api.getMe).mockResolvedValue(shopFixture);
+      vi.mocked(api.getProducts).mockResolvedValue([]);
+      const customRole: Role = {
+        id: 30, name: "Продавець", is_system: false, members_count: 0,
+        can_view_inventory: true, can_edit_products: true, can_manage_reservations: true,
+        can_manage_stock: true, can_view_finance: true, can_manage_billing: true,
+      };
+      vi.mocked(api.getRoles).mockResolvedValue([ownerRoleFixture, managerRoleFixture, customRole]);
+
+      render(<App />);
+      await goToSettings();
+      fireEvent.click(await screen.findByText("Продавець"));
+      expect(await screen.findByLabelText("Назва ролі: Продавець")).toBeInTheDocument();
+
+      expect(observe).toHaveBeenCalled();
+      expect(observedCallback).not.toBeNull();
+
+      // Частково видима — НЕ закриваємо (інакше зникло б "під пальцем").
+      observedCallback!(
+        [{ isIntersecting: true } as IntersectionObserverEntry],
+        {} as IntersectionObserver,
+      );
+      expect(screen.getByLabelText("Назва ролі: Продавець")).toBeInTheDocument();
+
+      // Повністю за межами скрол-контейнера — закриваємо.
+      observedCallback!(
+        [{ isIntersecting: false } as IntersectionObserverEntry],
+        {} as IntersectionObserver,
+      );
+      await waitFor(() => {
+        expect(screen.queryByLabelText("Назва ролі: Продавець")).not.toBeInTheDocument();
+      });
+    } finally {
+      window.IntersectionObserver = OriginalIntersectionObserver;
+    }
   });
 
   it("deletes a role without holders via two-step confirm", async () => {

@@ -63,7 +63,14 @@ _ALLOWED: dict[SubStatus, set[SubStatus]] = {
 
 
 class SubscriptionError(Exception):
-    pass
+    """status_code — опційний, дефолт 400 (як і було): існуючі виклики без
+    цього аргументу (недозволений перехід стейт-машини, cancel()) далі
+    мапляться на 400 без змін. redeem_promo — єдине місце, що передає
+    інший код (404/409/410), щоб API-шар міг розрізнити причину відмови."""
+
+    def __init__(self, message: str, *, status_code: int = 400):
+        super().__init__(message)
+        self.status_code = status_code
 
 
 def _period_delta(period: SubPeriod) -> timedelta:
@@ -227,12 +234,19 @@ class SubscriptionService:
 
     # --- 6. Промокод ---------------------------------------------------- #
     async def redeem_promo(self, shop: Shop, sub: Subscription, code: str) -> Subscription:
-        """Кейс 'магазин рекламує -> 2 місяці безкоштовно'."""
+        """Кейс 'магазин рекламує -> 2 місяці безкоштовно' (free_period) або
+        'адмін видає платний план безкоштовно на N днів' (plan_grant).
+
+        Порядок перевірок навмисний: "цей магазин вже використав" (409) —
+        ДО загального "вичерпано/прострочено" (410). Інакше повторна спроба
+        ТОГО САМОГО магазину, чий редемпшн і вичерпав max_uses=1, отримала
+        б менш точне повідомлення (промокод уже глобально вичерпаний), а не
+        те, що стосується саме його дії."""
         promo = await self.s.scalar(
             select(PromoCode).where(PromoCode.code == code.strip().upper())
         )
-        if not promo or not promo.is_redeemable:
-            raise SubscriptionError("промокод недійсний або вичерпаний")
+        if not promo:
+            raise SubscriptionError("Код не знайдено", status_code=404)
 
         already = await self.s.scalar(
             select(PromoRedemption).where(
@@ -241,13 +255,28 @@ class SubscriptionService:
             )
         )
         if already:
-            raise SubscriptionError("промокод уже активовано цим магазином")
+            raise SubscriptionError("Ви вже використали цей код", status_code=409)
+
+        if not promo.is_redeemable:
+            raise SubscriptionError("Код вичерпано або прострочено", status_code=410)
 
         if promo.type == PromoType.free_period:
             now = utcnow()
             current_end = sub.current_period_end and ensure_aware_utc(sub.current_period_end)
             base = current_end if (current_end and current_end > now) else now
             sub.current_period_end = base + timedelta(days=promo.value)
+            sub.is_comp = True
+            sub.auto_renew = False
+            self._transition(sub, SubStatus.active)
+        elif promo.type == PromoType.plan_grant:
+            plan = await self.s.get(Plan, promo.plan_id) if promo.plan_id else None
+            if plan is None:
+                raise SubscriptionError("План промокоду не знайдено", status_code=404)
+            now = utcnow()
+            current_end = sub.current_period_end and ensure_aware_utc(sub.current_period_end)
+            base = current_end if (current_end and current_end > now) else now
+            sub.current_period_end = base + timedelta(days=promo.value)
+            sub.plan_id = plan.id
             sub.is_comp = True
             sub.auto_renew = False
             self._transition(sub, SubStatus.active)

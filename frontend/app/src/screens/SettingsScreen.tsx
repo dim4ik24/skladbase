@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import type { RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import { currentPlanLabel } from "../lib/planStatus";
 import { errorMessage } from "../errors";
@@ -13,6 +14,7 @@ interface SettingsScreenProps {
   onUpdateShopName: (name: string) => Promise<{ shop_name: string; logo_url: string | null }>;
   onUploadShopLogo: (file: File) => Promise<void>;
   onDeleteShopLogo: () => Promise<void>;
+  scrollContainerRef: RefObject<HTMLDivElement | null>;
 }
 
 const STATUS_LABELS: Record<string, { label: string; colorClass: string }> = {
@@ -197,6 +199,7 @@ export function SettingsScreen({
   onUpdateShopName,
   onUploadShopLogo,
   onDeleteShopLogo,
+  scrollContainerRef,
 }: SettingsScreenProps) {
   const statusInfo = shop?.status ? STATUS_LABELS[shop.status] : null;
   const planLabel = shop ? currentPlanLabel(shop) : "…";
@@ -271,7 +274,9 @@ export function SettingsScreen({
         />
       ) : null}
 
-      {shop?.role === "owner" ? <TeamSection /> : null}
+      {shop?.role === "owner" ? (
+        <TeamSection scrollContainerRef={scrollContainerRef} />
+      ) : null}
 
       {shop?.role === "owner" ? <NpKeySection /> : null}
 
