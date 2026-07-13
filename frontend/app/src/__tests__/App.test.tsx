@@ -3894,7 +3894,7 @@ describe("i18n language switcher", () => {
     expect(await screen.findByRole("tab", { name: "Dashboard" })).toBeInTheDocument();
   });
 
-  it("falls back to Ukrainian text for keys not yet translated", async () => {
+  it("renders English text on the dashboard and sklad screens", async () => {
     vi.mocked(api.getMe).mockResolvedValue(shopFixture);
     vi.mocked(api.getProducts).mockResolvedValue([]);
     vi.mocked(api.getPlans).mockResolvedValue([planFixture]);
@@ -3903,10 +3903,30 @@ describe("i18n language switcher", () => {
     await goToSettings();
 
     fireEvent.click(screen.getByRole("button", { name: "English" }));
-    await screen.findByRole("tab", { name: "Dashboard" });
+    fireEvent.click(await screen.findByRole("tab", { name: "Dashboard" }));
 
-    // "Підписка" (subscription card heading) has no en/ru translation yet —
-    // it must still fall back to the Ukrainian source string.
-    expect(screen.getByText("Підписка")).toBeInTheDocument();
+    // Dashboard: finance card heading + period chips (stage 3 translation).
+    expect(await screen.findByText("Finance")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "All time" })).toBeInTheDocument();
+
+    // Sklad: search field + "Add product" button (stage 3 translation).
+    fireEvent.click(screen.getByRole("tab", { name: "Inventory" }));
+    expect(await screen.findByPlaceholderText("Search products...")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add product" })).toBeInTheDocument();
+  });
+
+  it("falls back to the uk value when a key has no translation for the active language", async () => {
+    // en.json/ru.json are now complete for every uk.json key (enforced by
+    // scripts/check-locales.mjs), so there's no naturally-missing key left to
+    // probe through the rendered app. This proves the fallback MECHANISM
+    // itself (fallbackLng: "uk") still works, via a synthetic key that only
+    // exists in the uk bundle — not by rendering the whole app.
+    const { default: i18n } = await import("../i18n");
+    i18n.addResourceBundle("uk", "translation", { __test: { onlyInUk: "Тільки укр" } }, true, true);
+    await i18n.changeLanguage("en");
+
+    expect(i18n.t("__test.onlyInUk")).toBe("Тільки укр");
+
+    await i18n.changeLanguage("uk");
   });
 });
