@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
 from app.deps import require_permission
+from app.i18n import get_lang, msg
 from app.models import (
     Membership,
     MovementType,
@@ -211,6 +212,7 @@ async def finance_history(
     date: str | None = None,
     membership: Membership = require_permission("can_view_finance"),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> list[dict]:
     """Стрічка подій каси/складу: продаж/повернення/зняття, DESC, ліміт 100.
 
@@ -236,7 +238,7 @@ async def finance_history(
         try:
             day_start = datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=UTC)
         except ValueError as exc:
-            raise HTTPException(422, "date має бути у форматі YYYY-MM-DD") from exc
+            raise HTTPException(422, msg("finance.invalid_date_format", lang)) from exc
         day_end = day_start + timedelta(days=1)
         stmt = stmt.where(StockMovement.created_at >= day_start, StockMovement.created_at < day_end)
     else:

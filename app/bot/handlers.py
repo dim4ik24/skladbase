@@ -75,6 +75,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.i18n import lang_from_telegram_code, msg
 from app.models import Plan, PromoCode, PromoType
 from app.security.rate_limit import InMemoryRateLimiter
 from app.services.support_moderation import (
@@ -95,6 +96,7 @@ support_limiter = InMemoryRateLimiter("support_message", max_requests=1, window_
 class SupportTarget(NamedTuple):
     tg_id: int
     name: str
+    lang: str = "uk"
 
 
 # message_id (у чаті адміна) -> хто юзер, якому переслати відповідь/закрити чат.
@@ -107,17 +109,19 @@ class SupportStates(StatesGroup):
 
 @router.message(CommandStart())
 async def cmd_start(message: Message) -> None:
+    lang = lang_from_telegram_code(message.from_user.language_code if message.from_user else None)
     keyboard = None
     if settings.MINI_APP_URL:
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
-                [InlineKeyboardButton(text="Відкрити SkladBase", web_app=WebAppInfo(url=settings.MINI_APP_URL))]
+                [
+                    InlineKeyboardButton(
+                        text=msg("bot.open_button", lang), web_app=WebAppInfo(url=settings.MINI_APP_URL)
+                    )
+                ]
             ]
         )
-    await message.answer(
-        "Ласкаво просимо в SkladBase! Натисніть кнопку нижче, щоб відкрити застосунок.",
-        reply_markup=keyboard,
-    )
+    await message.answer(msg("bot.welcome", lang), reply_markup=keyboard)
 
 
 @router.message(Command("support"))
@@ -125,26 +129,26 @@ async def cmd_support(message: Message, state: FSMContext, session: AsyncSession
     if message.from_user is None:
         return
 
+    lang = lang_from_telegram_code(message.from_user.language_code)
+
     ban = await get_ban(session, message.from_user.id)
     if ban is not None and ban.banned:
         return  # тихо ігноруємо — юзер не має знати, що забанений
 
     remaining = remaining_mute_minutes(ban)
     if remaining is not None:
-        await message.answer(f"Підтримка буде доступна через {remaining} хв")
+        await message.answer(msg("bot.support_muted", lang, remaining=remaining))
         return
 
     await state.set_state(SupportStates.active)
-    await message.answer(
-        "Ви на зв'язку з підтримкою. Опишіть проблему — я передам адміністратору.\n"
-        "Для виходу — /cancel"
-    )
+    await message.answer(msg("bot.support_intro", lang))
 
 
 @router.message(Command("cancel"), StateFilter(SupportStates.active))
 async def cmd_cancel(message: Message, state: FSMContext, bot: Bot) -> None:
     await state.clear()
-    await message.answer("Ви вийшли з режиму підтримки.")
+    lang = lang_from_telegram_code(message.from_user.language_code if message.from_user else None)
+    await message.answer(msg("bot.support_exited", lang))
 
     if message.from_user is None or not settings.ADMIN_TG_ID:
         return
@@ -177,9 +181,7 @@ async def admin_close(message: Message, bot: Bot, storage: BaseStorage) -> None:
         return
 
     try:
-        await bot.send_message(
-            target.tg_id, "Адміністратор закінчив чат підтримки. Дякуємо за звернення!"
-        )
+        await bot.send_message(target.tg_id, msg("bot.support_closed_by_admin", target.lang))
     except Exception:
         logger.warning(
             "не вдалося повідомити юзера tg_id=%s про закриття чату", target.tg_id, exc_info=True
@@ -208,7 +210,7 @@ async def admin_mute(message: Message, bot: Bot, session: AsyncSession) -> None:
 
     await mute_user(session, target.tg_id)
     try:
-        await bot.send_message(target.tg_id, "⏸ Підтримка тимчасово недоступна (1 година)")
+        await bot.send_message(target.tg_id, msg("bot.support_paused_notice", target.lang))
     except Exception:
         logger.warning("не вдалося повідомити юзера tg_id=%s про мут", target.tg_id, exc_info=True)
 
@@ -409,7 +411,7 @@ async def admin_reply(message: Message, bot: Bot) -> None:
         return
 
     try:
-        await bot.send_message(target.tg_id, f"💬 Відповідь підтримки:\n{text}")
+        await bot.send_message(target.tg_id, msg("bot.support_reply_prefix", target.lang, text=text))
     except Exception:
         logger.warning(
             "не вдалося надіслати відповідь підтримки tg_id=%s", target.tg_id, exc_info=True
@@ -421,6 +423,7 @@ async def support_message(message: Message, state: FSMContext, bot: Bot, session
     if message.from_user is None:
         return
     user = message.from_user
+    lang = lang_from_telegram_code(user.language_code)
 
     ban = await get_ban(session, user.id)
     if ban is not None and ban.banned:
@@ -428,15 +431,15 @@ async def support_message(message: Message, state: FSMContext, bot: Bot, session
 
     remaining = remaining_mute_minutes(ban)
     if remaining is not None:
-        await message.answer(f"Підтримка буде доступна через {remaining} хв")
+        await message.answer(msg("bot.support_muted", lang, remaining=remaining))
         return
 
     if not settings.ADMIN_TG_ID:
-        await message.answer("Підтримка тимчасово недоступна.")
+        await message.answer(msg("bot.support_unavailable", lang))
         return
 
     if not support_limiter.hit(str(user.id)):
-        await message.answer("Зачекайте хвилину перед наступним повідомленням.")
+        await message.answer(msg("bot.support_rate_limited", lang))
         return
 
     username = f"@{user.username}" if user.username else "без username"
@@ -453,8 +456,8 @@ async def support_message(message: Message, state: FSMContext, bot: Bot, session
         logger.warning("не вдалося переслати повідомлення підтримки адміну", exc_info=True)
         return
 
-    target = SupportTarget(tg_id=user.id, name=user.first_name)
+    target = SupportTarget(tg_id=user.id, name=user.first_name, lang=lang)
     support_map[context_msg.message_id] = target
     support_map[copied.message_id] = target
 
-    await message.answer("Передано ✅")
+    await message.answer(msg("bot.support_delivered", lang))

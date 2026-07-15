@@ -4,6 +4,7 @@
  * На КОЖЕН запит — заголовок `X-Telegram-Init-Data` (бекенд бере shop_id
  * лише з нього, CLAUDE.md, інваріант №1). Базовий URL — `VITE_API_BASE`.
  */
+import i18n from "./i18n";
 import { getInitData } from "./telegram";
 import type {
   AdjustPayload,
@@ -66,6 +67,7 @@ export function setActiveShopId(id: number | null): void {
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = {
     "X-Telegram-Init-Data": getInitData(),
+    "X-App-Language": i18n.language,
   };
   if (activeShopId != null) {
     headers["X-Shop-Id"] = String(activeShopId);

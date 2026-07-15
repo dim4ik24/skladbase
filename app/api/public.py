@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.db import get_session
+from app.i18n import get_lang, msg
 from app.models import Product, Shop
 from app.security.rate_limit import InMemoryRateLimiter, rate_limited
 from app.services.catalog import current_plan_limits, frozen_product_ids
@@ -65,10 +66,13 @@ class PublicShopOut(BaseModel):
 async def get_public_catalog(
     slug: str,
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> PublicShopOut:
     shop = await session.scalar(select(Shop).where(Shop.slug == slug))
     if shop is None or not shop.public_catalog_enabled:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Каталог не знайдено")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=msg("public.catalog_not_found", lang)
+        )
 
     products = (
         await session.scalars(

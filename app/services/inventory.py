@@ -32,6 +32,7 @@ from typing import TypeVar
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.i18n import ServiceError
 from app.models import (
     MovementType,
     Reservation,
@@ -57,19 +58,12 @@ def _validate_ttn(ttn: str | None) -> None:
     """Порожньо/None — дозволено (ТТН опційний, продавець може вписати пізніше
     через update_ttn())."""
     if ttn and not _TTN_RE.fullmatch(ttn):
-        raise InventoryError(
-            HTTPStatus.UNPROCESSABLE_ENTITY,
-            "ТТН Нової Пошти — 14 цифр, починається з 20 або 59",
-        )
+        raise InventoryError(HTTPStatus.UNPROCESSABLE_ENTITY, "inventory.ttn_format")
 
 
-class InventoryError(Exception):
-    """Помилка складу з HTTP статус-кодом для API-шару."""
-
-    def __init__(self, status_code: int, detail: str) -> None:
-        super().__init__(detail)
-        self.status_code = status_code
-        self.detail = detail
+class InventoryError(ServiceError):
+    """Помилка складу з HTTP статус-кодом для API-шару. Текст рендериться
+    на межі API-шару через .detail(lang) — див. app/i18n.py."""
 
 
 async def _locked_variant(session: AsyncSession, shop_id: int, variant_id: int) -> Variant:
@@ -79,7 +73,7 @@ async def _locked_variant(session: AsyncSession, shop_id: int, variant_id: int) 
         .with_for_update()
     )
     if variant is None:
-        raise InventoryError(HTTPStatus.NOT_FOUND, "Варіант не знайдено")
+        raise InventoryError(HTTPStatus.NOT_FOUND, "catalog.variant_not_found")
     return variant
 
 
@@ -92,7 +86,7 @@ async def _locked_reservation(
         .with_for_update()
     )
     if reservation is None:
-        raise InventoryError(HTTPStatus.NOT_FOUND, "Резерв не знайдено")
+        raise InventoryError(HTTPStatus.NOT_FOUND, "inventory.reservation_not_found")
     return reservation
 
 
@@ -133,7 +127,7 @@ def _maybe_reset_low_stock_flag(variant: Variant) -> None:
 
 def _require_positive_qty(qty: int) -> None:
     if qty <= 0:
-        raise InventoryError(HTTPStatus.BAD_REQUEST, "qty має бути додатнім")
+        raise InventoryError(HTTPStatus.BAD_REQUEST, "inventory.qty_positive")
 
 
 async def _finalize(session: AsyncSession, obj: _T, *, commit: bool) -> _T:
@@ -167,7 +161,9 @@ async def reserve(
     if variant.available < qty:
         raise InventoryError(
             HTTPStatus.CONFLICT,
-            f"Недостатньо залишку: доступно {variant.available}, потрібно {qty}",
+            "inventory.insufficient_stock",
+            available=variant.available,
+            qty=qty,
         )
 
     variant.reserved += qty
@@ -210,15 +206,13 @@ async def release(
     у `tasks.py`, скасування замовлення в `orders.py`) викликають без причини;
     причина потрібна лише коли менеджер знімає резерв вручну через діалог."""
     if reason is not None and reason not in RELEASE_REASONS:
-        raise InventoryError(HTTPStatus.UNPROCESSABLE_ENTITY, f"Невідома причина: {reason}")
+        raise InventoryError(HTTPStatus.UNPROCESSABLE_ENTITY, "inventory.unknown_reason", reason=reason)
     if reason == "other" and not comment:
-        raise InventoryError(
-            HTTPStatus.UNPROCESSABLE_ENTITY, "Для причини 'other' коментар обов'язковий"
-        )
+        raise InventoryError(HTTPStatus.UNPROCESSABLE_ENTITY, "inventory.comment_required")
 
     reservation = await _locked_reservation(session, shop_id, reservation_id)
     if reservation.status != ReservationStatus.active:
-        raise InventoryError(HTTPStatus.CONFLICT, "Резерв не активний")
+        raise InventoryError(HTTPStatus.CONFLICT, "inventory.reservation_not_active")
 
     variant = await _locked_variant(session, shop_id, reservation.variant_id)
     variant.reserved -= reservation.qty
@@ -278,12 +272,12 @@ async def fulfill(
     """Прямий продаж раніше відкладеного резерву (без відправки, зустріч/самовивіз)."""
     reservation = await _locked_reservation(session, shop_id, reservation_id)
     if reservation.status != ReservationStatus.active:
-        raise InventoryError(HTTPStatus.CONFLICT, "Резерв не активний")
+        raise InventoryError(HTTPStatus.CONFLICT, "inventory.reservation_not_active")
 
     variant = await _locked_variant(session, shop_id, reservation.variant_id)
     if variant.on_hand < reservation.qty:
         # Не повинно траплятись (резерв уже гарантував available), захист про всяк випадок.
-        raise InventoryError(HTTPStatus.CONFLICT, "Недостатньо залишку для списання резерву")
+        raise InventoryError(HTTPStatus.CONFLICT, "inventory.insufficient_stock_fulfill")
 
     variant.on_hand -= reservation.qty
     variant.reserved -= reservation.qty
@@ -308,7 +302,7 @@ async def ship(
     _validate_ttn(ttn)
     reservation = await _locked_reservation(session, shop_id, reservation_id)
     if reservation.status != ReservationStatus.active:
-        raise InventoryError(HTTPStatus.CONFLICT, "Резерв не активний")
+        raise InventoryError(HTTPStatus.CONFLICT, "inventory.reservation_not_active")
 
     variant = await _locked_variant(session, shop_id, reservation.variant_id)
     variant.on_hand -= reservation.qty
@@ -333,7 +327,7 @@ async def update_ttn(
     _validate_ttn(ttn)
     reservation = await _locked_reservation(session, shop_id, reservation_id)
     if reservation.status != ReservationStatus.shipped:
-        raise InventoryError(HTTPStatus.CONFLICT, "Резерв не відправлено")
+        raise InventoryError(HTTPStatus.CONFLICT, "inventory.reservation_not_shipped")
 
     reservation.ttn = ttn
     return await _finalize(session, reservation, commit=commit)
@@ -350,7 +344,7 @@ async def pick_up(
     тут лише фіксація продажу/доходу (спільна з fulfill логіка)."""
     reservation = await _locked_reservation(session, shop_id, reservation_id)
     if reservation.status != ReservationStatus.shipped:
-        raise InventoryError(HTTPStatus.CONFLICT, "Резерв не відправлено")
+        raise InventoryError(HTTPStatus.CONFLICT, "inventory.reservation_not_shipped")
 
     variant = await _locked_variant(session, shop_id, reservation.variant_id)
 
@@ -371,15 +365,13 @@ async def not_picked_up(
     рух type=ret з price_at=None (не впливає на revenue у finance_summary).
     Reserved далі не чіпаємо — earmark уже знято на ship()."""
     if reason not in NOT_PICKED_UP_REASONS:
-        raise InventoryError(HTTPStatus.UNPROCESSABLE_ENTITY, f"Невідома причина: {reason}")
+        raise InventoryError(HTTPStatus.UNPROCESSABLE_ENTITY, "inventory.unknown_reason", reason=reason)
     if reason == "other" and not comment:
-        raise InventoryError(
-            HTTPStatus.UNPROCESSABLE_ENTITY, "Для причини 'other' коментар обов'язковий"
-        )
+        raise InventoryError(HTTPStatus.UNPROCESSABLE_ENTITY, "inventory.comment_required")
 
     reservation = await _locked_reservation(session, shop_id, reservation_id)
     if reservation.status != ReservationStatus.shipped:
-        raise InventoryError(HTTPStatus.CONFLICT, "Резерв не відправлено")
+        raise InventoryError(HTTPStatus.CONFLICT, "inventory.reservation_not_shipped")
 
     variant = await _locked_variant(session, shop_id, reservation.variant_id)
     variant.on_hand += reservation.qty
@@ -421,7 +413,9 @@ async def sell_direct(
     if variant.available < qty:
         raise InventoryError(
             HTTPStatus.CONFLICT,
-            f"Недостатньо доступного залишку: доступно {variant.available}, потрібно {qty}",
+            "inventory.insufficient_available",
+            available=variant.available,
+            qty=qty,
         )
 
     variant.on_hand -= qty
@@ -488,17 +482,17 @@ async def write_off(
     """
     _require_positive_qty(qty)
     if reason not in WRITE_OFF_REASONS:
-        raise InventoryError(HTTPStatus.UNPROCESSABLE_ENTITY, f"Невідома причина: {reason}")
+        raise InventoryError(HTTPStatus.UNPROCESSABLE_ENTITY, "inventory.unknown_reason", reason=reason)
     if reason == "other" and not comment:
-        raise InventoryError(
-            HTTPStatus.UNPROCESSABLE_ENTITY, "Для причини 'other' коментар обов'язковий"
-        )
+        raise InventoryError(HTTPStatus.UNPROCESSABLE_ENTITY, "inventory.comment_required")
 
     variant = await _locked_variant(session, shop_id, variant_id)
     if qty > variant.available:
         raise InventoryError(
             HTTPStatus.CONFLICT,
-            f"Недостатньо доступного залишку: доступно {variant.available}, потрібно списати {qty}",
+            "inventory.insufficient_available_writeoff",
+            available=variant.available,
+            qty=qty,
         )
 
     variant.on_hand -= qty

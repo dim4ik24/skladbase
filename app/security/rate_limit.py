@@ -11,7 +11,9 @@ from __future__ import annotations
 import time
 from collections import defaultdict, deque
 
-from fastapi import HTTPException, Request, status
+from fastapi import Depends, HTTPException, Request, status
+
+from app.i18n import get_lang, msg
 
 _registry: dict[str, "InMemoryRateLimiter"] = {}
 
@@ -59,11 +61,11 @@ def rate_limited(limiter: InMemoryRateLimiter):
     цього лімітера. Виконується ДО тіла ендпоінта (дешевше за перевірку
     підпису/бізнес-логіки на кожен зайвий запит)."""
 
-    async def _dependency(request: Request) -> None:
+    async def _dependency(request: Request, lang: str = Depends(get_lang)) -> None:
         if not limiter.hit(client_ip(request)):
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Занадто багато запитів, спробуйте пізніше",
+                detail=msg("rate_limit.too_many_requests", lang),
             )
 
     return _dependency

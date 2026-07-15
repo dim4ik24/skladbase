@@ -120,7 +120,7 @@ async def test_perm_true_missing_sub_raises_402(client: AsyncClient) -> None:
     async with db.async_session() as session:
         _check_permission(m, "can_view_finance")  # must not raise (perm=True)
         with pytest.raises(HTTPException) as exc_info:
-            await _check_writable(nonexistent_shop_id, session)
+            await _check_writable(nonexistent_shop_id, session, "uk")
         assert exc_info.value.status_code == 402
 
 

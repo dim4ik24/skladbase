@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
 from app.deps import require_owner
+from app.i18n import get_lang
 from app.models import Membership, Shop
 from app.seed import clear_demo_catalog
 from app.services.media import MediaError, delete_photo, max_upload_bytes, read_capped, upload_photo
@@ -57,6 +58,7 @@ async def upload_shop_logo(
     file: UploadFile = File(...),
     membership: Membership = Depends(require_owner),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> dict:
     shop = await session.get(Shop, membership.shop_id)
     assert shop is not None
@@ -68,7 +70,7 @@ async def upload_shop_logo(
             data=data,
         )
     except MediaError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail(lang)) from exc
     shop.logo_url = url
     await session.commit()
     return {"logo_url": url}

@@ -30,6 +30,7 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.i18n import ServiceError
 from app.models import (
     Payment,
     PaymentStatus,
@@ -62,15 +63,15 @@ _ALLOWED: dict[SubStatus, set[SubStatus]] = {
 }
 
 
-class SubscriptionError(Exception):
+class SubscriptionError(ServiceError):
     """status_code — опційний, дефолт 400 (як і було): існуючі виклики без
     цього аргументу (недозволений перехід стейт-машини, cancel()) далі
     мапляться на 400 без змін. redeem_promo — єдине місце, що передає
-    інший код (404/409/410), щоб API-шар міг розрізнити причину відмови."""
+    інший код (404/409/410), щоб API-шар міг розрізнити причину відмови.
 
-    def __init__(self, message: str, *, status_code: int = 400):
-        super().__init__(message)
-        self.status_code = status_code
+    Текст рендериться на межі API-шару через .detail(lang) — див.
+    app/i18n.py. Виняток: недозволений перехід стейт-машини (_transition)
+    — внутрішній інваріант, не реальний UI-текст, лишається укр (raw=)."""
 
 
 def _period_delta(period: SubPeriod) -> timedelta:
@@ -89,7 +90,7 @@ class SubscriptionService:
         if to == sub.status:
             return
         if to not in _ALLOWED.get(sub.status, set()):
-            raise SubscriptionError(f"недозволений перехід {sub.status} -> {to}")
+            raise SubscriptionError(400, raw=f"недозволений перехід {sub.status} -> {to}")
         sub.status = to
 
     # --- 1. Тріал ------------------------------------------------------- #
@@ -246,7 +247,7 @@ class SubscriptionService:
             select(PromoCode).where(PromoCode.code == code.strip().upper())
         )
         if not promo:
-            raise SubscriptionError("Код не знайдено", status_code=404)
+            raise SubscriptionError(404, "billing.promo_not_found")
 
         already = await self.s.scalar(
             select(PromoRedemption).where(
@@ -255,10 +256,10 @@ class SubscriptionService:
             )
         )
         if already:
-            raise SubscriptionError("Ви вже використали цей код", status_code=409)
+            raise SubscriptionError(409, "billing.promo_already_used")
 
         if not promo.is_redeemable:
-            raise SubscriptionError("Код вичерпано або прострочено", status_code=410)
+            raise SubscriptionError(410, "billing.promo_exhausted")
 
         if promo.type == PromoType.free_period:
             now = utcnow()
@@ -271,7 +272,7 @@ class SubscriptionService:
         elif promo.type == PromoType.plan_grant:
             plan = await self.s.get(Plan, promo.plan_id) if promo.plan_id else None
             if plan is None:
-                raise SubscriptionError("План промокоду не знайдено", status_code=404)
+                raise SubscriptionError(404, "billing.promo_plan_not_found")
             now = utcnow()
             current_end = sub.current_period_end and ensure_aware_utc(sub.current_period_end)
             base = current_end if (current_end and current_end > now) else now

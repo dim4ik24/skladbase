@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
 from app.deps import require_owner
+from app.i18n import get_lang, msg
 from app.models import Membership, Shop
 from app.security.crypto import encrypt
 from app.services.novaposhta import ping
@@ -33,9 +34,10 @@ async def set_np_key(
     payload: NpKeyIn,
     membership: Membership = Depends(require_owner),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> NpKeyStatusOut:
     if not await ping(payload.api_key):
-        raise HTTPException(status_code=422, detail="Ключ не пройшов перевірку")
+        raise HTTPException(status_code=422, detail=msg("np.key_invalid", lang))
 
     shop = await session.get(Shop, membership.shop_id)
     assert shop is not None

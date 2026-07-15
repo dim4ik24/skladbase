@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
 from app.deps import require_owner, require_permission, require_permission_writable
+from app.i18n import get_lang, msg
 from app.models import Membership, Shop
 from app.security.crypto import decrypt
 from app.services.novaposhta import NovaPoshtaError, get_warehouses, search_cities
@@ -86,11 +87,11 @@ class CreateTtnOut(BaseModel):
 # --------------------------------------------------------------------------- #
 #  Довідники (проксі до НП, потребують підключеного ключа магазину)
 # --------------------------------------------------------------------------- #
-async def _shop_api_key(shop_id: int, session: AsyncSession) -> str:
+async def _shop_api_key(shop_id: int, session: AsyncSession, lang: str) -> str:
     shop = await session.get(Shop, shop_id)
     assert shop is not None
     if not shop.np_api_key_encrypted:
-        raise HTTPException(status_code=422, detail="Підключіть ключ Нової Пошти в налаштуваннях")
+        raise HTTPException(status_code=422, detail=msg("np.key_required", lang))
     return decrypt(shop.np_api_key_encrypted)
 
 
@@ -99,11 +100,13 @@ async def list_np_cities(
     q: str,
     membership: Membership = require_permission("can_manage_reservations"),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> list[dict]:
-    api_key = await _shop_api_key(membership.shop_id, session)
+    api_key = await _shop_api_key(membership.shop_id, session, lang)
     try:
         return await search_cities(api_key, q)
     except NovaPoshtaError as exc:
+        # НП: passthrough — не перекладаємо (app/i18n.py, шапка модуля).
         raise HTTPException(status_code=422, detail=f"НП: {exc}") from exc
 
 
@@ -112,11 +115,13 @@ async def list_np_warehouses(
     city_ref: str,
     membership: Membership = require_permission("can_manage_reservations"),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> list[dict]:
-    api_key = await _shop_api_key(membership.shop_id, session)
+    api_key = await _shop_api_key(membership.shop_id, session, lang)
     try:
         return await get_warehouses(api_key, city_ref)
     except NovaPoshtaError as exc:
+        # НП: passthrough — не перекладаємо (app/i18n.py, шапка модуля).
         raise HTTPException(status_code=422, detail=f"НП: {exc}") from exc
 
 
@@ -160,6 +165,7 @@ async def create_reservation_ttn(
     payload: CreateTtnIn,
     membership: Membership = require_permission_writable("can_manage_reservations"),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> dict:
     try:
         return await create_ttn(
@@ -176,4 +182,4 @@ async def create_reservation_ttn(
             description=payload.description,
         )
     except NpShippingError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail(lang)) from exc

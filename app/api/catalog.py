@@ -18,6 +18,7 @@ from sqlalchemy.orm import selectinload
 from app.config import settings
 from app.db import get_session
 from app.deps import require_permission, require_permission_writable
+from app.i18n import get_lang, msg
 from app.models import Membership, Product, ProductPhoto, ProductTemplate, TemplateCode, Variant
 from app.services import catalog as catalog_service
 from app.services import media as media_service
@@ -148,13 +149,14 @@ async def create_template(
     payload: TemplateIn,
     membership: Membership = require_permission("can_edit_products"),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> ProductTemplate:
     try:
         return await templates_service.create_custom_template(
             session, membership, payload.name, payload.field_schema
         )
     except templates_service.TemplateError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail(lang)) from exc
 
 
 @router.patch("/templates/{template_id}", response_model=TemplateOut)
@@ -163,13 +165,14 @@ async def patch_template(
     payload: TemplatePatch,
     membership: Membership = require_permission("can_edit_products"),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> ProductTemplate:
     try:
         return await templates_service.patch_custom_template(
             session, membership, template_id, payload.name, payload.field_schema
         )
     except templates_service.TemplateError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail(lang)) from exc
 
 
 @router.delete("/templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -177,11 +180,12 @@ async def delete_template(
     template_id: int,
     membership: Membership = require_permission("can_edit_products"),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> None:
     try:
         await templates_service.delete_custom_template(session, membership, template_id)
     except templates_service.TemplateError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail(lang)) from exc
 
 
 # --------------------------------------------------------------------------- #
@@ -192,6 +196,7 @@ async def create_product(
     payload: ProductIn,
     membership: Membership = require_permission_writable("can_edit_products"),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> Product:
     service_payload = catalog_service.ProductInput(
         name=payload.name,
@@ -214,7 +219,7 @@ async def create_product(
             session, membership, service_payload
         )
     except catalog_service.CatalogError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail(lang)) from exc
 
 
 @router.get("/products", response_model=list[ProductOut])
@@ -245,14 +250,18 @@ async def list_products(
     return result
 
 
-async def _get_owned_product(session: AsyncSession, shop_id: int, product_id: int) -> Product:
+async def _get_owned_product(
+    session: AsyncSession, shop_id: int, product_id: int, lang: str
+) -> Product:
     product = await session.scalar(
         select(Product)
         .options(selectinload(Product.variants))
         .where(Product.id == product_id, Product.shop_id == shop_id)
     )
     if product is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Товар не знайдено")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=msg("catalog.product_not_found", lang)
+        )
     return product
 
 
@@ -262,13 +271,14 @@ async def patch_product(
     payload: ProductPatch,
     membership: Membership = require_permission_writable("can_edit_products"),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> Product:
-    product = await _get_owned_product(session, membership.shop_id, product_id)
+    product = await _get_owned_product(session, membership.shop_id, product_id, lang)
 
     try:
         await catalog_service.enforce_product_writable(product.id, membership.shop_id, session)
     except catalog_service.CatalogError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail(lang)) from exc
 
     for field_name, value in payload.model_dump(exclude_unset=True).items():
         setattr(product, field_name, value)
@@ -283,8 +293,9 @@ async def delete_product(
     product_id: int,
     membership: Membership = require_permission_writable("can_edit_products"),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> None:
-    product = await _get_owned_product(session, membership.shop_id, product_id)
+    product = await _get_owned_product(session, membership.shop_id, product_id, lang)
     product.archived = True
     await session.commit()
 
@@ -299,18 +310,21 @@ async def upload_variant_photo(
     file: UploadFile = File(...),
     membership: Membership = require_permission_writable("can_edit_products"),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> Variant:
     variant = await session.scalar(
         select(Variant).where(Variant.id == variant_id, Variant.shop_id == membership.shop_id)
     )
     if variant is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Варіант не знайдено")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=msg("catalog.variant_not_found", lang)
+        )
 
     try:
         await catalog_service.enforce_product_writable(variant.product_id, membership.shop_id, session)
         await catalog_service.enforce_photos_allowed(membership.shop_id, session)
     except catalog_service.CatalogError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail(lang)) from exc
 
     max_bytes = media_service.max_upload_bytes()
 
@@ -325,7 +339,7 @@ async def upload_variant_photo(
         if declared_size is not None and declared_size > max_bytes:
             raise HTTPException(
                 status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-                detail=f"Файл занадто великий: максимум {settings.MAX_PHOTO_UPLOAD_MB} МБ.",
+                detail=msg("media.file_too_large", lang, max_mb=settings.MAX_PHOTO_UPLOAD_MB),
             )
 
     try:
@@ -339,7 +353,7 @@ async def upload_variant_photo(
             data=data,
         )
     except media_service.MediaError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail(lang)) from exc
 
     variant.photo_url = photo_url
     await session.commit()
@@ -361,21 +375,22 @@ async def upload_product_photo(
     file: UploadFile = File(...),
     membership: Membership = require_permission_writable("can_edit_products"),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> ProductPhoto:
-    product = await _get_owned_product(session, membership.shop_id, product_id)
+    product = await _get_owned_product(session, membership.shop_id, product_id, lang)
 
     try:
         await catalog_service.enforce_product_writable(product.id, membership.shop_id, session)
         await catalog_service.enforce_photos_allowed(membership.shop_id, session)
     except catalog_service.CatalogError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail(lang)) from exc
 
     photo_count = await session.scalar(
         select(func.count(ProductPhoto.id)).where(ProductPhoto.product_id == product_id)
     )
     if (photo_count or 0) >= 10:
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="Максимум 10 фото на товар"
+            status_code=status.HTTP_409_CONFLICT, detail=msg("catalog.photo_limit", lang)
         )
 
     max_bytes = media_service.max_upload_bytes()
@@ -388,7 +403,7 @@ async def upload_product_photo(
         if declared_size is not None and declared_size > max_bytes:
             raise HTTPException(
                 status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-                detail=f"Файл занадто великий: максимум {settings.MAX_PHOTO_UPLOAD_MB} МБ.",
+                detail=msg("media.file_too_large", lang, max_mb=settings.MAX_PHOTO_UPLOAD_MB),
             )
 
     try:
@@ -399,7 +414,7 @@ async def upload_product_photo(
             data=data,
         )
     except media_service.MediaError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail(lang)) from exc
 
     max_pos = await session.scalar(
         select(func.max(ProductPhoto.position)).where(ProductPhoto.product_id == product_id)
@@ -422,8 +437,9 @@ async def delete_product_photo(
     photo_id: int,
     membership: Membership = require_permission("can_edit_products"),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> None:
-    product = await _get_owned_product(session, membership.shop_id, product_id)
+    product = await _get_owned_product(session, membership.shop_id, product_id, lang)
 
     photo = await session.scalar(
         select(ProductPhoto).where(
@@ -431,7 +447,9 @@ async def delete_product_photo(
         )
     )
     if photo is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Фото не знайдено")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=msg("catalog.photo_not_found", lang)
+        )
 
     await media_service.delete_photo(photo.url)
     await session.delete(photo)
@@ -448,13 +466,14 @@ async def patch_variant(
     payload: VariantPatch,
     membership: Membership = require_permission_writable("can_edit_products"),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> Variant:
     try:
         return await catalog_service.patch_variant(
             session, membership, variant_id, payload.model_dump(exclude_unset=True)
         )
     except catalog_service.CatalogError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail(lang)) from exc
 
 
 @router.post(
@@ -467,6 +486,7 @@ async def add_variant(
     payload: VariantAddIn,
     membership: Membership = require_permission_writable("can_edit_products"),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> Variant:
     try:
         return await catalog_service.add_variant_to_product(
@@ -480,7 +500,7 @@ async def add_variant(
             ),
         )
     except catalog_service.CatalogError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail(lang)) from exc
 
 
 @router.delete("/variants/{variant_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -488,10 +508,11 @@ async def delete_variant(
     variant_id: int,
     membership: Membership = require_permission_writable("can_edit_products"),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> None:
     try:
         photo_url = await catalog_service.delete_variant(session, membership, variant_id)
     except catalog_service.CatalogError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail(lang)) from exc
     if photo_url:
         await media_service.delete_photo(photo_url)

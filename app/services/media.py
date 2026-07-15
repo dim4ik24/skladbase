@@ -20,6 +20,7 @@ from fastapi import UploadFile
 from PIL import Image, UnidentifiedImageError
 
 from app.config import settings
+from app.i18n import ServiceError
 
 ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
 MAX_DIMENSION = 1024
@@ -27,27 +28,25 @@ WEBP_QUALITY = 80
 _READ_CHUNK_SIZE = 64 * 1024
 
 
-class MediaError(Exception):
-    """Помилка завантаження фото з HTTP статус-кодом для API-шару."""
-
-    def __init__(self, status_code: int, detail: str) -> None:
-        super().__init__(detail)
-        self.status_code = status_code
-        self.detail = detail
+class MediaError(ServiceError):
+    """Помилка завантаження фото з HTTP статус-кодом для API-шару. Текст
+    рендериться на межі API-шару через .detail(lang) — див. app/i18n.py."""
 
 
 def _validate(content_type: str, data: bytes) -> None:
     if content_type not in ALLOWED_CONTENT_TYPES:
         raise MediaError(
             HTTPStatus.BAD_REQUEST,
-            f"Непідтримуваний тип файлу: '{content_type}'. Дозволено: jpeg, png, webp.",
+            "media.unsupported_type",
+            content_type=content_type,
         )
 
     max_bytes = settings.MAX_PHOTO_UPLOAD_MB * 1024 * 1024
     if len(data) > max_bytes:
         raise MediaError(
             HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
-            f"Файл занадто великий: максимум {settings.MAX_PHOTO_UPLOAD_MB} МБ.",
+            "media.file_too_large",
+            max_mb=settings.MAX_PHOTO_UPLOAD_MB,
         )
 
 
@@ -56,7 +55,7 @@ def _compress_to_webp(data: bytes) -> bytes:
         opened = Image.open(io.BytesIO(data))
         opened.load()
     except UnidentifiedImageError as exc:
-        raise MediaError(HTTPStatus.BAD_REQUEST, "Файл не є валідним зображенням") from exc
+        raise MediaError(HTTPStatus.BAD_REQUEST, "media.invalid_image") from exc
 
     image = opened.convert("RGB")
     image.thumbnail((MAX_DIMENSION, MAX_DIMENSION))
@@ -93,7 +92,8 @@ def max_upload_bytes() -> int:
 def _too_large_error() -> MediaError:
     return MediaError(
         HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
-        f"Файл занадто великий: максимум {settings.MAX_PHOTO_UPLOAD_MB} МБ.",
+        "media.file_too_large",
+        max_mb=settings.MAX_PHOTO_UPLOAD_MB,
     )
 
 

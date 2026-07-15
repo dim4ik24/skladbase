@@ -22,6 +22,7 @@ from sqlalchemy.orm import selectinload
 from app.bot.notify import notifier
 from app.db import get_session
 from app.deps import require_api_key, require_permission, require_permission_writable
+from app.i18n import get_lang, msg
 from app.models import Membership, Order, OrderSource, OrderStatus, Shop
 from app.services import orders as orders_service
 
@@ -74,6 +75,7 @@ async def submit_website_order(
     response: Response,
     shop: Shop = Depends(require_api_key),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> Order:
     service_payload = orders_service.OrderInput(
         items=[
@@ -89,13 +91,14 @@ async def submit_website_order(
             session, shop_id=shop.id, payload=service_payload
         )
     except orders_service.OrderError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail(lang)) from exc
 
     response.status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
 
     if created:
         items_text = "\n".join(f"• variant #{i.variant_id} × {i.qty}" for i in payload.items)
-        await notifier(shop.owner_tg_id, f"Нове замовлення з сайту #{order.id}\n{items_text}")
+        order_line = msg("bot.new_website_order", shop.owner_language_code, order_id=order.id)
+        await notifier(shop.owner_tg_id, f"{order_line}\n{items_text}")
 
     return order
 
@@ -124,13 +127,14 @@ async def confirm_order(
     order_id: int,
     membership: Membership = require_permission_writable("can_manage_reservations"),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> Order:
     try:
         return await orders_service.confirm_order(
             session, shop_id=membership.shop_id, order_id=order_id
         )
     except orders_service.OrderError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail(lang)) from exc
 
 
 @router.post("/orders/{order_id}/cancel", response_model=OrderOut)
@@ -138,10 +142,11 @@ async def cancel_order(
     order_id: int,
     membership: Membership = require_permission_writable("can_manage_reservations"),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> Order:
     try:
         return await orders_service.cancel_order(
             session, shop_id=membership.shop_id, order_id=order_id
         )
     except orders_service.OrderError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail(lang)) from exc

@@ -12,16 +12,13 @@ from http import HTTPStatus
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.i18n import ServiceError
 from app.models import Membership, Product, ProductTemplate, TemplateCode
 
 
-class TemplateError(Exception):
-    """Помилка сервісу шаблонів із HTTP статус-кодом для API-шару."""
-
-    def __init__(self, status_code: int, detail: str) -> None:
-        super().__init__(detail)
-        self.status_code = status_code
-        self.detail = detail
+class TemplateError(ServiceError):
+    """Помилка сервісу шаблонів із HTTP статус-кодом для API-шару. Текст
+    рендериться на межі API-шару через .detail(lang) — див. app/i18n.py."""
 
 
 _KEY_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9_]*$")
@@ -40,37 +37,40 @@ def validate_field_schema(schema: dict) -> None:
     - невалідно → TemplateError(422, <деталь>).
     """
     if not isinstance(schema, dict):
-        raise TemplateError(HTTPStatus.UNPROCESSABLE_ENTITY, "field_schema має бути об'єктом")
+        raise TemplateError(HTTPStatus.UNPROCESSABLE_ENTITY, "template.schema_must_be_object")
 
     attributes = schema.get("attributes", [])
     variant_axes = schema.get("variant_axes", [])
 
     if not isinstance(attributes, list):
-        raise TemplateError(HTTPStatus.UNPROCESSABLE_ENTITY, "attributes має бути списком")
+        raise TemplateError(HTTPStatus.UNPROCESSABLE_ENTITY, "template.attributes_must_be_list")
     if not isinstance(variant_axes, list):
-        raise TemplateError(HTTPStatus.UNPROCESSABLE_ENTITY, "variant_axes має бути списком")
+        raise TemplateError(HTTPStatus.UNPROCESSABLE_ENTITY, "template.axes_must_be_list")
 
     seen_keys: set[str] = set()
 
     for field in [*attributes, *variant_axes]:
         if not isinstance(field, dict):
-            raise TemplateError(HTTPStatus.UNPROCESSABLE_ENTITY, "кожне поле має бути об'єктом")
+            raise TemplateError(HTTPStatus.UNPROCESSABLE_ENTITY, "template.field_must_be_object")
 
         key = field.get("key", "")
         if not isinstance(key, str) or not key:
             raise TemplateError(
                 HTTPStatus.UNPROCESSABLE_ENTITY,
-                f"key має бути непорожнім рядком, отримано: {key!r}",
+                "template.key_required",
+                key=key,
             )
         if not _KEY_RE.match(key):
             raise TemplateError(
                 HTTPStatus.UNPROCESSABLE_ENTITY,
-                f"key '{key}' має починатися з літери і містити лише [a-zA-Z0-9_]",
+                "template.key_format",
+                key=key,
             )
         if key in seen_keys:
             raise TemplateError(
                 HTTPStatus.UNPROCESSABLE_ENTITY,
-                f"Дублікат key '{key}' у field_schema",
+                "template.key_duplicate",
+                key=key,
             )
         seen_keys.add(key)
 
@@ -78,14 +78,17 @@ def validate_field_schema(schema: dict) -> None:
         if not isinstance(label, str) or not label:
             raise TemplateError(
                 HTTPStatus.UNPROCESSABLE_ENTITY,
-                f"label для key '{key}' має бути непорожнім рядком",
+                "template.label_required",
+                key=key,
             )
 
         ftype = field.get("type", "")
         if ftype not in _VALID_TYPES:
             raise TemplateError(
                 HTTPStatus.UNPROCESSABLE_ENTITY,
-                f"type для key '{key}' має бути 'enum' або 'string', отримано: {ftype!r}",
+                "template.type_invalid",
+                key=key,
+                ftype=ftype,
             )
 
         if ftype == "enum":
@@ -93,17 +96,20 @@ def validate_field_schema(schema: dict) -> None:
             if not isinstance(options, list) or not options:
                 raise TemplateError(
                     HTTPStatus.UNPROCESSABLE_ENTITY,
-                    f"type=enum вимагає непорожнього options[] для key '{key}'",
+                    "template.options_required",
+                    key=key,
                 )
             if any(not isinstance(o, str) or not o for o in options):
                 raise TemplateError(
                     HTTPStatus.UNPROCESSABLE_ENTITY,
-                    f"options для key '{key}' мають бути непорожніми рядками",
+                    "template.options_must_be_strings",
+                    key=key,
                 )
             if len(options) != len(set(options)):
                 raise TemplateError(
                     HTTPStatus.UNPROCESSABLE_ENTITY,
-                    f"options для key '{key}' мають бути унікальними",
+                    "template.options_must_be_unique",
+                    key=key,
                 )
 
 
@@ -137,13 +143,11 @@ async def _load_own_template(
     """
     template = await session.get(ProductTemplate, template_id)
     if template is None:
-        raise TemplateError(HTTPStatus.NOT_FOUND, "Шаблон не знайдено")
+        raise TemplateError(HTTPStatus.NOT_FOUND, "catalog.template_not_found")
     if template.shop_id is None:
-        raise TemplateError(
-            HTTPStatus.FORBIDDEN, "Базовий шаблон не можна змінити"
-        )
+        raise TemplateError(HTTPStatus.FORBIDDEN, "template.base_immutable")
     if template.shop_id != membership.shop_id:
-        raise TemplateError(HTTPStatus.NOT_FOUND, "Шаблон не знайдено")
+        raise TemplateError(HTTPStatus.NOT_FOUND, "catalog.template_not_found")
     return template
 
 
@@ -185,14 +189,10 @@ async def patch_custom_template(
 
             for key in old_types:
                 if key not in new_types:
-                    raise TemplateError(
-                        HTTPStatus.CONFLICT,
-                        f"Не можна видалити поле '{key}': на шаблоні є товари",
-                    )
+                    raise TemplateError(HTTPStatus.CONFLICT, "template.field_in_use", key=key)
                 if old_types[key] != new_types[key]:
                     raise TemplateError(
-                        HTTPStatus.CONFLICT,
-                        f"Не можна змінити тип поля '{key}': на шаблоні є товари",
+                        HTTPStatus.CONFLICT, "template.field_type_locked", key=key
                     )
             # нові ключі (є в new_types, нема в old_types) → ОК
 
@@ -215,10 +215,7 @@ async def delete_custom_template(
 
     product_count = await count_products_for_template(session, template_id)
     if product_count > 0:
-        raise TemplateError(
-            HTTPStatus.CONFLICT,
-            "Не можна видалити шаблон: спершу перенесіть або видаліть товари",
-        )
+        raise TemplateError(HTTPStatus.CONFLICT, "template.delete_blocked")
 
     await session.delete(template)
     await session.commit()

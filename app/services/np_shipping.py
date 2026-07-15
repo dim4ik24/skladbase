@@ -14,6 +14,7 @@ from http import HTTPStatus
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.i18n import ServiceError
 from app.models import Product, Reservation, ReservationStatus, Shop, Variant
 from app.security.crypto import decrypt
 from app.services import inventory
@@ -22,13 +23,9 @@ from app.services.novaposhta import NovaPoshtaError, create_document
 DEFAULT_WEIGHT_KG = 0.5
 
 
-class NpShippingError(Exception):
-    """Помилка створення накладної з HTTP статус-кодом для API-шару."""
-
-    def __init__(self, status_code: int, detail: str) -> None:
-        super().__init__(detail)
-        self.status_code = status_code
-        self.detail = detail
+class NpShippingError(ServiceError):
+    """Помилка створення накладної з HTTP статус-кодом для API-шару. Текст
+    рендериться на межі API-шару через .detail(lang) — див. app/i18n.py."""
 
 
 async def create_ttn(
@@ -52,14 +49,14 @@ async def create_ttn(
         select(Reservation).where(Reservation.id == reservation_id, Reservation.shop_id == shop_id)
     )
     if reservation is None:
-        raise NpShippingError(HTTPStatus.NOT_FOUND, "Резерв не знайдено")
+        raise NpShippingError(HTTPStatus.NOT_FOUND, "inventory.reservation_not_found")
     if reservation.status != ReservationStatus.active:
-        raise NpShippingError(HTTPStatus.CONFLICT, "Резерв не активний")
+        raise NpShippingError(HTTPStatus.CONFLICT, "inventory.reservation_not_active")
 
     shop = await session.get(Shop, shop_id)
     assert shop is not None
     if not shop.np_api_key_encrypted:
-        raise NpShippingError(HTTPStatus.UNPROCESSABLE_ENTITY, "Підключіть ключ Нової Пошти в налаштуваннях")
+        raise NpShippingError(HTTPStatus.UNPROCESSABLE_ENTITY, "np.key_required")
 
     sender_city_ref = shop.np_sender_city_ref
     sender_warehouse_ref = shop.np_sender_warehouse_ref
@@ -70,7 +67,7 @@ async def create_ttn(
         or sender_phone is None
         or shop.np_sender_name is None
     ):
-        raise NpShippingError(HTTPStatus.UNPROCESSABLE_ENTITY, "Заповніть дані відправника в налаштуваннях")
+        raise NpShippingError(HTTPStatus.UNPROCESSABLE_ENTITY, "np.sender_details_required")
 
     variant = await session.scalar(
         select(Variant).where(Variant.id == reservation.variant_id, Variant.shop_id == shop_id)
@@ -100,7 +97,10 @@ async def create_ttn(
             cod_amount=resolved_cod_amount if cod else None,
         )
     except NovaPoshtaError as exc:
-        raise NpShippingError(HTTPStatus.UNPROCESSABLE_ENTITY, f"НП: {exc}") from exc
+        # НП: passthrough — текст може бути як власне відповіддю НП API
+        # (уже укр від самої НП), так і нашим network-фолбеком; в обох
+        # випадках НЕ перекладаємо (app/i18n.py, шапка модуля).
+        raise NpShippingError(HTTPStatus.UNPROCESSABLE_ENTITY, raw=f"НП: {exc}") from exc
 
     await inventory.ship(session, shop_id=shop_id, reservation_id=reservation_id, ttn=result.ttn)
 

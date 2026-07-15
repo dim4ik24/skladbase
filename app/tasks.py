@@ -21,6 +21,7 @@ from decimal import Decimal
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.i18n import msg
 from app.models import (
     MovementType,
     Plan,
@@ -75,7 +76,7 @@ async def expire_subscriptions(session: AsyncSession, notify: Notifier) -> int:
         shop = await session.get(Shop, sub.shop_id)
         await notify(
             shop.owner_tg_id,  # type: ignore[union-attr]
-            "⏳ Підписку призупинено. Дані збережено — оформи підписку, щоб редагувати.",
+            msg("bot.subscription_paused", shop.owner_language_code),  # type: ignore[union-attr]
         )
     await session.commit()
     return len(expired_candidates)
@@ -97,7 +98,10 @@ async def send_renewal_reminders(session: AsyncSession, notify: Notifier) -> int
         period_end = ensure_aware_utc(sub.current_period_end)  # type: ignore[arg-type]
         days = max((period_end - now).days, 0)
         shop = await session.get(Shop, sub.shop_id)
-        await notify(shop.owner_tg_id, f"🔔 Підписка закінчується через {days} дн. Продовжити можна в меню.")  # type: ignore[union-attr]
+        await notify(
+            shop.owner_tg_id,  # type: ignore[union-attr]
+            msg("bot.renewal_reminder", shop.owner_language_code, days=days),  # type: ignore[union-attr]
+        )
         sub.renewal_reminder_sent = True
     await session.commit()
     return len(subs)
@@ -146,7 +150,10 @@ async def charge_due_card_subscriptions(
         else:
             await svc.mark_past_due(sub)
             shop = await session.get(Shop, sub.shop_id)
-            await notify(shop.owner_tg_id, "⚠️ Не вдалось списати оплату з картки. Онови картку протягом 3 днів.")  # type: ignore[union-attr]
+            await notify(
+                shop.owner_tg_id,  # type: ignore[union-attr]
+                msg("bot.card_charge_failed", shop.owner_language_code),  # type: ignore[union-attr]
+            )
     await session.commit()
     return charged
 
@@ -271,8 +278,13 @@ async def np_tracking(session: AsyncSession, notify: Notifier, track: NpTrackFn)
                     amount = (variant.price * updated.qty) if variant else Decimal("0")
                     await notify(
                         shop.owner_tg_id,
-                        f"📦 Посилку {reservation.ttn} отримано — {name}, "
-                        f"+{amount.quantize(Decimal('0.01'))} ₴",
+                        msg(
+                            "bot.parcel_picked_up",
+                            shop.owner_language_code,
+                            ttn=reservation.ttn,
+                            name=name,
+                            amount=amount.quantize(Decimal("0.01")),
+                        ),
                     )
                     processed += 1
                 elif code in RETURNED_CODES:
@@ -282,7 +294,12 @@ async def np_tracking(session: AsyncSession, notify: Notifier, track: NpTrackFn)
                     name, _ = await _np_display_name(session, updated.variant_id)
                     await notify(
                         shop.owner_tg_id,
-                        f"↩️ Посилку {reservation.ttn} не забрали — {name} повернуто на склад",
+                        msg(
+                            "bot.parcel_returned",
+                            shop.owner_language_code,
+                            ttn=reservation.ttn,
+                            name=name,
+                        ),
                     )
                     processed += 1
                 else:
@@ -313,16 +330,27 @@ async def low_stock_scan(session: AsyncSession, notify: Notifier) -> int:
         product = await session.get(Product, v.product_id)
         shop = await session.get(Shop, v.shop_id)
         name = product.name if product else f"Товар #{v.product_id}"
-        await notify(shop.owner_tg_id, f"📦 «{name}» закінчується — залишилось {avail} {_units(avail)}.")  # type: ignore[union-attr]
+        lang = shop.owner_language_code  # type: ignore[union-attr]
+        await notify(
+            shop.owner_tg_id,  # type: ignore[union-attr]
+            msg("bot.low_stock", lang, name=name, avail=avail, units=_units(avail, lang)),
+        )
         v.low_stock_notified_at = utcnow()
     await session.commit()
     return len(variants)
 
 
-def _units(n: int) -> str:
-    """Українська плюралізація: 1 одиниця / 2 одиниці / 5 одиниць."""
+def _units(n: int, lang: str) -> str:
+    """Плюралізація слова "одиниця/одиниці/одиниць" (uk/ru — CLDR one/few/many;
+    en — one/other). Той самий алгоритм, що фронтовий Intl.PluralRules, але
+    тут руками (без важких лібів, msg() сам по собі — просто .format())."""
+    if lang == "en":
+        return "unit" if n == 1 else "units"
+    one, few, many = {"ru": ("единица", "единицы", "единиц")}.get(
+        lang, ("одиниця", "одиниці", "одиниць")
+    )
     if n % 10 == 1 and n % 100 != 11:
-        return "одиниця"
+        return one
     if 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14:
-        return "одиниці"
-    return "одиниць"
+        return few
+    return many

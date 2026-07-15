@@ -24,6 +24,7 @@ from app.billing.refs import build_ref
 from app.config import settings
 from app.db import get_session
 from app.deps import require_permission
+from app.i18n import get_lang, msg
 from app.models import Membership, Plan, Shop, SubPeriod, SubProvider, Subscription, SubStatus
 from app.services.subscriptions import SubscriptionError, SubscriptionService
 
@@ -85,21 +86,26 @@ class SubscriptionOut(BaseModel):
     is_comp: bool
 
 
-async def _get_subscription(session: AsyncSession, shop_id: int) -> Subscription:
+async def _get_subscription(session: AsyncSession, shop_id: int, lang: str) -> Subscription:
     subscription = await session.scalar(
         select(Subscription).where(Subscription.shop_id == shop_id)
     )
     if subscription is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Підписку не знайдено")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=msg("billing.subscription_not_found", lang),
+        )
     return subscription
 
 
-async def _get_active_plan(session: AsyncSession, plan_code: str) -> Plan:
+async def _get_active_plan(session: AsyncSession, plan_code: str, lang: str) -> Plan:
     plan = await session.scalar(
         select(Plan).where(Plan.code == plan_code, Plan.is_active.is_(True))
     )
     if plan is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="План не знайдено")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=msg("billing.plan_not_found", lang)
+        )
     return plan
 
 
@@ -124,13 +130,14 @@ async def create_stars_checkout(
     payload: StarsCheckoutIn,
     membership: Membership = require_permission("can_manage_billing"),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> StarsCheckoutOut:
-    plan = await _get_active_plan(session, payload.plan_code)
+    plan = await _get_active_plan(session, payload.plan_code, lang)
 
     if plan.price_stars <= 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Безкоштовний план не потребує оплати",
+            detail=msg("billing.free_plan_no_payment", lang),
         )
 
     bot = Bot(token=settings.BOT_TOKEN)
@@ -155,8 +162,9 @@ async def create_card_checkout(
     payload: CardCheckoutIn,
     membership: Membership = require_permission("can_manage_billing"),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> CardCheckoutOut:
-    plan = await _get_active_plan(session, payload.plan_code)
+    plan = await _get_active_plan(session, payload.plan_code, lang)
     amount = SubscriptionService.effective_price_uah(plan, payload.period)
     order_ref = build_ref(membership.shop_id, plan.code, payload.period.value)
 
@@ -179,8 +187,9 @@ async def create_crypto_checkout(
     payload: CryptoCheckoutIn,
     membership: Membership = require_permission("can_manage_billing"),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> CryptoCheckoutOut:
-    plan = await _get_active_plan(session, payload.plan_code)
+    plan = await _get_active_plan(session, payload.plan_code, lang)
     amount_uah = SubscriptionService.effective_price_uah(plan, payload.period)
     amount_usd = (amount_uah / settings.UAH_USD_RATE).quantize(Decimal("0.01"))
     order_id = build_ref(membership.shop_id, plan.code, payload.period.value)
@@ -203,16 +212,19 @@ async def redeem_promo(
     payload: PromoIn,
     membership: Membership = require_permission("can_manage_billing"),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> Subscription:
     shop = await session.get(Shop, membership.shop_id)
     if shop is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Магазин не знайдено")
-    subscription = await _get_subscription(session, membership.shop_id)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=msg("billing.shop_not_found", lang)
+        )
+    subscription = await _get_subscription(session, membership.shop_id, lang)
 
     try:
         await SubscriptionService(session).redeem_promo(shop, subscription, payload.code)
     except SubscriptionError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail(lang)) from exc
 
     await session.commit()
     await session.refresh(subscription)
@@ -226,8 +238,9 @@ async def redeem_promo(
 async def cancel_subscription(
     membership: Membership = require_permission("can_manage_billing"),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> Subscription:
-    subscription = await _get_subscription(session, membership.shop_id)
+    subscription = await _get_subscription(session, membership.shop_id, lang)
 
     if subscription.provider == SubProvider.stars and subscription.external_sub_id:
         bot = Bot(token=settings.BOT_TOKEN)
@@ -239,7 +252,7 @@ async def cancel_subscription(
     try:
         await SubscriptionService(session).cancel(subscription)
     except SubscriptionError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.detail(lang)) from exc
 
     await session.commit()
     await session.refresh(subscription)

@@ -28,6 +28,7 @@ from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.db import get_session
+from app.i18n import get_lang, msg
 from app.models import MemberRole, Membership, Shop, Subscription
 from app.security.crypto import CryptoError, decrypt
 from app.security.initdata import InitDataError, validate_init_data
@@ -62,6 +63,7 @@ async def resolve_membership(
     x_telegram_init_data: str = Header(alias="X-Telegram-Init-Data"),
     x_shop_id: int | None = Header(default=None, alias="X-Shop-Id"),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> Membership:
     try:
         init_data = validate_init_data(
@@ -82,7 +84,7 @@ async def resolve_membership(
         )
         if membership is None:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="Немає доступу до цього магазину"
+                status_code=status.HTTP_403_FORBIDDEN, detail=msg("auth.no_shop_access", lang)
             )
         request.state.invite_status = None
         return membership
@@ -99,7 +101,7 @@ async def resolve_membership(
         if not _bootstrap_limiter.hit(client_ip(request)):
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Занадто багато нових магазинів з цієї IP, спробуйте пізніше",
+                detail=msg("auth.too_many_new_shops", lang),
             )
         membership, invite_status = await bootstrap_shop(
             session, init_data.user, init_data.start_param
@@ -132,6 +134,7 @@ async def require_owner(
 async def require_writable(
     membership: Membership = Depends(require_member),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> Membership:
     """Гард на запис: протермінована підписка -> read-only (CLAUDE.md).
     GET-ендпоінти цей гард не накладають — дані лишаються видимими завжди."""
@@ -141,7 +144,7 @@ async def require_writable(
     if subscription is None or not subscription.is_writable:
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail="підписка не активна — режим лише читання",
+            detail=msg("auth.subscription_readonly", lang),
         )
     return membership
 
@@ -174,7 +177,7 @@ def _check_permission(membership: Membership, perm: str) -> None:
         )
 
 
-async def _check_writable(shop_id: int, session: AsyncSession) -> None:
+async def _check_writable(shop_id: int, session: AsyncSession, lang: str) -> None:
     """Pure async writable check — exposed for direct testing."""
     subscription = await session.scalar(
         select(Subscription).where(Subscription.shop_id == shop_id)
@@ -182,7 +185,7 @@ async def _check_writable(shop_id: int, session: AsyncSession) -> None:
     if subscription is None or not subscription.is_writable:
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail="підписка не активна — режим лише читання",
+            detail=msg("auth.subscription_readonly", lang),
         )
 
 
@@ -201,9 +204,10 @@ def require_permission_writable(perm: str) -> Any:
     async def _dep(
         membership: Membership = Depends(resolve_membership),
         session: AsyncSession = Depends(get_session),
+        lang: str = Depends(get_lang),
     ) -> Membership:
         _check_permission(membership, perm)          # 403 fires first
-        await _check_writable(membership.shop_id, session)  # 402 independent
+        await _check_writable(membership.shop_id, session, lang)  # 402 independent
         return membership
     return Depends(_dep)
 
@@ -211,6 +215,7 @@ def require_permission_writable(perm: str) -> Any:
 async def require_api_key(
     x_api_key: str | None = Header(default=None, alias="X-API-Key"),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> Shop:
     """`api_key_prefix` НЕ унікальний (8 символів — теоретично можлива колізія
     між магазинами, ROADMAP, відкладено зі Стадії 4a). Тож тут перебираємо
@@ -218,7 +223,9 @@ async def require_api_key(
     ключем, замість `scalar()` (який впав би з `MultipleResultsFound` при
     колізії) чи довіри першому знайденому (який міг би віддати ЧУЖИЙ shop)."""
     if not x_api_key:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="X-API-Key відсутній")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail=msg("auth.api_key_missing", lang)
+        )
 
     prefix = x_api_key[:_API_KEY_PREFIX_LEN]
     candidates = (
@@ -235,4 +242,6 @@ async def require_api_key(
         if hmac.compare_digest(expected, x_api_key):
             return shop
 
-    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="невалідний API-ключ")
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED, detail=msg("auth.api_key_invalid", lang)
+    )

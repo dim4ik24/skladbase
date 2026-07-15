@@ -26,6 +26,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.i18n import ServiceError
 from app.models import (
     Order,
     OrderItem,
@@ -42,13 +43,9 @@ from app.services.inventory import InventoryError
 from app.services.webhooks import dispatch_stock_changed
 
 
-class OrderError(Exception):
-    """Помилка замовлення з HTTP статус-кодом для API-шару."""
-
-    def __init__(self, status_code: int, detail: str) -> None:
-        super().__init__(detail)
-        self.status_code = status_code
-        self.detail = detail
+class OrderError(ServiceError):
+    """Помилка замовлення з HTTP статус-кодом для API-шару. Текст
+    рендериться на межі API-шару через .detail(lang) — див. app/i18n.py."""
 
 
 @dataclass
@@ -82,7 +79,7 @@ async def _get_owned_order(session: AsyncSession, shop_id: int, order_id: int) -
         _order_query().where(Order.id == order_id, Order.shop_id == shop_id)
     )
     if order is None:
-        raise OrderError(HTTPStatus.NOT_FOUND, "Замовлення не знайдено")
+        raise OrderError(HTTPStatus.NOT_FOUND, "orders.order_not_found")
     return order
 
 
@@ -127,7 +124,7 @@ async def create_website_order(
     повтор — викликач (API-шар) на цій підставі вирішує, чи слати notify-хук
     власнику (повторно нотифікувати про вже відоме замовлення не треба)."""
     if not payload.items:
-        raise OrderError(HTTPStatus.BAD_REQUEST, "Потрібен хоча б один товар у замовленні")
+        raise OrderError(HTTPStatus.BAD_REQUEST, "orders.item_required")
 
     existing = await _find_by_idempotency_key(session, shop_id, payload.idempotency_key)
     if existing is not None:
@@ -162,7 +159,9 @@ async def create_website_order(
                 select(Variant).where(Variant.id == item.variant_id, Variant.shop_id == shop_id)
             )
             if variant is None:
-                raise OrderError(HTTPStatus.NOT_FOUND, f"Варіант {item.variant_id} не знайдено")
+                raise OrderError(
+                    HTTPStatus.NOT_FOUND, "orders.variant_not_found", variant_id=item.variant_id
+                )
 
             session.add(
                 OrderItem(
@@ -185,7 +184,7 @@ async def create_website_order(
             )
     except InventoryError as exc:
         await session.rollback()
-        raise OrderError(exc.status_code, exc.detail) from exc
+        raise OrderError(exc.status_code, exc.key, raw=exc.raw, **exc.fmt) from exc
     except OrderError:
         await session.rollback()
         raise
@@ -201,7 +200,7 @@ async def confirm_order(session: AsyncSession, *, shop_id: int, order_id: int) -
     """Підтвердження власником: всі активні резерви замовлення -> fulfilled."""
     order = await _get_owned_order(session, shop_id, order_id)
     if order.status != OrderStatus.pending:
-        raise OrderError(HTTPStatus.CONFLICT, "Замовлення вже не очікує підтвердження")
+        raise OrderError(HTTPStatus.CONFLICT, "orders.not_pending")
 
     reservations = await _active_reservations(session, shop_id, order_id)
     try:
@@ -211,7 +210,7 @@ async def confirm_order(session: AsyncSession, *, shop_id: int, order_id: int) -
             )
     except InventoryError as exc:
         await session.rollback()
-        raise OrderError(exc.status_code, exc.detail) from exc
+        raise OrderError(exc.status_code, exc.key, raw=exc.raw, **exc.fmt) from exc
 
     order.status = OrderStatus.fulfilled
     await session.commit()
@@ -224,7 +223,7 @@ async def cancel_order(session: AsyncSession, *, shop_id: int, order_id: int) ->
     """Скасування: всі активні резерви замовлення -> released."""
     order = await _get_owned_order(session, shop_id, order_id)
     if order.status != OrderStatus.pending:
-        raise OrderError(HTTPStatus.CONFLICT, "Замовлення не можна скасувати в цьому статусі")
+        raise OrderError(HTTPStatus.CONFLICT, "orders.cannot_cancel")
 
     reservations = await _active_reservations(session, shop_id, order_id)
     try:
@@ -234,7 +233,7 @@ async def cancel_order(session: AsyncSession, *, shop_id: int, order_id: int) ->
             )
     except InventoryError as exc:
         await session.rollback()
-        raise OrderError(exc.status_code, exc.detail) from exc
+        raise OrderError(exc.status_code, exc.key, raw=exc.raw, **exc.fmt) from exc
 
     order.status = OrderStatus.canceled
     await session.commit()

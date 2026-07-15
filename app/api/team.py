@@ -25,6 +25,7 @@ from sqlalchemy.orm import selectinload
 from app.config import settings
 from app.db import get_session
 from app.deps import effective_permission, require_owner
+from app.i18n import get_lang, msg
 from app.models import Invite, MemberRole, Membership, Role, utcnow
 
 router = APIRouter(prefix="/api/team", tags=["team"])
@@ -206,10 +207,11 @@ async def revoke_invite(
     invite_id: int,
     membership: Membership = Depends(require_owner),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> Response:
     invite = await session.get(Invite, invite_id)
     if invite is None or invite.shop_id != membership.shop_id:
-        raise HTTPException(status_code=404, detail="інвайт не знайдено")
+        raise HTTPException(status_code=404, detail=msg("team.invite_not_found", lang))
 
     invite.revoked_at = utcnow()
     await session.commit()
@@ -263,12 +265,13 @@ async def create_role(
     payload: RoleCreate,
     membership: Membership = Depends(require_owner),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> RoleOut:
     duplicate = await session.scalar(
         select(Role.id).where(Role.shop_id == membership.shop_id, Role.name == payload.name)
     )
     if duplicate is not None:
-        raise HTTPException(status_code=409, detail="роль з такою назвою вже існує")
+        raise HTTPException(status_code=409, detail=msg("team.role_name_taken", lang))
 
     role = Role(shop_id=membership.shop_id, is_system=False, **payload.model_dump())
     session.add(role)
@@ -282,14 +285,13 @@ async def update_role(
     payload: RolePatch,
     membership: Membership = Depends(require_owner),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> RoleOut:
     role = await session.get(Role, role_id)
     if role is None or role.shop_id != membership.shop_id:
-        raise HTTPException(status_code=404, detail="роль не знайдено")
+        raise HTTPException(status_code=404, detail=msg("team.role_not_found", lang))
     if role.name == _OWNER_ROLE_NAME:
-        raise HTTPException(
-            status_code=403, detail="Роль власника завжди має всі права"
-        )
+        raise HTTPException(status_code=403, detail=msg("team.owner_role_protected", lang))
 
     changes = payload.model_dump(exclude_unset=True)
     if "name" in changes and changes["name"] != role.name:
@@ -299,7 +301,7 @@ async def update_role(
             )
         )
         if duplicate is not None:
-            raise HTTPException(status_code=409, detail="роль з такою назвою вже існує")
+            raise HTTPException(status_code=409, detail=msg("team.role_name_taken", lang))
 
     for field_name, value in changes.items():
         setattr(role, field_name, value)
@@ -317,20 +319,19 @@ async def delete_role(
     role_id: int,
     membership: Membership = Depends(require_owner),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> Response:
     role = await session.get(Role, role_id)
     if role is None or role.shop_id != membership.shop_id:
-        raise HTTPException(status_code=404, detail="роль не знайдено")
+        raise HTTPException(status_code=404, detail=msg("team.role_not_found", lang))
     if role.is_system:
-        raise HTTPException(status_code=409, detail="Системну роль не можна видалити")
+        raise HTTPException(status_code=409, detail=msg("team.system_role_protected", lang))
 
     holders = await session.scalar(
         select(func.count()).select_from(Membership).where(Membership.role_id == role_id)
     )
     if holders:
-        raise HTTPException(
-            status_code=409, detail="Спершу переведіть учасників на іншу роль"
-        )
+        raise HTTPException(status_code=409, detail=msg("team.role_has_members", lang))
 
     await session.delete(role)
     await session.commit()
@@ -343,18 +344,19 @@ async def update_member_role(
     payload: MemberRolePatch,
     membership: Membership = Depends(require_owner),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> MemberOut:
     target = await session.get(
         Membership, membership_id, options=[selectinload(Membership.role_ref)]
     )
     if target is None or target.shop_id != membership.shop_id:
-        raise HTTPException(status_code=404, detail="учасника не знайдено")
+        raise HTTPException(status_code=404, detail=msg("team.member_not_found", lang))
     if target.role == MemberRole.owner:
-        raise HTTPException(status_code=409, detail="роль owner'а незмінна")
+        raise HTTPException(status_code=409, detail=msg("team.owner_role_immutable", lang))
 
     new_role = await session.get(Role, payload.role_id)
     if new_role is None or new_role.shop_id != membership.shop_id:
-        raise HTTPException(status_code=404, detail="роль не знайдено")
+        raise HTTPException(status_code=404, detail=msg("team.role_not_found", lang))
 
     target.role_ref = new_role
     # Скидання overrides — та сама транзакція, що й призначення ролі (один
@@ -374,14 +376,15 @@ async def update_member_permissions(
     payload: MemberPermissionsPatch,
     membership: Membership = Depends(require_owner),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> MemberOut:
     target = await session.get(
         Membership, membership_id, options=[selectinload(Membership.role_ref)]
     )
     if target is None or target.shop_id != membership.shop_id:
-        raise HTTPException(status_code=404, detail="учасника не знайдено")
+        raise HTTPException(status_code=404, detail=msg("team.member_not_found", lang))
     if target.role == MemberRole.owner:
-        raise HTTPException(status_code=409, detail="права owner'а незмінні")
+        raise HTTPException(status_code=409, detail=msg("team.owner_permissions_immutable", lang))
 
     changes = payload.model_dump(exclude_unset=True)
     for field_name, value in changes.items():
@@ -396,14 +399,15 @@ async def delete_member(
     membership_id: int,
     membership: Membership = Depends(require_owner),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> Response:
     target = await session.get(Membership, membership_id)
     if target is None or target.shop_id != membership.shop_id:
-        raise HTTPException(status_code=404, detail="учасника не знайдено")
+        raise HTTPException(status_code=404, detail=msg("team.member_not_found", lang))
     if target.id == membership.id:
-        raise HTTPException(status_code=409, detail="не можна видалити самого себе")
+        raise HTTPException(status_code=409, detail=msg("team.cannot_remove_self", lang))
     if target.role == MemberRole.owner:
-        raise HTTPException(status_code=409, detail="не можна видалити owner'а")
+        raise HTTPException(status_code=409, detail=msg("team.cannot_remove_owner", lang))
 
     await session.delete(target)
     await session.commit()

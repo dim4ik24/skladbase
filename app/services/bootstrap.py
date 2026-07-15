@@ -40,6 +40,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.i18n import lang_from_telegram_code
 from app.models import Invite, MemberRole, Membership, Role, Shop, ShopStatus
 from app.security.initdata import TelegramUser
 from app.seed import seed_demo_catalog, seed_plans, seed_system_templates
@@ -178,7 +179,12 @@ async def bootstrap_shop(
     await seed_plans(session)
 
     shop_name = f"Магазин {user.first_name}".strip() or "Мій магазин"
-    shop = Shop(owner_tg_id=user.id, name=shop_name, slug=f"shop-{user.id}")
+    shop = Shop(
+        owner_tg_id=user.id,
+        name=shop_name,
+        slug=f"shop-{user.id}",
+        owner_language_code=lang_from_telegram_code(user.language_code),
+    )
     owner_role = Role(shop=shop, name=OWNER_ROLE_NAME, is_system=True)
     manager_role = Role(shop=shop, name=MANAGER_ROLE_NAME, is_system=True)
     membership = Membership(

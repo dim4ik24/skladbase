@@ -17,6 +17,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.i18n import ServiceError
 from app.models import (
     Membership,
     Plan,
@@ -32,13 +33,9 @@ from app.models import (
 )
 
 
-class CatalogError(Exception):
-    """Помилка каталогу з HTTP статус-кодом для API-шару."""
-
-    def __init__(self, status_code: int, detail: str) -> None:
-        super().__init__(detail)
-        self.status_code = status_code
-        self.detail = detail
+class CatalogError(ServiceError):
+    """Помилка каталогу з HTTP статус-кодом для API-шару. Текст рендериться
+    на межі API-шару через .detail(lang) — див. app/i18n.py."""
 
 
 @dataclass
@@ -159,7 +156,8 @@ async def enforce_can_create_product(shop_id: int, session: AsyncSession) -> Non
     if current >= max_products:
         raise CatalogError(
             HTTPStatus.PAYMENT_REQUIRED,
-            f"Ліміт плану: {max_products} товарів. Оформіть тариф для розширення.",
+            "catalog.plan_limit_products",
+            max=max_products,
         )
 
 
@@ -167,20 +165,14 @@ async def enforce_product_writable(product_id: int, shop_id: int, session: Async
     """402 якщо товар заморожений (не входить у топ-N активних free-плану)."""
     frozen = await frozen_product_ids(shop_id, session)
     if product_id in frozen:
-        raise CatalogError(
-            HTTPStatus.PAYMENT_REQUIRED,
-            "Цей товар заморожено. Оформіть тариф, щоб редагувати.",
-        )
+        raise CatalogError(HTTPStatus.PAYMENT_REQUIRED, "catalog.product_frozen")
 
 
 async def enforce_photos_allowed(shop_id: int, session: AsyncSession) -> None:
     """402 якщо поточний план не дозволяє фото (free: photos=False)."""
     limits = await current_plan_limits(shop_id, session)
     if not limits.get("photos"):
-        raise CatalogError(
-            HTTPStatus.PAYMENT_REQUIRED,
-            "Фото доступні на тарифі Basic+. Оформіть тариф.",
-        )
+        raise CatalogError(HTTPStatus.PAYMENT_REQUIRED, "catalog.photos_not_allowed")
 
 
 # Збережено для сумісності з api/catalog.py до рефакторингу імпортів.
@@ -198,20 +190,18 @@ def _validate_axis_values(template: ProductTemplate | None, variant: VariantInpu
 
     unknown = set(variant.axis_values) - axis_keys
     if unknown:
-        raise CatalogError(
-            HTTPStatus.BAD_REQUEST, f"Невідомі осі варіанта: {sorted(unknown)}"
-        )
+        raise CatalogError(HTTPStatus.BAD_REQUEST, "catalog.unknown_axes", axes=sorted(unknown))
     missing = axis_keys - set(variant.axis_values)
     if missing:
-        raise CatalogError(
-            HTTPStatus.BAD_REQUEST, f"Не вказані осі варіанта: {sorted(missing)}"
-        )
+        raise CatalogError(HTTPStatus.BAD_REQUEST, "catalog.missing_axes", axes=sorted(missing))
     for key, allowed in enum_options.items():
         value = variant.axis_values.get(key)
         if value is not None and value not in allowed:
             raise CatalogError(
                 HTTPStatus.BAD_REQUEST,
-                f"Недопустиме значення '{value}' для осі '{key}'",
+                "catalog.invalid_axis_value",
+                value=value,
+                key=key,
             )
 
 
@@ -227,7 +217,7 @@ async def _resolve_template(
         )
     )
     if template is None:
-        raise CatalogError(HTTPStatus.NOT_FOUND, "Шаблон не знайдено")
+        raise CatalogError(HTTPStatus.NOT_FOUND, "catalog.template_not_found")
     return template
 
 
@@ -237,7 +227,7 @@ async def create_product_with_variants(
     shop_id = membership.shop_id
 
     if not payload.variants:
-        raise CatalogError(HTTPStatus.BAD_REQUEST, "Потрібен хоча б один варіант")
+        raise CatalogError(HTTPStatus.BAD_REQUEST, "catalog.variant_required")
 
     template = await _resolve_template(session, shop_id, payload.template_id)
     for variant_input in payload.variants:
@@ -273,12 +263,8 @@ async def create_product_with_variants(
     except IntegrityError as exc:
         await session.rollback()
         if _is_sku_conflict(exc):
-            raise CatalogError(
-                HTTPStatus.CONFLICT, "SKU вже використовується в цьому магазині"
-            ) from exc
-        raise CatalogError(
-            HTTPStatus.CONFLICT, "Не вдалося створити товар через конфлікт даних"
-        ) from exc
+            raise CatalogError(HTTPStatus.CONFLICT, "catalog.sku_taken") from exc
+        raise CatalogError(HTTPStatus.CONFLICT, "catalog.product_create_conflict") from exc
 
     await session.commit()
     await session.refresh(product, attribute_names=["variants", "photos"])
@@ -296,7 +282,7 @@ async def _load_variant_for_shop(
         select(Variant).where(Variant.id == variant_id, Variant.shop_id == shop_id)
     )
     if variant is None:
-        raise CatalogError(HTTPStatus.NOT_FOUND, "Варіант не знайдено")
+        raise CatalogError(HTTPStatus.NOT_FOUND, "catalog.variant_not_found")
     return variant
 
 
@@ -313,7 +299,7 @@ async def _check_no_axis_duplicate(
     rows = (await session.scalars(q)).all()
     for v in rows:
         if v.axis_values == axis_values:
-            raise CatalogError(HTTPStatus.CONFLICT, "Варіант з такими осями вже існує")
+            raise CatalogError(HTTPStatus.CONFLICT, "catalog.variant_axes_conflict")
 
 
 async def patch_variant(
@@ -345,10 +331,8 @@ async def patch_variant(
     except IntegrityError as exc:
         await session.rollback()
         if _is_sku_conflict(exc):
-            raise CatalogError(
-                HTTPStatus.CONFLICT, "SKU вже використовується в цьому магазині"
-            ) from exc
-        raise CatalogError(HTTPStatus.CONFLICT, "Не вдалося оновити варіант") from exc
+            raise CatalogError(HTTPStatus.CONFLICT, "catalog.sku_taken") from exc
+        raise CatalogError(HTTPStatus.CONFLICT, "catalog.variant_update_failed") from exc
 
     await session.commit()
     await session.refresh(variant)
@@ -372,7 +356,7 @@ async def add_variant_to_product(
         select(Product).where(Product.id == product_id, Product.shop_id == membership.shop_id)
     )
     if product is None:
-        raise CatalogError(HTTPStatus.NOT_FOUND, "Товар не знайдено")
+        raise CatalogError(HTTPStatus.NOT_FOUND, "catalog.product_not_found")
 
     await enforce_product_writable(product_id, membership.shop_id, session)
 
@@ -395,10 +379,8 @@ async def add_variant_to_product(
     except IntegrityError as exc:
         await session.rollback()
         if _is_sku_conflict(exc):
-            raise CatalogError(
-                HTTPStatus.CONFLICT, "SKU вже використовується в цьому магазині"
-            ) from exc
-        raise CatalogError(HTTPStatus.CONFLICT, "Не вдалося додати варіант") from exc
+            raise CatalogError(HTTPStatus.CONFLICT, "catalog.sku_taken") from exc
+        raise CatalogError(HTTPStatus.CONFLICT, "catalog.variant_add_failed") from exc
 
     await session.commit()
     await session.refresh(variant)
@@ -418,7 +400,7 @@ async def delete_variant(
         select(func.count(Variant.id)).where(Variant.product_id == variant.product_id)
     )
     if (sibling_count or 0) <= 1:
-        raise CatalogError(HTTPStatus.CONFLICT, "Товар має лишити хоча б один варіант")
+        raise CatalogError(HTTPStatus.CONFLICT, "catalog.product_needs_variant")
 
     active_res = await session.scalar(
         select(func.count(Reservation.id)).where(
@@ -427,7 +409,7 @@ async def delete_variant(
         )
     )
     if (active_res or 0) > 0:
-        raise CatalogError(HTTPStatus.CONFLICT, "Зніміть резерви перед видаленням варіанта")
+        raise CatalogError(HTTPStatus.CONFLICT, "catalog.release_before_delete")
 
     photo_url = variant.photo_url
     await session.delete(variant)

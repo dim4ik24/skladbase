@@ -30,11 +30,20 @@ from app.config import settings
 from tests.conftest import TEST_BOT_TOKEN
 
 
-def _make_user(tg_id: int, first_name: str = "Тест", username: str | None = None) -> MagicMock:
+def _make_user(
+    tg_id: int,
+    first_name: str = "Тест",
+    username: str | None = None,
+    language_code: str | None = None,
+) -> MagicMock:
     user = MagicMock()
     user.id = tg_id
     user.first_name = first_name
     user.username = username
+    # MagicMock: непроставлений атрибут повертає ще один MagicMock (truthy),
+    # тож lang_from_telegram_code(user.language_code) без явного None/рядка
+    # тут заплуталася б у "код.startswith(...) є truthy" -> хибно "en".
+    user.language_code = language_code
     return user
 
 
@@ -47,9 +56,10 @@ def _make_message(
     first_name: str = "Тест",
     username: str | None = "test_user",
     message_id: int = 500,
+    language_code: str | None = None,
 ) -> MagicMock:
     message = MagicMock()
-    message.from_user = _make_user(tg_id, first_name, username)
+    message.from_user = _make_user(tg_id, first_name, username, language_code)
     message.text = text
     message.caption = caption
     message.reply_to_message = reply_to_message

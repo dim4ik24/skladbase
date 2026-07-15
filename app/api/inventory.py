@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.catalog import VariantOut
 from app.db import get_session
 from app.deps import require_permission, require_permission_writable
+from app.i18n import get_lang, msg
 from app.models import Membership, Reservation, ReservationSource, ReservationStatus, Variant
 from app.services import catalog as catalog_service
 from app.services import inventory
@@ -91,7 +92,7 @@ class ReservationOut(BaseModel):
 #  Варіанти: поповнення / корекція / ручний резерв
 # --------------------------------------------------------------------------- #
 async def _enforce_variant_product_writable(
-    variant_id: int, shop_id: int, session: AsyncSession
+    variant_id: int, shop_id: int, session: AsyncSession, lang: str
 ) -> None:
     """Завантажує варіант без lock, дістає product_id, перевіряє enforce_product_writable.
     Inventory-сервіс потім ще раз локує той самий варіант через SELECT FOR UPDATE."""
@@ -99,11 +100,11 @@ async def _enforce_variant_product_writable(
         select(Variant).where(Variant.id == variant_id, Variant.shop_id == shop_id)
     )
     if variant is None:
-        raise HTTPException(status_code=404, detail="Варіант не знайдено")
+        raise HTTPException(status_code=404, detail=msg("catalog.variant_not_found", lang))
     try:
         await catalog_service.enforce_product_writable(variant.product_id, shop_id, session)
     except catalog_service.CatalogError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail(lang)) from exc
 
 
 @router.post("/variants/{variant_id}/restock", response_model=VariantOut)
@@ -112,14 +113,15 @@ async def restock_variant(
     payload: RestockIn,
     membership: Membership = require_permission_writable("can_manage_stock"),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> Variant:
-    await _enforce_variant_product_writable(variant_id, membership.shop_id, session)
+    await _enforce_variant_product_writable(variant_id, membership.shop_id, session, lang)
     try:
         return await inventory.restock(
             session, shop_id=membership.shop_id, variant_id=variant_id, qty=payload.qty
         )
     except InventoryError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail(lang)) from exc
 
 
 @router.post("/variants/{variant_id}/adjust", response_model=VariantOut)
@@ -128,8 +130,9 @@ async def adjust_variant(
     payload: AdjustIn,
     membership: Membership = require_permission_writable("can_manage_stock"),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> Variant:
-    await _enforce_variant_product_writable(variant_id, membership.shop_id, session)
+    await _enforce_variant_product_writable(variant_id, membership.shop_id, session, lang)
     try:
         return await inventory.write_off(
             session,
@@ -140,7 +143,7 @@ async def adjust_variant(
             comment=payload.comment,
         )
     except InventoryError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail(lang)) from exc
 
 
 @router.post("/variants/{variant_id}/reserve", response_model=ReservationOut)
@@ -149,10 +152,11 @@ async def reserve_variant(
     payload: ReserveIn,
     membership: Membership = require_permission_writable("can_manage_reservations"),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> Reservation:
     """Ручний резерв «відклади товар» — менеджер тримає одиницю для клієнта
     поза замовленням із сайту (`ReservationSource.manual`)."""
-    await _enforce_variant_product_writable(variant_id, membership.shop_id, session)
+    await _enforce_variant_product_writable(variant_id, membership.shop_id, session, lang)
     try:
         return await inventory.reserve(
             session,
@@ -164,7 +168,7 @@ async def reserve_variant(
             expires_at=payload.expires_at,
         )
     except InventoryError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail(lang)) from exc
 
 
 # --------------------------------------------------------------------------- #
@@ -176,6 +180,7 @@ async def release_reservation(
     payload: ReleaseIn | None = None,
     membership: Membership = require_permission_writable("can_manage_reservations"),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> Reservation:
     try:
         return await inventory.release(
@@ -186,7 +191,7 @@ async def release_reservation(
             comment=payload.comment if payload else None,
         )
     except InventoryError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail(lang)) from exc
 
 
 @router.post("/reservations/{reservation_id}/fulfill", response_model=ReservationOut)
@@ -194,6 +199,7 @@ async def fulfill_reservation(
     reservation_id: int,
     membership: Membership = require_permission_writable("can_manage_reservations"),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> Reservation:
     """Ручний продаж раніше відкладеного резерву (списує on_hand)."""
     try:
@@ -201,7 +207,7 @@ async def fulfill_reservation(
             session, shop_id=membership.shop_id, reservation_id=reservation_id
         )
     except InventoryError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail(lang)) from exc
 
 
 @router.post("/reservations/{reservation_id}/ship", response_model=ReservationOut)
@@ -210,6 +216,7 @@ async def ship_reservation(
     payload: ShipIn | None = None,
     membership: Membership = require_permission_writable("can_manage_reservations"),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> Reservation:
     try:
         return await inventory.ship(
@@ -219,7 +226,7 @@ async def ship_reservation(
             ttn=payload.ttn if payload else None,
         )
     except InventoryError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail(lang)) from exc
 
 
 @router.patch("/reservations/{reservation_id}/ttn", response_model=ReservationOut)
@@ -228,13 +235,14 @@ async def update_reservation_ttn(
     payload: UpdateTtnIn,
     membership: Membership = require_permission_writable("can_manage_reservations"),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> Reservation:
     try:
         return await inventory.update_ttn(
             session, shop_id=membership.shop_id, reservation_id=reservation_id, ttn=payload.ttn
         )
     except InventoryError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail(lang)) from exc
 
 
 @router.post("/reservations/{reservation_id}/pick-up", response_model=ReservationOut)
@@ -242,6 +250,7 @@ async def pick_up_reservation(
     reservation_id: int,
     membership: Membership = require_permission_writable("can_manage_reservations"),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> Reservation:
     """Клієнт забрав відправлення — продаж (списує on_hand, дохід)."""
     try:
@@ -249,7 +258,7 @@ async def pick_up_reservation(
             session, shop_id=membership.shop_id, reservation_id=reservation_id
         )
     except InventoryError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail(lang)) from exc
 
 
 @router.post("/reservations/{reservation_id}/not-picked-up", response_model=ReservationOut)
@@ -258,6 +267,7 @@ async def not_picked_up_reservation(
     payload: NotPickedUpIn,
     membership: Membership = require_permission_writable("can_manage_reservations"),
     session: AsyncSession = Depends(get_session),
+    lang: str = Depends(get_lang),
 ) -> Reservation:
     """Клієнт не забрав відправлення — товар повертається на склад, без доходу."""
     try:
@@ -269,7 +279,7 @@ async def not_picked_up_reservation(
             comment=payload.comment,
         )
     except InventoryError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail(lang)) from exc
 
 
 @router.get("/reservations", response_model=list[ReservationOut])

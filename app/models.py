@@ -155,6 +155,12 @@ class Shop(Base):
     name: Mapped[str] = mapped_column(String(120))
     slug: Mapped[str] = mapped_column(String(80), unique=True, index=True)  # для публічного каталогу /c/{slug}
 
+    # Мова власника (uk/en/ru), знята з Telegram `language_code` при
+    # bootstrap_shop (app/services/bootstrap.py) — джерело мови для
+    # cron-пушів бота (app/tasks.py), де немає live Update, щоб узяти
+    # language_code напряму (app/i18n.py: lang_from_telegram_code).
+    owner_language_code: Mapped[str] = mapped_column(String(8), default="uk", server_default="uk")
+
     # --- Брендування (фіча 2): "це моя власна апка" ---
     logo_url: Mapped[str | None] = mapped_column(String(500))
     accent_color: Mapped[str] = mapped_column(String(7), default="#2E7D32")  # hex
